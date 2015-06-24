@@ -58,12 +58,11 @@ public:
 private:
 	std::ifstream* stream;
 
-
-
 	char lastChar;
-	void NextChar();
-	char PeekChar();
+	char nextChar;
 
+	void AppendNext();
+	void EatNext();
 	void EatWhitespaces();
 
 };

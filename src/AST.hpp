@@ -92,6 +92,7 @@ public:
 
 //Represents a call to a function in the AST
 class ASTCall : public ASTNode {
+friend class CodeGenerator;
 public:
 	ASTCall(std::string& functionName, std::vector<ASTExpression*> args) :
 		functionName(functionName), args(args) { }

@@ -100,7 +100,7 @@ ASTNode* Parser::ParseIdentifier() {
 		return new ASTVariable(name, type);
 	}
 
-	//Type Inference
+	//TYPE INFER
 	else if(token == Token::TypeInfer) {
 		//TODO type infrence
 		return nullptr;
@@ -128,14 +128,21 @@ ASTNode* Parser::ParseIdentifier() {
 
 	//FunctionCall!
 	else if (token == Token::ParenOpen) {
-		std::string functionName = lexer->tokenString;
-		LOG_VERBOSE("Parsing Call");
-		std::vector<ASTExpression*> args;
-		while(lexer->GetToken() != Token::ParenClose) {
+		LOG_VERBOSE("Parsing Call to: " << name);
 
+		std::vector<ASTExpression*> args;
+		Token token = lexer->GetToken();
+		while(token != Token::ParenClose && token != Token::Unkown && token != Token::EndOfFile) {
+			token = lexer->GetToken();
 		}
 
-		return new ASTCall(functionName, args);
+		if(token == Token::ParenClose) {
+			lexer->GetToken();	//Eat the close
+		}
+
+
+		ASTCall* call = new ASTCall(name, args);
+		codeGenerator->Codegen(call);
 	}
 
 	LOG_ERROR("Unknown token after identifier '" << name << "' (" << lexer->tokenString << ")");
@@ -189,4 +196,3 @@ void Parser::ParseFile() {
 	LOG_INFO("Writing IR to file");
 	module->dump();
 }
-

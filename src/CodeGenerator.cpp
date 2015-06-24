@@ -36,6 +36,28 @@ llvm::Value* CodeGenerator::Codegen(float value) {
 	return llvm::ConstantFP::get(llvm::Type::getFloatTy(module->getContext()), value);
 }
 
+llvm::Value* CodeGenerator::Codegen(ASTCall* call) {
+	llvm::Function* function = module->getFunction(call->functionName);
+	if(function == 0) {
+		LOG_ERROR("Call to undefined function(" << call->functionName << ")");
+		return nullptr;
+	}
+
+	if(call->args.size() != function->arg_size()) {
+		LOG_ERROR("Function Call contains incorrect number of arguments!");
+		return nullptr;
+	}
+
+	std::vector<llvm::Value*> argsV;
+	for(uint32 i = 0, e = function->arg_size(); i != e; i++) {
+		argsV.push_back(Codegen(call->args[i]));
+		if(argsV.back() == 0) return nullptr;
+	}
+
+	return builder->CreateCall(function, argsV, "calltmp");
+}
+
+
 //Generates IR for ASTFunctions
 //Does not require a prototype
 //TODO use #foreign to set external or internal linkage
@@ -82,4 +104,3 @@ llvm::Function* CodeGenerator::Codegen(ASTFunction* functionAST) {
 	LOG_ERROR("Error parsing body of function");
 	return nullptr;
 }
-

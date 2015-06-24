@@ -9,6 +9,7 @@
 #define _COMMON_HPP
 
 #include <iostream>
+#include <assert.h>
 #include <stdint.h>
 
 typedef int8_t int8;

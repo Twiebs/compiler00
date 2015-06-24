@@ -10,18 +10,16 @@
 Lexer::Lexer(std::ifstream* stream) {
 	this->stream = stream;
 	this->lastChar = ' ';
+	this->nextChar = ' ';
 }
 
 Lexer::~Lexer() {
 
 }
 
-char Lexer::PeekChar() {
-	return stream->peek();
-}
-
-void Lexer::NextChar() {
+void Lexer::AppendNext() {
 	lastChar = stream->get();
+	nextChar = stream->peek();
 	colNumber++;
 	if (lastChar == '\n') {
 		lineNumber++;
@@ -31,93 +29,115 @@ void Lexer::NextChar() {
 	}
 }
 
+void Lexer::EatNext() {
+	lastChar = stream->get();
+	nextChar = stream->peek();
+
+	if (lastChar == '\n') {
+		lineNumber++;
+		colNumber = 1;
+	}
+}
+
 void Lexer::EatWhitespaces() {
-	while(isspace(lastChar))
-		NextChar();
+	while(isspace(nextChar))
+		EatNext();
 }
 
 
 Token Lexer::GetToken() {
 	tokenString = ""; //Reset the tokenstring
 	EatWhitespaces();
+	assert(nextChar != ' ' && nextChar != '\n' && nextChar != '\r');
 
-	//We now have somthing to lex
-	//Save the currentLine and colum number so we known where the token originiated
+	//We now have some non-whitespace character to lex.
+	//At this point the tokenString is empty and the nextChar is the character that is a non whitespace
+	//Last char should be a whitespace or somthing that was tokenized seperatly like an opperator
+	//Save the currentLine and column number so we known where the token originated
 	currentTokenLineNumber = lineNumber;
 	currentTokenColumnNumber = colNumber;
 
 	//KEYWORD, IDENTIFIER, TYPE
 	//If the character begins with a letter it must be a keyword, type, or identifier
-	if (isalpha(lastChar)) {
-		while (isalnum(lastChar))
-			NextChar();	//Grab all the alnum chars in the identifier
+	if(isalnum(nextChar)) {
+		while (isalnum(nextChar)) {
+			AppendNext();
+		}
+		//The nextChar is now somthing that is not alphanum so the end of our token is reached
 		//Check to see if this token is a keyword
+		//If its not any keywords then it must be a identifier
 		if (tokenString == "func") return Token::Func;
 		if (tokenString == "foreign") return Token::Foreign;
 		if (tokenString == "if") return Token::If;
 		if (tokenString == "else") return Token::Else;
-		//If its not any keywords then it must be a identifier
 		return Token::Identifer;
 	}
 
 	//NUMERIC LITERAL
-	//If the character beings with a digit then we are lexing a
-	//Numerical literal
-	if (isdigit(lastChar)) { //Charcter was not alpha so we already know that it will not be an identifier
-		do NextChar();
-		while (isdigit(lastChar));
+	if (isdigit(nextChar)) { //Character was not alpha so we already know that it will not be an identifier
+		while(isdigit(nextChar)) {
+			AppendNext();
+		}	//TODO dont worry about FP for now
 		return Token::Number;
 	}
 
 	//COMMENTS
-	//Checks if this token is a comment
-	//Will Eat the line and recusivly get a token if it is
-	if (lastChar == '/') {
-		NextChar();	//Eat the '/ 'char
-		// Check to see if the next char is another /
-		// If so this token is a comment
-		if (lastChar == '/') {
-			//Eat all the chars until a newline or the EOF is reached
-			do NextChar();
-			while (lastChar != EOF && lastChar != '\n' && lastChar != '\r');
-			if (lastChar != EOF)
+	if (nextChar == '/') {
+		EatNext();	//Eat the '/ 'char
+		// Check to see if the next char is another '/' If so this token is a comment
+		if (nextChar == '/') {
+			EatNext(); //Eats the second '/'
+			while(nextChar != EOF && nextChar != '\n' && nextChar != '\r') {
+				EatNext();	//Now we eat the comment body itsself
+			}
+			//We have reached the end of the comment.  If is not the end of the file get the next token
+			if(nextChar != EOF) {
 				return GetToken();
+			}
 		}
 	}
-
-	//SYMBOL TOKENS
-	Token token;
 
 	//COLON TOKENS
-	//TypeDefine, TypeInfer, and TypeAssign
-	if (lastChar == ':') {
-		char nextChar = PeekChar();
-		//If a colon is seen check what comes next
-		//If its another colon then the token is a typeDefine
-		if(nextChar == ':'){
-			NextChar();	//Eat the first ':'
-			token = Token::TypeDefine;
+	if (nextChar == ':') {
+		AppendNext();
+		if(nextChar == ':') {
+			AppendNext();
+			return Token::TypeDefine;
 		}
-		//If it a = then the token is a type inference
-		else if(nextChar == '=') {
-			NextChar(); //Eat the ':'
-			token = Token::TypeInfer;
+		else if (nextChar == '='){
+			AppendNext();
+			return Token::TypeInfer;
 		}
-		//Otherwise its just a plain old colon and its a type assignment
-		else
-			token = Token::TypeAssign;
+		else {
+			return Token::TypeAssign;
+		}
 	}
-	//The token was not a colon
-	//Check other token symbols
-	else if (lastChar == '(') token = Token::ParenOpen;
-	else if (lastChar == ')') token = Token::ParenClose;
-	else if (lastChar == '{') token = Token::ScopeOpen;
-	else if (lastChar == '}') token = Token::ScopeClose;
-	else if (lastChar == EOF) token = Token::EndOfFile;
-	else token = Token::Unkown;
 
-	NextChar(); //Eat the symbol token
-	return token;	//Return it
+	//BRACES, BRACKETS, SUBSCRIPTS
+	else if (nextChar == '(') {
+		AppendNext();
+		return Token::ParenOpen;
+	}
+	else if (nextChar == ')') {
+		AppendNext();
+		return Token::ParenClose;
+	}
+	else if (nextChar == '{') {
+		AppendNext();
+		return Token::ScopeOpen;
+	}
+	else if (nextChar == '}') {
+		AppendNext();
+		return Token::ScopeClose;
+	}
+	else if (nextChar == EOF) {
+		//Dont append or ead the EOF
+		return Token::EndOfFile;
+	}
+	else{
+		AppendNext();
+		return Token::Unkown;
+	}
 }
 
 //This function will be called after a type opperator has been seen by the parser
@@ -127,10 +147,11 @@ Type Lexer::GetType() {
 	EatWhitespaces();
 
 	//All types must start with a alpha char
-	if (isalpha(lastChar)) {
-		do NextChar();
-		while (isalnum(lastChar));
-	//Get the tokenString while there are still alphaNumeric charcters
+	if (isalpha(nextChar)) {
+		while(isalnum(nextChar)) {
+			AppendNext();
+		}
+		//Get the tokenString while there are still alphaNumeric charcters
 
 	//Check to see what type the string represents
 		if (tokenString == "Int32") 	 return Type::Int32;
