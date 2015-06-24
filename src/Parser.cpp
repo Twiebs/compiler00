@@ -51,6 +51,10 @@ ASTFunction* Parser::ParseFunction(std::string& identiferName) {
 		//TODO care about function paramaters
 	}
 
+	if(token == Token::ParenClose) {
+		lexer->GetToken();
+	}
+
 	//Here we handle if the function is an external function by simply setting that it is external if the function is
 	//The main function other wise it is internal.. however this is sort of the opposite of what i acctualy want
 	bool isForegin = (identiferName == "main") ? false : false;

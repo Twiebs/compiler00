@@ -73,7 +73,6 @@ llvm::Function* CodeGenerator::Codegen(ASTPrototype* prototype) {
 		func = module->getFunction(prototype->name);
 	}
 
-
 	//if(!llvm::verifyFunction(*func)) {
 	//	LOG_ERROR("Function verification failed!");
 	//}
