@@ -82,17 +82,16 @@ int main(int argc, char** argv) {
 	LOG_INFO("Writing bitcode to file");
 
 	//Move theModule into the execution engine
-	llvm::ExecutionEngine* engine = llvm::EngineBuilder(std::unique_ptr<llvm::Module>(module)).create();
+	// llvm::ExecutionEngine* engine = llvm::EngineBuilder(std::unique_ptr<llvm::Module>(module)).create();
+	//
+	// auto mainFunction = engine->FindFunctionNamed("Main");
+	// if (mainFunction == nullptr) {
+	// 	LOG_ERROR("Program must contain a 'Main' function!");
+	// 	return 0;
+	// }
+	// std::vector<llvm::GenericValue> args;
+	// llvm::GenericValue returnCode = engine->runFunction(mainFunction, args);
 
-	auto mainFunction = engine->FindFunctionNamed("Main");
-	if (mainFunction == nullptr) {
-		LOG_ERROR("Program must contain a 'Main' function!");
-		return 0;
-	}
-	std::vector<llvm::GenericValue> args;
-	llvm::GenericValue returnCode = engine->runFunction(mainFunction, args);
-
-	system("pause");
+	//system("pause");
 	return 0;
 }
-
