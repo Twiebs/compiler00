@@ -15,6 +15,7 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/FormattedStream.h"
 
 #include "llvm/Bitcode/ReaderWriter.h"
 
@@ -38,9 +39,8 @@
 #include "Parser.hpp"
 
 extern "C"
-int Print() {
+void println() {
 	std::cout << "This is a message send from my language!\n";
-	return 0;
 }
 
 
@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
 	llvm::LLVMContext& context = llvm::getGlobalContext();
 	llvm::Module* module = new llvm::Module("LLVMLang Compiler", context);
 
-	Parser parser(module, &stream);
+	Parser parser(module, inputFile, &stream);
 	parser.ParseFile();
 
 	std::error_code errorCode;

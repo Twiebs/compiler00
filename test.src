@@ -1,6 +1,13 @@
+//Type Gramar
+// : (Type assign)
+// := (type infer)
+// :: (type define)
+// :> (type return)
 
-println :: ()
 
 
-main :: ()
-println()
+println :: () :> S32 foreign
+
+main :: () :> S32 {
+  println()
+}

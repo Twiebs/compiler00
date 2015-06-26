@@ -7,10 +7,11 @@
 
 #include "Lexer.hpp"
 
-Lexer::Lexer(std::ifstream* stream) {
+Lexer::Lexer(std::string filename, std::ifstream* stream) {
+	this->filePos.filename = filename;
 	this->stream = stream;
-	this->lastChar = ' ';
-	this->nextChar = ' ';
+	this->nextChar = stream->peek();
+	this->lastChar = stream->get();
 }
 
 Lexer::~Lexer() {
@@ -18,8 +19,8 @@ Lexer::~Lexer() {
 }
 
 void Lexer::AppendNext() {
-	lastChar = stream->get();
-	nextChar = stream->peek();
+	lastChar = nextChar;
+	nextChar = stream->get();
 	colNumber++;
 	if (lastChar == '\n') {
 		lineNumber++;
@@ -30,8 +31,8 @@ void Lexer::AppendNext() {
 }
 
 void Lexer::EatNext() {
-	lastChar = stream->get();
-	nextChar = stream->peek();
+	lastChar = nextChar;
+	nextChar = stream->get();
 
 	if (lastChar == '\n') {
 		lineNumber++;
@@ -44,6 +45,9 @@ void Lexer::EatWhitespaces() {
 		EatNext();
 }
 
+void Lexer::NextToken() {
+	token = GetToken();
+}
 
 Token Lexer::GetToken() {
 	tokenString = ""; //Reset the tokenstring
@@ -54,8 +58,8 @@ Token Lexer::GetToken() {
 	//At this point the tokenString is empty and the nextChar is the character that is a non whitespace
 	//Last char should be a whitespace or somthing that was tokenized seperatly like an opperator
 	//Save the currentLine and column number so we known where the token originated
-	currentTokenLineNumber = lineNumber;
-	currentTokenColumnNumber = colNumber;
+	filePos.lineNumber = lineNumber;
+	filePos.columNumber = colNumber;
 
 	//KEYWORD, IDENTIFIER, TYPE
 	//If the character begins with a letter it must be a keyword, type, or identifier
@@ -108,6 +112,10 @@ Token Lexer::GetToken() {
 			AppendNext();
 			return Token::TypeInfer;
 		}
+		else if (nextChar == '>') {
+			AppendNext();
+			return Token::TypeReturn;
+		}
 		else {
 			return Token::TypeAssign;
 		}
@@ -138,30 +146,4 @@ Token Lexer::GetToken() {
 		AppendNext();
 		return Token::Unkown;
 	}
-}
-
-//This function will be called after a type opperator has been seen by the parser
-//Returns the type that is represented by the tokenString
-Type Lexer::GetType() {
-	tokenString = "";
-	EatWhitespaces();
-
-	//All types must start with a alpha char
-	if (isalpha(nextChar)) {
-		while(isalnum(nextChar)) {
-			AppendNext();
-		}
-		//Get the tokenString while there are still alphaNumeric charcters
-
-	//Check to see what type the string represents
-		if (tokenString == "Int32") 	 return Type::Int32;
-		if (tokenString == "Int64") 	 return Type::Int64;
-		if (tokenString == "Float32") return Type::Float32;
-		if (tokenString == "Float64") return Type::Float64;
-		//If its not anyone of these then the type is undefined
-		return Type::Undefined;
-	}
-	//The charcter did not start with a letter
-	//Types cannot start with a number so this is not a valid type
-	return Type::Undefined;
 }

@@ -19,9 +19,14 @@ enum class Token {
 	Unkown,
 
 	Identifer,
+
 	TypeDefine,
 	TypeAssign,
 	TypeInfer,
+	TypeReturn,
+
+	Plus,
+	Minus,
 
 	Func,
 	Foreign,
@@ -39,31 +44,44 @@ enum class Token {
 	EndOfFile
 };
 
+struct FilePosition {
+	std::string filename;
+	uint32 lineNumber;
+	uint32 columNumber;
+
+	friend std::ostream& operator<<(std::ostream& output, const FilePosition& position) {
+		output << "[" << position.filename << "::" << position.lineNumber << ":" << position.columNumber<< "]";
+		return output;
+	}
+};
+
 class Lexer {
 public:
 	std::string tokenString;
-	int lineNumber = 0;
-	int colNumber = 1;
-
-	uint32 currentTokenLineNumber;
-	uint32 currentTokenColumnNumber;
+	Token token;
 
 
-	Lexer(std::ifstream* stream);
+	FilePosition filePos;
+	Lexer(std::string filename, std::ifstream* stream);
 	~Lexer();
 
-	Token GetToken();
-	Type GetType();
-
+	void NextToken();
 private:
+	int lineNumber = 0;
+	int colNumber = 1;
 	std::ifstream* stream;
 
 	char lastChar;
 	char nextChar;
 
+	Token GetToken();
+
+
 	void AppendNext();
 	void EatNext();
 	void EatWhitespaces();
+
+
 
 };
 

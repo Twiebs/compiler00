@@ -17,7 +17,7 @@
 
 class Parser {
 public:
-	Parser(llvm::Module* module, std::ifstream* stream);
+	Parser(llvm::Module* module, std::string filename, std::ifstream* stream);
 	virtual ~Parser();
 
 	ASTNode* HandleToken(Token token);
@@ -39,6 +39,8 @@ private:
 	llvm::Module* module;
 	CodeGenerator* codeGenerator;
 	Lexer* lexer;
+
+	void CreateType(std::string name, llvm::Type* type);
 
 	std::vector<ASTType> types;
 	std::unordered_map<std::string, uint32> typeMap;

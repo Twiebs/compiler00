@@ -9,18 +9,31 @@
 #include "Parser.hpp"
 
 
-Parser::Parser(llvm::Module* module, std::ifstream* stream) {
+Parser::Parser(llvm::Module* module, std::string filename, std::ifstream* stream) {
 	this->module = module;
-	lexer = new Lexer(stream);
+	lexer = new Lexer(filename, stream);
 	codeGenerator = new CodeGenerator(module);
 
-	types.push_back(ASTType("Int32", (llvm::Type*)llvm::Type::getInt32Ty(module->getContext())));
-	typeMap["Int32"] = 1;
+	CreateType("Void", llvm::Type::getVoidTy(module->getContext()));
+	CreateType("S8", llvm::Type::getInt8Ty(module->getContext()));
+	CreateType("S16", llvm::Type::getInt16Ty(module->getContext()));
+	CreateType("S32", llvm::Type::getInt32Ty(module->getContext()));
+	CreateType("S64", llvm::Type::getInt64Ty(module->getContext()));
+
+	CreateType("F16", llvm::Type::getHalfTy(module->getContext()));
+	CreateType("F32", llvm::Type::getFloatTy(module->getContext()));
+	CreateType("F64", llvm::Type::getDoubleTy(module->getContext()));
+	CreateType("F128", llvm::Type::getFP128Ty(module->getContext()));
 }
 
 Parser::~Parser() {
 	delete lexer;
 	delete codeGenerator;
+}
+
+void Parser::CreateType(std::string name, llvm::Type* type) {
+	types.push_back(ASTType(name, type));
+	typeMap[name] = types.size();
 }
 
 ASTExpression* Parser::ParseExpression() {
@@ -44,23 +57,49 @@ ASTFunction* Parser::ParseFunction(std::string& identiferName) {
 
 	//We should be at the openParen
 	//Getting the nextToken will eat it and we will see what args are inside
-	Token token = lexer->GetToken();
+	lexer->NextToken();
 	//Loop through tokens until we find the end of the Paren
 	std::vector<Type> args;
-	while(token != Token::ParenClose) {
-		//TODO care about function paramaters
+	while(lexer->token != Token::ParenClose && lexer->token != Token::EndOfFile && lexer->token != Token::Unkown) {
+		//TODO care about function parameters
 	}
 
-	if(token == Token::ParenClose) {
-		lexer->GetToken();
+	if(lexer->token == Token::ParenClose) {
+		lexer->NextToken();
+	} else {
+		LOG_ERROR("Expected end of parens in function decl");
 	}
 
-	//Here we handle if the function is an external function by simply setting that it is external if the function is
-	//The main function other wise it is internal.. however this is sort of the opposite of what i acctualy want
-	bool isForegin = (identiferName == "main") ? false : false;
-	ASTPrototype* proto = new ASTPrototype(identiferName, args, isForegin);
-	ASTExpression* body = ParseExpression();
-	ASTFunction* function = new ASTFunction(proto, body);
+	ASTFunction* function = new ASTFunction(identiferName, args);
+	if (lexer->token == Token::TypeReturn) {
+		lexer->NextToken();
+		if(lexer->token != Token::Identifer) {
+			LOG_ERROR("expected a type after the return operator");
+			return nullptr;
+		}
+
+		function->returnType = StringToType(lexer->tokenString);
+		lexer->NextToken();
+	} else {
+		function->returnType = &types[0];
+	}
+
+	if(lexer->token == Token::ScopeOpen) {
+		//A new scope has been opened...
+		while(lexer->token != Token::ScopeClose && lexer->token != Token::EndOfFile) {
+			ASTNode* node = ParsePrimary();
+			if(node == nullptr) {
+				LOG_ERROR("Could not generate code for statement inside function body: " << identiferName);
+				return nullptr;
+			}
+			function->body.push_back(node);
+		}
+
+	} else if (lexer->token != Token::Foreign) {
+		LOG_ERROR("Expected a new scope to open '{' after function definition!");
+		return nullptr;
+	}
+
 	codeGenerator->Codegen(function);
 	return function;
 }
@@ -69,7 +108,7 @@ ASTFunction* Parser::ParseFunction(std::string& identiferName) {
 
 ASTType* Parser::ParseType() {
 	//Eat the previous token and get the type
-	lexer->GetToken();
+	lexer->NextToken();
 	ASTType* type = StringToType(lexer->tokenString);
 	return type;
 }
@@ -79,50 +118,51 @@ ASTNode* Parser::ParseIdentifier() {
 	std::string name = lexer->tokenString;
 	ASTType* type;
 
-	//Eat the identifier and get the next token
-	Token token = lexer->GetToken();
+	FilePosition identifierFilePos = lexer->filePos; //Store the position in the file the identifier was seen
+
+	lexer->NextToken();	//Eat the identifier
 
 	//TYPEASSIGNMENT
-	if (token == Token::TypeAssign) {
+	if (lexer->token == Token::TypeAssign) {
 		LOG_VERBOSE("Parsing TypeAssign");
-		token = lexer->GetToken();	//Eat the type assignment operator and get the type token
+		lexer->NextToken();	//Eat the type assignment operator and get the type token
 		//If the next token provided by the lexer is not a identifier then the user is being stupid
-		if(token != Token::Identifer) {
-			LOG_ERROR("Expected a type identifier after type assign opperator");
+		if(lexer->token != Token::Identifer) {
+			LOG_ERROR(lexer->filePos << "Expected a type identifier after type assign opperator");
 			return nullptr;
 		}
 		//The lexer has now tokenized the type try and see if it has been defined
 		type = StringToType(lexer->tokenString);
 		//The type has not been defined
 		if(type == nullptr) {
-			LOG_ERROR("type(" << lexer->tokenString << ")is undefined!");
+			LOG_ERROR(lexer->filePos << "type(" << lexer->tokenString << ")is undefined!");
 			return nullptr;
 		}
 
 		//The type was determined successfully!;
-		LOG_INFO("(" << name << ") of type(" << lexer->tokenString << ") declared! at line(" << lexer->lineNumber << ":" << lexer->colNumber << ")");
+		LOG_INFO(identifierFilePos << " (" << name << ") of type(" << lexer->tokenString << ") declared!");
 		return new ASTVariable(name, type);
 	}
 
 	//TYPE INFER
-	else if(token == Token::TypeInfer) {
+	else if(lexer->token == Token::TypeInfer) {
 		//TODO type infrence
 		return nullptr;
 	}
 
 	//TYPE DEFINE
-	else if (token == Token::TypeDefine) {
+	else if (lexer->token == Token::TypeDefine) {
 		LOG_VERBOSE("Parsing TypeDefine");
-		token = lexer->GetToken();
+		lexer->NextToken();
 
 		//If the token is a openParen then this is a function definition
 		//FUNCTION DEFINITION
-		if(token == Token::ParenOpen) {
+		if(lexer->token == Token::ParenOpen) {
 			return ParseFunction(name);
 		}
 
 		//The token is some identifier so this is a data structure definition... or something
-		if(token == Token::Identifer) {
+		if(lexer->token == Token::Identifer) {
 			//For now we will assume any custom data type being created must be a struct or something...
 			//For not we will not handle this yet
 			LOG_ERROR("Custom data types not implemented yet!");
@@ -131,36 +171,43 @@ ASTNode* Parser::ParseIdentifier() {
 	}
 
 	//FunctionCall!
-	else if (token == Token::ParenOpen) {
+	else if (lexer->token == Token::ParenOpen) {
 		LOG_VERBOSE("Parsing Call to: " << name);
 
 		std::vector<ASTExpression*> args;
-		Token token = lexer->GetToken();
-		while(token != Token::ParenClose && token != Token::Unkown && token != Token::EndOfFile) {
-			token = lexer->GetToken();
+		lexer->NextToken();
+		while(lexer->token != Token::ParenClose && lexer->token != Token::Unkown && lexer->token != Token::EndOfFile) {
+			lexer->NextToken();
 		}
 
-		if(token == Token::ParenClose) {
-			lexer->GetToken();	//Eat the close
+		if(lexer->token == Token::ParenClose) {
+			lexer->NextToken();
 		}
 
 
 		ASTCall* call = new ASTCall(name, args);
 		codeGenerator->Codegen(call);
+		return call;
 	}
 
-	LOG_ERROR("Unknown token after identifier '" << name << "' (" << lexer->tokenString << ")");
+	LOG_ERROR(lexer->filePos << "Unknown token after identifier '" << name << "' [ '" << lexer->tokenString << "' ]");
 	return nullptr;
 }
 
 ASTNode* Parser::ParsePrimary() {
-	switch (lexer->GetToken()) {
+	lexer->NextToken();
+	switch (lexer->token) {
 	case Token::Identifer:
 		return ParseIdentifier();
 	case Token::Number:
 		return ParseNumber();
+	case Token::ScopeOpen:
+		LOG_VERBOSE(lexer->filePos << "Parsing a new scope");
+		break;
+	case Token::EndOfFile:
+		return nullptr;
 	default:
-		LOG_ERROR("Unknown token when expecting expression");
+		LOG_ERROR(lexer->filePos << "Unknown token when expecting expression");
 		return nullptr;
 	}
 }
@@ -170,9 +217,9 @@ ASTNumber* Parser::ParseNumber() {
 }
 
 void Parser::ParseFile() {
-	Token token = lexer->GetToken();
-	while (token != Token::EndOfFile) {
-		switch (token) {
+	lexer->NextToken();
+	while (lexer->token != Token::EndOfFile) {
+		switch (lexer->token) {
 		case Token::Identifer:
 			ParseIdentifier();
 			break;
@@ -186,11 +233,10 @@ void Parser::ParseFile() {
 		case Token::ParenClose:
 			break;
 		case Token::Unkown:
-			LOG_ERROR(
-					"Unknown Token(" << lexer->tokenString << ") at line(" << lexer->lineNumber << ":" << lexer->colNumber << ")");
+			LOG_ERROR(lexer->filePos << "Unknown Token(" << lexer->tokenString << ")");
 			break;
 		}
-		token = lexer->GetToken();
+		lexer->NextToken();
 	}
 
 

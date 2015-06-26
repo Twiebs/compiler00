@@ -27,8 +27,9 @@ typedef uint64_t uint64;
 
 #define LOG_LEVEL LOG_LEVEL_VERBOSE
 
+
 #if LOG_LEVEL > 0
-#define LOG_ERROR(x) std::cerr << "ERROR: " << x << "\n"
+#define LOG_ERROR(x) std::cout << x << "\n"
 #else
 #define LOG_ERROR(x)
 #endif

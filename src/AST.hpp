@@ -22,8 +22,7 @@ class ASTNode {
 public:
 friend class CodeGenerator;
 	virtual ~ASTNode() { }
-private:
-
+protected:
 };
 
 
@@ -31,9 +30,10 @@ class ASTType : public ASTNode {
 public:
 	ASTType(std::string name, llvm::Type* llvmType) : name(name), llvmType(llvmType) { }
 	~ASTType() { }
-private:
 	std::string name;
 	llvm::Type* llvmType;
+private:
+
 };
 
 
@@ -62,12 +62,16 @@ private:
 //A Node representing a function definition in the AST
 class ASTFunction : public ASTNode {
 friend class CodeGenerator;
+
 public:
-	ASTFunction(ASTPrototype* proto, ASTExpression* body) : proto(proto), body(body) { }
+	ASTFunction(std::string& name, std::vector<Type> args) : name(name), args(args) { }
 	~ASTFunction() { }
+	std::vector<ASTNode*> body;
+	ASTType* returnType;
 private:
-	ASTPrototype* proto;
-	ASTExpression* body;
+	std::string name;
+	std::vector<Type> args;
+
 };
 
 
