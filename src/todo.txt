@@ -1,0 +1,7 @@
+Change recursive ASTNode traversal to an iterraive process
+
+Cosntruct an array of ASTNode* that represent the expressions in the statement
+Dont do any actual work during this phase just determine what needs to be done and
+store the nodes in the array in the order in which they need to be processed.
+
+Finally iterrate over the array linearly
