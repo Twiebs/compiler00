@@ -12,19 +12,51 @@
 #include "llvm/IR/Value.h"
 #include "Lexer.hpp"
 
+namespace AST {
 
-//Base node all members of the AST inherit from:
-//Archetype of:
-//ASTExpression
-//ASTFunction
-//ASTType
+struct Node {
+	//What does this actually need?
+};
+
+//NOTE this is starting to look like linked list bullshit...
+struct Identifier {
+	FilePosition position;	 //Where was the identifier declared
+	std::string name;		//What is the name of the identifier
+	Node* node;			 //What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
+};
+
+struct TypeDefinition : public Node{
+	Identifier* identifier;
+	llvm::Type* llvmType;
+};
+
+struct Variable : public Node {
+	Identifier* identifier;
+	TypeDefinition* type;
+	//TODO apparently variables are suposed to hold values????
+};
+
+struct Function : public Node {
+	Identifier* identifier;
+	TypeDefinition* returnType;
+	std::vector<Node*> args;
+	std::vector<Node*> body;
+};
+
+struct Call : public Node {
+	Function* function;
+	std::vector<Node*> args;
+};
+
+
+}
+
 class ASTNode {
 public:
 friend class CodeGenerator;
 	virtual ~ASTNode() { }
 protected:
 };
-
 
 class ASTType : public ASTNode {
 public:

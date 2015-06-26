@@ -18,7 +18,7 @@ enum class Type {
 enum class Token {
 	Unkown,
 
-	Identifer,
+	Identifier,
 
 	TypeDefine,
 	TypeAssign,
@@ -44,11 +44,11 @@ enum class Token {
 	EndOfFile
 };
 
+
 struct FilePosition {
 	std::string filename;
 	uint32 lineNumber;
 	uint32 columNumber;
-
 	friend std::ostream& operator<<(std::ostream& output, const FilePosition& position) {
 		output << "[" << position.filename << "::" << position.lineNumber << ":" << position.columNumber<< "]";
 		return output;

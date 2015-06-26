@@ -25,6 +25,11 @@ public:
 	CodeGenerator(llvm::Module* module);
 	~CodeGenerator();
 
+	llvm::Value* Codegen(AST::Node* node);
+	llvm::Value* Codegen(AST::Call* call);
+	llvm::Function* Codegen(AST::Function* function);
+
+
 	llvm::Value* Codegen(ASTNode* node);
 	llvm::Value* Codegen(ASTExpression* expression);
 

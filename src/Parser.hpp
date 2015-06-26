@@ -25,14 +25,14 @@ public:
 	//Runs the parser until the EOF is hit
 	void ParseFile();
 
-	ASTNode* ParsePrimary();
-	//This could be anything...
-	ASTNode* ParseIdentifier();
+	AST::Node* ParsePrimary();
+	AST::Node* ParseIdentifier();
+
 	ASTExpression* ParseExpression();
-	ASTNumber* ParseNumber();
 	ASTFunction* ParseFunction(std::string& identifierName);
 
 	ASTType* ParseType();
+	AST::TypeDefinition* StringToTypeDefinition(std::string string);
 	ASTType* StringToType(std::string string);
 
 private:
@@ -40,10 +40,16 @@ private:
 	CodeGenerator* codeGenerator;
 	Lexer* lexer;
 
+	//TODO add more create... here to remove memory management from the equation?
 	void CreateType(std::string name, llvm::Type* type);
+
+	std::vector<AST::TypeDefinition> typeDefinitions;
+	std::unordered_map<std::string, uint32> namedTypeDefinitions;
 
 	std::vector<ASTType> types;
 	std::unordered_map<std::string, uint32> typeMap;
+
+	std::unordered_map<std::string, AST::Identifier*> identifiers;
 };
 
 #endif /* PARSER_HPP_ */

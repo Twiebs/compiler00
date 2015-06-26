@@ -42,6 +42,17 @@ ASTExpression* Parser::ParseExpression() {
 }
 
 
+
+AST::TypeDefinition* Parser::StringToTypeDefinition(std::string string) {
+	uint32 typeIndex =  namedTypeDefinitions[string];
+	if(typeIndex == 0) {
+		LOG_DEBUG(string << " has not been defined!");
+		return nullptr;
+	}
+      AST::TypeDefinition* type = &typeDefinitions[typeIndex - 1];
+	return type;
+}
+
 ASTType* Parser::StringToType(std::string string) {
 	uint32 typeIndex = typeMap[string];
 	if(typeIndex == 0) {
@@ -52,96 +63,75 @@ ASTType* Parser::StringToType(std::string string) {
 	return type;
 }
 
-ASTFunction* Parser::ParseFunction(std::string& identiferName) {
-	LOG_VERBOSE("Parsing Function");
+ASTFunction* Parser::ParseFunction(std::string& identifierName) {
 
-	//We should be at the openParen
-	//Getting the nextToken will eat it and we will see what args are inside
-	lexer->NextToken();
-	//Loop through tokens until we find the end of the Paren
-	std::vector<Type> args;
-	while(lexer->token != Token::ParenClose && lexer->token != Token::EndOfFile && lexer->token != Token::Unkown) {
-		//TODO care about function parameters
-	}
-
-	if(lexer->token == Token::ParenClose) {
-		lexer->NextToken();
-	} else {
-		LOG_ERROR("Expected end of parens in function decl");
-	}
-
-	ASTFunction* function = new ASTFunction(identiferName, args);
-	if (lexer->token == Token::TypeReturn) {
-		lexer->NextToken();
-		if(lexer->token != Token::Identifer) {
-			LOG_ERROR("expected a type after the return operator");
-			return nullptr;
-		}
-
-		function->returnType = StringToType(lexer->tokenString);
-		lexer->NextToken();
-	} else {
-		function->returnType = &types[0];
-	}
-
-	if(lexer->token == Token::ScopeOpen) {
-		//A new scope has been opened...
-		while(lexer->token != Token::ScopeClose && lexer->token != Token::EndOfFile) {
-			ASTNode* node = ParsePrimary();
-			if(node == nullptr) {
-				LOG_ERROR("Could not generate code for statement inside function body: " << identiferName);
-				return nullptr;
-			}
-			function->body.push_back(node);
-		}
-
-	} else if (lexer->token != Token::Foreign) {
-		LOG_ERROR("Expected a new scope to open '{' after function definition!");
-		return nullptr;
-	}
-
-	codeGenerator->Codegen(function);
-	return function;
 }
 
 
 
 ASTType* Parser::ParseType() {
-	//Eat the previous token and get the type
+	//Eat the previous token and get the
+
 	lexer->NextToken();
 	ASTType* type = StringToType(lexer->tokenString);
 	return type;
 }
 
-ASTNode* Parser::ParseIdentifier() {
+AST::Node* Parser::ParseIdentifier() {
 	LOG_VERBOSE("Parsing Identifier : " << lexer->tokenString);
-	std::string name = lexer->tokenString;
-	ASTType* type;
+      AST::Identifier* identifier = identifiers[lexer->tokenString];
+      if(identifier == nullptr) {
+            //TODO how are we going to handle AST allocations?
+            //Store identifiers in an array contiguously? and point to the AST::Node they represent?
+            //Does the node then point back to the identifier that represnts it?
+            identifier = new AST::Identifier;
+            identifier->position = lexer->filePos;
+            identifier->name = lexer->tokenString;
+            identifiers[lexer->tokenString] = identifier;
+      }
 
-	FilePosition identifierFilePos = lexer->filePos; //Store the position in the file the identifier was seen
-
-	lexer->NextToken();	//Eat the identifier
+      //We now have an identifier that has either been created or pulled from the idTable
+	lexer->NextToken(); //Eat the identifier
 
 	//TYPEASSIGNMENT
 	if (lexer->token == Token::TypeAssign) {
 		LOG_VERBOSE("Parsing TypeAssign");
 		lexer->NextToken();	//Eat the type assignment operator and get the type token
-		//If the next token provided by the lexer is not a identifier then the user is being stupid
-		if(lexer->token != Token::Identifer) {
+
+            // If the next token provided by the lexer is not a identifier then the user is being stupid
+            if(lexer->token != Token::Identifier) {
 			LOG_ERROR(lexer->filePos << "Expected a type identifier after type assign opperator");
 			return nullptr;
 		}
-		//The lexer has now tokenized the type try and see if it has been defined
-		type = StringToType(lexer->tokenString);
-		//The type has not been defined
-		if(type == nullptr) {
-			LOG_ERROR(lexer->filePos << "type(" << lexer->tokenString << ")is undefined!");
+
+            //The next token is an identifier we need to create a variable to represent it no mater what...
+            //Actualy lets see what it is first...
+            //Instead of looking up the type directly we can lookup the identifier and see if it points to a type...
+            //This might be a good idea because it could provide better error messages and also removes ambiguity betweem functions, types
+            //And other stuff.
+
+            auto type = identifiers[lexer->tokenString];
+            //TODO here we need to wait on identifiers/types to be resolved!1
+            if (!type) {
+                  LOG_ERROR(lexer->filePos << "type(" << lexer->tokenString << ")is undefined!");
 			return nullptr;
-		}
+            }
 
 		//The type was determined successfully!;
-		LOG_INFO(identifierFilePos << " (" << name << ") of type(" << lexer->tokenString << ") declared!");
-		return new ASTVariable(name, type);
+        //TOOD stream opperator overload for identifiers?
+		LOG_INFO(identifier->position << " (" << identifier->name << ") of type(" << lexer->tokenString << ") declared!");
+		//What is a variable and why the fuck do i need one??  its never actualy used...
+            //NOTE There was a ASTVariable being created and returned here... I deleted it and am returning a nullptr for now
+            //Because this currently doesnt make a difference.
+            //URGENT This probably is the source of your error dumb-dumb
+
+            //TODO here we need to check if there is a n assignment opperator after the type
+
+            //We need some type of memory manager that will create these variables and store them approraityl
+            AST::Variable* variable = new AST::Variable;
+            variable->identifier = identifier;
+            variable->type = (AST::TypeDefinition*)identifier->node;
+            return variable;
 	}
 
 	//TYPE INFER
@@ -153,16 +143,81 @@ ASTNode* Parser::ParseIdentifier() {
 	//TYPE DEFINE
 	else if (lexer->token == Token::TypeDefine) {
 		LOG_VERBOSE("Parsing TypeDefine");
-		lexer->NextToken();
+            //First we makesure that the identifier has not been resolved yet
+            if(identifier->node != nullptr) {
+                  LOG_ERROR(lexer->filePos << " Identifier " << identifier->name << "was allready defined at" << identifier->position);
+                  return nullptr;   //The identifer has allready been defined!  It can not be type assigned
+            }
+            lexer->NextToken();
 
 		//If the token is a openParen then this is a function definition
 		//FUNCTION DEFINITION
-		if(lexer->token == Token::ParenOpen) {
-			return ParseFunction(name);
+		//TODO Parse Clojures here {}...
+            //Move parse Function inline?
+            //Thats probably a good idea because its only ever going to be called from right here anyway!
+
+
+            if(lexer->token == Token::ParenOpen) {
+            	LOG_VERBOSE("Parsing Function");
+            	lexer->NextToken();    //Eat the open paren
+
+            	AST::Function* function = new AST::Function;
+            	function->identifier = identifier;
+
+            	while(lexer->token != Token::ParenClose) {
+            		//Its assumed parsePrimary will handle any EOF / unkowns
+            		function->args.push_back(ParsePrimary());
+            	}
+            	//Eat the close ')'
+            	lexer->NextToken();
+
+            	if (lexer->token == Token::TypeReturn) {
+            		lexer->NextToken();
+            		if(lexer->token != Token::Identifier) {
+            			LOG_ERROR("expected a type after the return operator");
+            			return nullptr;
+            		}
+
+            		AST::Identifier* returnTypeIdentifier = identifiers[lexer->tokenString];
+            		if(returnTypeIdentifier == nullptr) {
+            			LOG_ERROR("...Unkown identifier");
+            			return nullptr;
+            		}
+
+            		function->returnType = returnTypeIdentifier->node;
+            		lexer->NextToken();
+
+            	}
+
+            	//There was no type return ':>' opperator after the argument list
+            	else {
+            		function->returnType = (AST::TypeDefinition*) (identifiers["Void"]->node);
+            	}
+
+            	//URGENT we might need to eat a token here?
+
+            	if(lexer->token == Token::ScopeOpen) {
+            		//A new scope has been opened...
+            		while(lexer->token != Token::ScopeClose && lexer->token != Token::EndOfFile) {
+            			AST::Node* node = ParsePrimary();
+            			if(node == nullptr) {
+            				LOG_ERROR("Could not generate code for statement inside function body: " << identifier->name);
+            				return nullptr;
+            			}
+            			function->body.push_back(node);
+            		}
+
+            	} else if (lexer->token != Token::Foreign) {
+            		LOG_ERROR("Expected a new scope to open '{' after function definition!");
+            		return nullptr;
+            	}
+
+            	codeGenerator->Codegen(function);
+            	return function;
 		}
 
 		//The token is some identifier so this is a data structure definition... or something
-		if(lexer->token == Token::Identifer) {
+		if(lexer->token == Token::Identifier) {
 			//For now we will assume any custom data type being created must be a struct or something...
 			//For not we will not handle this yet
 			LOG_ERROR("Custom data types not implemented yet!");
@@ -172,9 +227,11 @@ ASTNode* Parser::ParseIdentifier() {
 
 	//FunctionCall!
 	else if (lexer->token == Token::ParenOpen) {
-		LOG_VERBOSE("Parsing Call to: " << name);
+		LOG_VERBOSE("Parsing Call to: " << identifier->name);
 
-		std::vector<ASTExpression*> args;
+		AST::Call* call = new AST::Call;
+		call->function = (AST::Function*)identifier->node;
+
 		lexer->NextToken();
 		while(lexer->token != Token::ParenClose && lexer->token != Token::Unkown && lexer->token != Token::EndOfFile) {
 			lexer->NextToken();
@@ -183,24 +240,22 @@ ASTNode* Parser::ParseIdentifier() {
 		if(lexer->token == Token::ParenClose) {
 			lexer->NextToken();
 		}
-
-
-		ASTCall* call = new ASTCall(name, args);
 		codeGenerator->Codegen(call);
 		return call;
 	}
 
-	LOG_ERROR(lexer->filePos << "Unknown token after identifier '" << name << "' [ '" << lexer->tokenString << "' ]");
+	LOG_ERROR(lexer->filePos << "Unknown token after identifier '" << identifier->name << "' [ '" << lexer->tokenString << "' ]");
 	return nullptr;
 }
 
-ASTNode* Parser::ParsePrimary() {
+AST::Node* Parser::ParsePrimary() {
 	lexer->NextToken();
 	switch (lexer->token) {
-	case Token::Identifer:
+	case Token::Identifier:
 		return ParseIdentifier();
 	case Token::Number:
-		return ParseNumber();
+		LOG_ERROR(lexer->filePos << "ATTEMPTING TO PARSE A NUMBER!");
+		return nullptr;
 	case Token::ScopeOpen:
 		LOG_VERBOSE(lexer->filePos << "Parsing a new scope");
 		break;
@@ -212,15 +267,14 @@ ASTNode* Parser::ParsePrimary() {
 	}
 }
 
-ASTNumber* Parser::ParseNumber() {
-	return nullptr;
-}
 
+//URGENT(As soon as the compiler runs again resolve this!)
+//What the fuck is this?
 void Parser::ParseFile() {
 	lexer->NextToken();
 	while (lexer->token != Token::EndOfFile) {
 		switch (lexer->token) {
-		case Token::Identifer:
+		case Token::Identifier:
 			ParseIdentifier();
 			break;
 		case Token::Number:

@@ -74,7 +74,8 @@ Token Lexer::GetToken() {
 		if (tokenString == "foreign") return Token::Foreign;
 		if (tokenString == "if") return Token::If;
 		if (tokenString == "else") return Token::Else;
-		return Token::Identifer;
+
+		return Token::Identifier;
 	}
 
 	//NUMERIC LITERAL

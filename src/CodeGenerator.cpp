@@ -16,6 +16,76 @@ CodeGenerator::~CodeGenerator() {
 	delete builder;
 }
 
+llvm::Value* CodeGenerator::Codegen(AST::Node* node) {
+	if (typeid(*node) == typeid(AST::Variable))
+		return Codegen((AST::Variable*) node);
+	if (typeid(*node) == typeid(AST::Function))
+		return Codegen((AST::Function*) node);
+	if (typeid(*node) == typeid(ASTCall))
+		return Codegen((AST::Call*) node);
+
+	LOG_ERROR("UNHANDLED CODEGEN OF ASTNODE");
+	return nullptr;
+}
+
+llvm::Value* CodeGenerator::Codegen(AST::Function* function) {
+	LOG_VERBOSE("Codgen Function");
+	llvm::FunctionType* funcType = llvm::FunctionType::get(function->returnType->llvmType, false);
+	llvm::Function::LinkageTypes linkage = (function->body.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
+	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->identifier->name, module);
+
+	if (function->body.size() > 0) {
+		llvm::BasicBlock* block = llvm::BasicBlock::Create(module->getContext(), "entry", llvmFunc);
+		builder->SetInsertPoint(block);
+
+		//Create a new block insider this function and
+		//Set the IRBuilders insertion point to the block
+
+		for (ASTNode* node : function->body) {
+			Codegen(node);
+		}
+
+		llvm::Value* returnValue = llvm::ConstantInt::get(function->returnType->llvmType, 1);
+		if (returnValue) {
+			builder->CreateRet(returnValue);
+			llvm::raw_os_ostream* stream = new llvm::raw_os_ostream(std::cout);
+			llvm::verifyModule(*module, stream);
+			return llvmFunc;
+		}
+	}
+
+	return llvmFunc;
+
+	//There was an error reading the body of the function
+	//Remove the function
+//	function->eraseFromParent();
+//	LOG_ERROR("Error parsing body of function");
+	return nullptr;
+
+}
+
+llvm::Value* CodeGenerator::Codegen(AST::Call* call) {
+	llvm::Function* function = module->getFunction(call->function->identifier->name);
+		if (function == 0) {
+			LOG_ERROR("Call to undefined function(" << call->function->identifier->name<< ")");
+			return nullptr;
+		}
+
+		if (call->args.size() != function->arg_size()) {
+			LOG_ERROR("Function Call contains incorrect number of arguments!");
+			return nullptr;
+		}
+
+		std::vector<llvm::Value*> argsV;
+		for (uint32 i = 0, e = function->arg_size(); i != e; i++) {
+			argsV.push_back(Codegen(call->args[i]));
+			if (argsV.back() == 0)
+				return nullptr;
+		}
+		return builder->CreateCall(function, argsV, "calltmp");
+}
+
+
 llvm::Value* CodeGenerator::Codegen(ASTNode* node) {
 	if (typeid(*node) == typeid(ASTVariable))
 		return Codegen((ASTVariable*) node);

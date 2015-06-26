@@ -4,10 +4,8 @@
 // :: (type define)
 // :> (type return)
 
-
-
-println :: () :> S32 foreign
-
 main :: () :> S32 {
   println()
 }
+
+println :: () :> S32 foreign
