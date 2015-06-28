@@ -5,3 +5,26 @@ Dont do any actual work during this phase just determine what needs to be done a
 store the nodes in the array in the order in which they need to be processed.
 
 Finally iterrate over the array linearly
+
+ASTStatement
+Urary
+
+Decleration->expression
+Decleration->type
+
+
+move built in types somewhere else?
+
+AST::TypeDefinition* typedef_Int;
+AST::TypeDefintiion* typdef_S32;
+
+AST::Literal* literal_true;
+AST::Literal* literal_false;
+
+MakeInteger?
+Create is better
+CreateInteger?
+
+CreateIntergerLiteral?
+
+StructDescription?

@@ -21,7 +21,7 @@ enum class Token {
 	Identifier,
 
 	TypeDefine,
-	TypeAssign,
+	TypeDeclare,
 	TypeInfer,
 	TypeReturn,
 
@@ -65,7 +65,9 @@ public:
 	Lexer(std::string filename, std::ifstream* stream);
 	~Lexer();
 
+
 	void NextToken();
+
 private:
 	int lineNumber = 0;
 	int colNumber = 1;

@@ -63,7 +63,7 @@ Token Lexer::GetToken() {
 
 	//KEYWORD, IDENTIFIER, TYPE
 	//If the character begins with a letter it must be a keyword, type, or identifier
-	if(isalnum(nextChar)) {
+	if(isalpha(nextChar)) {
 		while (isalnum(nextChar)) {
 			AppendNext();
 		}
@@ -93,7 +93,7 @@ Token Lexer::GetToken() {
 		if (nextChar == '/') {
 			EatNext(); //Eats the second '/'
 			while(nextChar != EOF && nextChar != '\n' && nextChar != '\r') {
-				EatNext();	//Now we eat the comment body itsself
+				EatNext();	//Now we eat the comment body itself
 			}
 			//We have reached the end of the comment.  If is not the end of the file get the next token
 			if(nextChar != EOF) {
@@ -118,8 +118,14 @@ Token Lexer::GetToken() {
 			return Token::TypeReturn;
 		}
 		else {
-			return Token::TypeAssign;
+			return Token::TypeDeclare;
 		}
+	}
+
+	//ASSIGNMENT OPERATOR
+	else if(nextChar == '=') {
+		AppendNext();
+		return Token::AssignmentOpperator;
 	}
 
 	//BRACES, BRACKETS, SUBSCRIPTS

@@ -1,10 +1,3 @@
-/*
- * Parser.hpp
- *
- *  Created on: Jun 18, 2015
- *      Author: torin
- */
-
 #ifndef PARSER_HPP_
 #define PARSER_HPP_
 
@@ -20,36 +13,24 @@ public:
 	Parser(llvm::Module* module, std::string filename, std::ifstream* stream);
 	virtual ~Parser();
 
-	ASTNode* HandleToken(Token token);
-
-	//Runs the parser until the EOF is hit
 	void ParseFile();
-
-	AST::Node* ParsePrimary();
-	AST::Node* ParseIdentifier();
-
-	ASTExpression* ParseExpression();
-	ASTFunction* ParseFunction(std::string& identifierName);
-
-	ASTType* ParseType();
-	AST::TypeDefinition* StringToTypeDefinition(std::string string);
-	ASTType* StringToType(std::string string);
-
 private:
 	llvm::Module* module;
 	CodeGenerator* codeGenerator;
 	Lexer* lexer;
 
-	//TODO add more create... here to remove memory management from the equation?
+	int32 operatorPrecedence[(int32)BinOp::Count];
+
+	AST::Node* ParseStatement();
+	AST::Expression* ParseExpression();
+
+	int32 GetBinopPrecedence();
+
 	void CreateType(std::string name, llvm::Type* type);
-
-	std::vector<AST::TypeDefinition> typeDefinitions;
-	std::unordered_map<std::string, uint32> namedTypeDefinitions;
-
-	std::vector<ASTType> types;
-	std::unordered_map<std::string, uint32> typeMap;
-
-	std::unordered_map<std::string, AST::Identifier*> identifiers;
+	//TODO these probably should not exist inside the parser.
+	//They should be moved into a memory manager or something...
+	//or... we could strip out this whole thing and move to a much more c style syntax
+	//But considering that this is a compiler this probably is'nt the time that we want to be experimenting with that...
 };
 
 #endif /* PARSER_HPP_ */

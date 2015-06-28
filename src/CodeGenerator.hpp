@@ -26,19 +26,12 @@ public:
 	~CodeGenerator();
 
 	llvm::Value* Codegen(AST::Node* node);
+	llvm::Value* Codegen(AST::Variable* var);
 	llvm::Value* Codegen(AST::Call* call);
+	llvm::Value* Codegen(AST::IntegerLiteral* intLiteral);
+	llvm::Value* Codegen(AST::FloatLiteral* floatLiteral);
 	llvm::Function* Codegen(AST::Function* function);
 
-
-	llvm::Value* Codegen(ASTNode* node);
-	llvm::Value* Codegen(ASTExpression* expression);
-
-	llvm::Value* Codegen(float value);
-
-	llvm::Value* Codegen(ASTVariable* variable);
-	llvm::Value* Codegen(ASTCall* call);
-	llvm::Function* Codegen(ASTPrototype* proto);
-	llvm::Function* Codegen(ASTFunction* function);
 
 private:
 	llvm::Module* module;

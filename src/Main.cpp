@@ -19,11 +19,6 @@
 
 #include "llvm/Bitcode/ReaderWriter.h"
 
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/GenericValue.h"
-#include "llvm/ExecutionEngine/GenericValue.h"
-#include "llvm/ExecutionEngine/MCJIT.h"
-
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -37,12 +32,6 @@
 
 #include "Lexer.hpp"
 #include "Parser.hpp"
-
-extern "C"
-void println() {
-	std::cout << "This is a message send from my language!\n";
-}
-
 
 int main(int argc, char** argv) {
 	static llvm::cl::opt<std::string> inputFile(llvm::cl::Positional,
@@ -73,6 +62,8 @@ int main(int argc, char** argv) {
 	llvm::LLVMContext& context = llvm::getGlobalContext();
 	llvm::Module* module = new llvm::Module("LLVMLang Compiler", context);
 
+	auto i = inputFile.size();
+
 	Parser parser(module, inputFile, &stream);
 	parser.ParseFile();
 
@@ -80,18 +71,5 @@ int main(int argc, char** argv) {
 	llvm::raw_fd_ostream ostream(outputFile, errorCode, llvm::sys::fs::F_None);
 	llvm::WriteBitcodeToFile(module, ostream);
 	LOG_INFO("Writing bitcode to file");
-
-	//Move theModule into the execution engine
-	// llvm::ExecutionEngine* engine = llvm::EngineBuilder(std::unique_ptr<llvm::Module>(module)).create();
-	//
-	// auto mainFunction = engine->FindFunctionNamed("Main");
-	// if (mainFunction == nullptr) {
-	// 	LOG_ERROR("Program must contain a 'Main' function!");
-	// 	return 0;
-	// }
-	// std::vector<llvm::GenericValue> args;
-	// llvm::GenericValue returnCode = engine->runFunction(mainFunction, args);
-
-	//system("pause");
 	return 0;
 }

@@ -1,11 +1,20 @@
-//Type Gramar
-// : (Type assign)
-// := (type infer)
-// :: (type define)
-// :> (type return)
+print :: () :> S32 foreign
+println :: () :> S32 foreign
+printlnInt :: (value : S32) :> S32 foreign
 
-main :: () :> S32 {
-  println()
+
+MyFunction :: () :> S32 {
+
 }
 
-println :: () :> S32 foreign
+main :: () :> S32 {
+    //foo : S32 = 0
+    //bar : S32 = 777
+
+    result : S32 = MyFunction()
+
+  //printlnInt(foo)
+  //printlnInt(77)
+ // printlnInt(22)
+  //printlnInt(8)
+}

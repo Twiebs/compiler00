@@ -9,133 +9,105 @@
 #define AST_HPP_
 
 #include <vector>
+#include <unordered_map>
 #include "llvm/IR/Value.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Instructions.h"
 #include "Lexer.hpp"
+
+//Please note
+//This is fucking retarded!
+
+enum class ASTNodeType {
+	TypeDefinition,
+	//Decleration,
+	Identifier,
+	Variable,
+	Function,
+	IntegerLiteral,
+	FloatLiteral,
+	Call
+};
+
+enum class BinOp {
+	ADD,
+	SUB,
+	MUL,
+	DIV,
+	Count
+};
 
 namespace AST {
 
 struct Node {
-	//What does this actually need?
+	ASTNodeType nodeType;
 };
 
-//NOTE this is starting to look like linked list bullshit...
+
 struct Identifier {
-	FilePosition position;	 //Where was the identifier declared
-	std::string name;		//What is the name of the identifier
-	Node* node;			 //What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
+	FilePosition position;	//Where was the identifier declared
+	std::string name;				//What is the name of the identifier
+	Node* node = nullptr;		//What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
 };
+
+struct Expression : public Node{
+
+};
+
+struct BinaryOperation {
+	BinOp op;
+	Expression* lhs, rhs;
+};
+
 
 struct TypeDefinition : public Node{
 	Identifier* identifier;
 	llvm::Type* llvmType;
 };
 
-struct Variable : public Node {
+struct Variable : public Expression {
 	Identifier* identifier;
 	TypeDefinition* type;
-	//TODO apparently variables are suposed to hold values????
+	Expression* initalExpression;
+	llvm::AllocaInst* allocaInst;
 };
 
 struct Function : public Node {
 	Identifier* identifier;
 	TypeDefinition* returnType;
-	std::vector<Node*> args;
+	std::vector<Variable*> args;
 	std::vector<Node*> body;
 };
 
 struct Call : public Node {
 	Function* function;
-	std::vector<Node*> args;
+	std::vector<Expression*> args;
 };
 
+struct IntegerLiteral : public Expression {
+	TypeDefinition* intType;
+	int64 value;
+};
 
+struct FloatLiteral : public Expression {
+	TypeDefinition* floatType;
+	float64 value;
+};
+
+void InitalizeLanguagePrimitives(llvm::Module* module);
+void CreateType(std::string name, llvm::Type* type);
+
+Identifier* FindIdentifier(std::string name);
+Identifier* CreateIdentifier(std::string name);
+Variable* CreateVariable();
+Function* CreateFunction();
+Call* CreateCall();
+
+IntegerLiteral* CreateIntegerLiteral();
+IntegerLiteral* CreateIntegerLiteral(int64 value);
+
+FloatLiteral* CreateFloatLiteral();
 }
 
-class ASTNode {
-public:
-friend class CodeGenerator;
-	virtual ~ASTNode() { }
-protected:
-};
-
-class ASTType : public ASTNode {
-public:
-	ASTType(std::string name, llvm::Type* llvmType) : name(name), llvmType(llvmType) { }
-	~ASTType() { }
-	std::string name;
-	llvm::Type* llvmType;
-private:
-
-};
-
-
-//Represents an expression in the AST
-class ASTExpression : public ASTNode {
-public:
-	virtual ~ASTExpression() { }
-};
-
-
-
-//Represents a prototype of a function in the AST
-//TODO This is probably completly unessecary
-class ASTPrototype : public ASTNode {
-friend class CodeGenerator;
-public:
-	ASTPrototype(std::string& name, std::vector<Type> args, bool foreign) :
-		name(name), args(args), isForegin(foreign) { }
-
-private:
-	bool isForegin = false;
-	std::string name;
-	std::vector<Type> args;
-};
-
-//A Node representing a function definition in the AST
-class ASTFunction : public ASTNode {
-friend class CodeGenerator;
-
-public:
-	ASTFunction(std::string& name, std::vector<Type> args) : name(name), args(args) { }
-	~ASTFunction() { }
-	std::vector<ASTNode*> body;
-	ASTType* returnType;
-private:
-	std::string name;
-	std::vector<Type> args;
-
-};
-
-
-//Represents a variable of some value and type
-class ASTVariable : public ASTExpression {
-public:
-	ASTVariable(const std::string& name, ASTType* type) :
-			name(name), type(type) {
-		//Blank Constructor
-	}
-private:
-	std::string name;
-	ASTType* type;
-};
-
-class ASTNumber : public ASTExpression {
-public:
-	ASTNumber() { }
-};
-
-
-
-//Represents a call to a function in the AST
-class ASTCall : public ASTNode {
-friend class CodeGenerator;
-public:
-	ASTCall(std::string& functionName, std::vector<ASTExpression*> args) :
-		functionName(functionName), args(args) { }
-private:
-	std::string functionName;
-	std::vector<ASTExpression*> args;
-};
-
-
-#endif /* AST_HPP_ */
+#endif //AST_HPP
