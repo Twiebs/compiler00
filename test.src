@@ -6,22 +6,7 @@ MyFunction :: () :> S32 {
       Println()
 }
 
-Main :: () -> S32
-      Println("Hello World")
-      if x == 3
-            Println("x is three")
-      else
-            Println("x is not three")
-
-
 main :: () :> S32 {
-      foo : S32 = 0
-      bar : S32 = 777
-      PrintlnInt(foo)
-      PrintlnInt(bar)
-
       result : S32 = MyFunction()
       PrintlnInt(result)
-
-      PrintlnInt(42)
 }
