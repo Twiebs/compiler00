@@ -1,9 +1,4 @@
-/*
- * Main.cpp
- *
- *  Created on: Jun 14, 2015
- *      Author: Torin Wiebelt
- */
+//NOTE all of this stuff was created on June18 if you end of caring about that sort of thing!
 
 #include <string>
 #include <iostream>
@@ -62,8 +57,6 @@ int main(int argc, char** argv) {
 	llvm::LLVMContext& context = llvm::getGlobalContext();
 	llvm::Module* module = new llvm::Module("LLVMLang Compiler", context);
 
-	auto i = inputFile.size();
-
 	Parser parser(module, inputFile, &stream);
 	parser.ParseFile();
 
@@ -71,5 +64,6 @@ int main(int argc, char** argv) {
 	llvm::raw_fd_ostream ostream(outputFile, errorCode, llvm::sys::fs::F_None);
 	llvm::WriteBitcodeToFile(module, ostream);
 	LOG_INFO("Writing bitcode to file");
+	LOG_INFO("No Errors were reported!  Have a \x1b[31mW\x1b[32mo\x1b[33mn\x1b[34md\x1b[35me\x1b[36mr\x1b[31mf\x1b[32mu\x1b[33ml\x1b[34ml \x1b[39mday!");
 	return 0;
 }

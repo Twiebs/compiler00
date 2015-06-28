@@ -71,9 +71,9 @@ AST::Node* Parser::ParseStatement() {
 			if (lexer->token == Token::AssignmentOpperator) {
 				lexer->NextToken();	//Eat the assignment operator
 				var->initalExpression = ParseExpression();
-				LOG_INFO(identifier->position << " (" << identifier->name << ") of type(" << type->identifier->name << ") declared with an expression!");
+				LOG_INFO(identifier->position << "Identifier(" << identifier->name << ") of Type(" << type->identifier->name << ") declared with an expression!");
 			} else {
-				LOG_INFO(identifier->position << " (" << identifier->name << ") of type(" << type->identifier->name << ") declared!");
+				LOG_INFO(identifier->position << "Identifier(" << identifier->name << ") of Type(" << type->identifier->name << ") declared!");
 			}
 			return var;
 		}
@@ -163,7 +163,7 @@ AST::Node* Parser::ParseStatement() {
 
 						AST::Node* node = ParseStatement();
 						if (node == nullptr) {
-							LOG_ERROR("Could not generate code for statement inside function body: " << identifier->name);
+							LOG_ERROR(lexer->filePos << " Could not generate code for statement inside function body: " << identifier->name);
 							return nullptr;
 						}
 						function->body.push_back(node);
@@ -204,7 +204,7 @@ AST::Node* Parser::ParseStatement() {
 			while (lexer->token != Token::ParenClose && lexer->token != Token::Unkown && lexer->token != Token::EndOfFile) {
 				AST::Expression* expression = ParseExpression();
 				if(expression == nullptr) {
-					LOG_ERROR("Unhandled expression");
+					LOG_ERROR(lexer->filePos << " Could not resolve expression for argument at index " << call->args.size() << " in call to function " << identifier->name);
 					return nullptr;
 				}
 				call->args.push_back(expression);
@@ -215,13 +215,12 @@ AST::Node* Parser::ParseStatement() {
 
 		//We have gotten past all our routines
 		//THIS SHOULD NEVER HAPPEN!
-		LOG_ERROR(lexer->filePos << "Unknown token after identifier '" << identifierName << "' [ '" << lexer->tokenString << "' ]");
+		LOG_ERROR(lexer->filePos << " Unknown token after identifier '" << identifierName << "' [ '" << lexer->tokenString << "' ]");
 		return nullptr;
 	}
 		break;
-
 	default:
-		LOG_ERROR(lexer->filePos << "Error parsing statement '" << lexer->tokenString << "'! Statement did not begin with an identifier or a keyword!!!");
+		LOG_ERROR(lexer->filePos << " Failed to parse Statement '" << lexer->tokenString << "', the statement did not begin with an identifier or a keyword!!!");
 		lexer->NextToken();
 		break;
 	}
@@ -242,9 +241,26 @@ AST::Expression* Parser::ParseExpression() {
 		}
 
 		lexer->NextToken(); //Consume the identifier
+		//@Duplicate of procedure inside of ParseStatement!
+		if(lexer->token == Token::ParenOpen) {
+			LOG_VERBOSE("Parsing Call to: " << ident->name);
+			AST::Call* call = AST::CreateCall();
+			call->function = (AST::Function*) ident->node;
+
+			lexer->NextToken();
+			while (lexer->token != Token::ParenClose && lexer->token != Token::Unkown && lexer->token != Token::EndOfFile) {
+				AST::Expression* expression = ParseExpression();
+				if (expression == nullptr) {
+					LOG_ERROR(lexer->filePos << " Could not resolve expression at argument index" << call->args.size() << "in call to function " << ident->name);
+					return nullptr;
+				}
+				call->args.push_back(expression);
+			}
+			lexer->NextToken();	//Eat the close ')'
+			return (AST::Expression*)call;
+		}
 		return (AST::Expression*)ident->node;
 	}break;
-
 	//This is a numeric literal!
 	case Token::Number: {
 		LOG_VERBOSE("Parsing a numberExpression!");
@@ -293,6 +309,7 @@ void Parser::ParseFile() {
 	if (llvm::verifyModule(*module))
 		LOG_ERROR("LLVMModule verification failed!");
 
-	LOG_INFO("Writing IR to file");
+	std::cout << "\x1b[33m" << "\n";
 	module->dump();
+	LOG_INFO("Compilation Finished: There were errors");
 }

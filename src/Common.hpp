@@ -29,13 +29,13 @@ typedef double 	  float64;
 
 
 #if LOG_LEVEL > 0
-#define LOG_ERROR(x) std::cout << "ERROR:" << x << "\n"
+#define LOG_ERROR(x) std::cout << "\x1b[31mERROR: " << x << "\033[39m\n"
 #else
 #define LOG_ERROR(x)
 #endif
 
 #if LOG_LEVEL > 1
-#define LOG_INFO(x) std::cout << "INFO: " << x << "\n"
+#define LOG_INFO(x) std::cout << "\x1b[36mINFO: " << x << "\033[39m\n"
 #else
 #define LOG_INFO(x)
 #endif
@@ -47,7 +47,7 @@ typedef double 	  float64;
 #endif
 
 #if LOG_LEVEL > 3
-#define LOG_VERBOSE(x) std::cout << "VERBOSE: " << x << "\n"
+#define LOG_VERBOSE(x) std::cout << "\x1b[30mVERBOSE: " << x << "\033[39m\n"
 #else
 #define LOG_VERBOSE(x)
 #endif
