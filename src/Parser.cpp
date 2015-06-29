@@ -9,6 +9,7 @@ Parser::Parser(llvm::Module* module, std::string filename, std::ifstream* stream
 	codeGenerator = new CodeGenerator(module);
 
 	AST::InitalizeLanguagePrimitives(module);
+	currentScope = AST::globalScope;
 
 	precedenceMap[(int32)Token::ADD] = 20;
 	precedenceMap[(int32)Token::SUB] = 20;
@@ -54,7 +55,7 @@ AST::Node* Parser::ParseStatement() {
 
 			//Now we check if the type the user is trying to assign has already been defined
 			//TODO this is where depends resolving for type decls need to happen!
-			auto typeIdentifier = AST::FindIdentifier(lexer->tokenString);
+			auto typeIdentifier = AST::FindIdentifier(currentScope, lexer->tokenString);
 			if (!typeIdentifier) {
 				LOG_ERROR(lexer->filePos << "identifier(" << lexer->tokenString << ")is undefined!");
 				return nullptr;
@@ -69,13 +70,13 @@ AST::Node* Parser::ParseStatement() {
 			//We now need to ensure that this indentifier does not yet exist
 
 			//We have gotten this far so we know that we are declaring a identifier of a type that has been resolved!
-			auto ident = AST::FindIdentifier(identifierName);
+			auto ident = AST::FindIdentifier(currentScope, identifierName);
 			if(ident != nullptr) {
 				LOG_ERROR("Redefintion of identifier " << identifierName << " declared at " << ident->position);
 				return nullptr;
 			}
 
-			ident = AST::CreateIdentifier(identifierName);
+			ident = AST::CreateIdentifier(currentScope, identifierName);
 			auto var = AST::CreateVariable();
 			//Actually this is kind of fucked... Identifiers should only be able to point to expressions
 			ident->node = var;	//TODO add an AssignIdentifierToNode() type of thing??
@@ -105,7 +106,7 @@ AST::Node* Parser::ParseStatement() {
 		else if (lexer->token == Token::TypeDefine) {
 			LOG_VERBOSE("Parsing TypeDefine");
 			//First we make sure that the identifier has not been resolved yet
-			auto identifier = AST::FindIdentifier(identifierName);
+			auto identifier = AST::FindIdentifier(currentScope, identifierName);
 			if (identifier != nullptr) {
 				if(identifier->node == nullptr) {
 					LOG_INFO("An idenfitier called: " << identifier->name << " was allready declared at " << identifier->position << " but has not been resolved!  We are now defining it!");
@@ -115,7 +116,7 @@ AST::Node* Parser::ParseStatement() {
 				}
 			} else {
 				//The identifier was not already created so we are now able to create one!
-				identifier = AST::CreateIdentifier(identifierName);
+				identifier = AST::CreateIdentifier(currentScope, identifierName);
 			}
 
 			lexer->NextToken();
@@ -130,13 +131,14 @@ AST::Node* Parser::ParseStatement() {
 				//Note since we have already checked against the identifierTable we know this function has not yet been defined
 				AST::Function* function = AST::CreateFunction();
 				identifier->node = function;
-				function->identifier = identifier;
+				function->ident = identifier;
+				currentScope = function;
 
 				//PARSE FUNCTION DEFN ARGUMENTS!
 				lexer->NextToken(); //Eat the open paren
 				while (lexer->token != Token::ParenClose) {
-					//If this is a function defn then it should only have decleartions in its argument lsit!
-					//Its assumed parsePrimary will handle any EOF / unknowns
+					// If this is a function defn then it should only have decleartions in its argument lsit!
+					// Its assumed parsePrimary will handle any EOF / unknowns
 					AST::Node* node = ParseStatement();
 					if (node != nullptr) {
 						if (node->nodeType != ASTNodeType::Variable) {
@@ -157,7 +159,7 @@ AST::Node* Parser::ParseStatement() {
 						return nullptr;
 					}
 
-					AST::Identifier* returnTypeIdentifier = AST::FindIdentifier(lexer->tokenString);
+					AST::Identifier* returnTypeIdentifier = AST::FindIdentifier(currentScope, lexer->tokenString);
 					if (returnTypeIdentifier == nullptr) {
 						LOG_ERROR("...Unknown identifier");
 						return nullptr;
@@ -165,12 +167,11 @@ AST::Node* Parser::ParseStatement() {
 
 					function->returnType = (AST::TypeDefinition*) returnTypeIdentifier->node;
 					lexer->NextToken();
-
 				}
 
 				//There was no type return ':>' operator after the argument list
 				else {
-					function->returnType = (AST::TypeDefinition*) (AST::FindIdentifier("Void")->node);
+					function->returnType = (AST::TypeDefinition*) (AST::FindIdentifier(currentScope, "Void")->node);
 				}
 
 				if (lexer->token == Token::ScopeOpen) {
@@ -193,7 +194,7 @@ AST::Node* Parser::ParseStatement() {
 							LOG_ERROR(lexer->filePos << " Could not generate code for statement inside function body: " << identifier->name);
 							return nullptr;
 						}
-						function->body.push_back(node);
+						function->members.push_back(node);
 					}
 
 				} else if (lexer->token != Token::Foreign) {
@@ -203,6 +204,7 @@ AST::Node* Parser::ParseStatement() {
 
 				lexer->NextToken();	//Eats the foreign or the end of the scope
 				codeGenerator->Codegen(function);
+				currentScope = function->parent;
 				return function;
 			}
 
@@ -218,7 +220,7 @@ AST::Node* Parser::ParseStatement() {
 		//FunctionCall!
 		else if (lexer->token == Token::ParenOpen) {
 			LOG_VERBOSE("Parsing Call to: " << identifierName);
-			auto identifier = AST::FindIdentifier(identifierName);
+			auto identifier = AST::FindIdentifier(currentScope, identifierName);
 			if(identifier == nullptr) {
 				LOG_ERROR("Function: " << identifierName << " does not exist");
 				return nullptr;
@@ -249,10 +251,10 @@ AST::Node* Parser::ParseStatement() {
 		case Token::DIV_EQUALS:
 		case Token::MOD_EQUALS:
  			lexer->NextToken();	//Eat the assignment operator!
-			auto ident = AST::FindIdentifier(identifierName);
+			auto ident = AST::FindIdentifier(currentScope, identifierName);
 
 			if(ident == nullptr) {
-				LOG_ERROR("Could not assign a value to unkown variable " << identifierName);
+				LOG_ERROR("Could not assign a value to unknown variable " << identifierName);
 				return nullptr;
 			}
 
@@ -345,7 +347,7 @@ AST::Expression* Parser::ParsePrimaryExpression() {
 	case Token::Identifier:
 	{
 		LOG_VERBOSE("Parsing an identifier expression! for identifier -> " << lexer->tokenString);
-		auto ident = AST::FindIdentifier(lexer->tokenString);
+		auto ident = AST::FindIdentifier(currentScope, lexer->tokenString);
 		if(!ident) {
 			LOG_ERROR(lexer->filePos << " identifier " << lexer->tokenString << " does not exist!");
 			return nullptr;
@@ -383,7 +385,7 @@ AST::Expression* Parser::ParsePrimaryExpression() {
 			return result;
 		} else {
 			auto result = AST::CreateIntegerLiteral();
-			result->intType = (AST::TypeDefinition*) (AST::FindIdentifier("S32")->node);
+			result->intType = (AST::TypeDefinition*) (AST::FindIdentifier(currentScope, "S32")->node);
 			result->value = std::stoi(lexer->tokenString);
 			lexer->NextToken(); // Eats the integer literal
 			return result;

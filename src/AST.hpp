@@ -20,6 +20,7 @@
 //This is fucking retarded!
 
 enum class ASTNodeType {
+	BLOCK,
 	TypeDefinition,
 	//Decleration,
 	BINOP,
@@ -69,6 +70,13 @@ struct Variable : public Expression {
 	llvm::AllocaInst* allocaInst;
 };
 
+//It is now time to have somesort of notion of scope!
+struct Block : public Node {
+	Block* parent;	//null if the global scope
+	std::vector<Node*> members;
+	std::unordered_map<std::string, Identifier*> identifiers;
+};
+
 struct ReturnValue : public Expression {
 	Expression* value;
 };
@@ -79,11 +87,10 @@ struct VariableMutation : public Node {
 	Expression* value;
 };
 
-struct Function : public Node {
-	Identifier* identifier;
+struct Function : public Block {
+	Identifier* ident;
 	TypeDefinition* returnType;
 	std::vector<Variable*> args;
-	std::vector<Node*> body;
 };
 
 struct Call : public Node {
@@ -104,9 +111,10 @@ struct FloatLiteral : public Expression {
 void InitalizeLanguagePrimitives(llvm::Module* module);
 void CreateType(std::string name, llvm::Type* type);
 
-Identifier* FindIdentifier(std::string name);
-Identifier* CreateIdentifier(std::string name);
+Identifier* FindIdentifier(Block* block, std::string name);
+Identifier* CreateIdentifier(Block* block, std::string name);
 Variable* CreateVariable();
+Block* CreateBlock(AST::Block* block);
 BinaryOperation* CreateBinaryOperation(Token binop, AST::Expression* lhs, AST::Expression* rhs);
 ReturnValue* CreateReturnValue(AST::Expression* value);
 
@@ -118,6 +126,10 @@ IntegerLiteral* CreateIntegerLiteral();
 IntegerLiteral* CreateIntegerLiteral(int64 value);
 
 FloatLiteral* CreateFloatLiteral(float64 value);
+
+
+extern AST::Block* globalScope;
+
 }
 
 #endif //AST_HPP

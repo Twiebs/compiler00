@@ -19,6 +19,9 @@ private:
 	CodeGenerator* codeGenerator;
 	Lexer* lexer;
 
+	AST::Block* previousScope;
+	AST::Block* currentScope;
+
 	std::unordered_map<int32, int32> precedenceMap;
 
 	AST::Node* ParseStatement();
@@ -28,8 +31,9 @@ private:
 
 	AST::Expression* ParsePrimaryExpression();
 
-
 	int32 GetCurrentTokenPrecedence();
+
+	void SetScope();
 
 	void CreateType(std::string name, llvm::Type* type);
 	//TODO these probably should not exist inside the parser.

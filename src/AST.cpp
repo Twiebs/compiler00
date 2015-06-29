@@ -1,11 +1,11 @@
 #include "AST.hpp"
 
-//Create a new ASTScope and auto initialize one for the global scope
-//but for now we will just get it working with variables!
-std::unordered_map<std::string, AST::Identifier*> gIdentifiers;
-std::unordered_map<std::string, AST::Variable*> gVariables;
+AST::Block* AST::globalScope;
 
 void AST::InitalizeLanguagePrimitives(llvm::Module* module) {
+	// NOTE we probably should not initialize the globalScope here...
+	globalScope = CreateBlock(nullptr);
+
 	AST::CreateType("Void", llvm::Type::getVoidTy(module->getContext()));
 
 	AST::CreateType("S8", llvm::Type::getInt8Ty(module->getContext()));
@@ -22,21 +22,23 @@ void AST::InitalizeLanguagePrimitives(llvm::Module* module) {
 void AST::CreateType(std::string name, llvm::Type* type) {
 	auto typeDefn = new AST::TypeDefinition;
 	typeDefn->llvmType = type;
-	auto identifier = AST::CreateIdentifier(name);
+	auto identifier = AST::CreateIdentifier(globalScope, name);
 	identifier->node = typeDefn;
 	typeDefn->identifier = identifier;
-	gIdentifiers[name] = identifier;
 }
 
-AST::Identifier* AST::FindIdentifier(std::string name) {
-	return gIdentifiers[name];
+AST::Identifier* AST::FindIdentifier(AST::Block* block, std::string name) {
+	auto ident = block->identifiers[name];
+	if(ident == nullptr && block->parent != nullptr)
+		return FindIdentifier(block->parent, name);
+	return ident;
 }
 
 //Were going to add these Create things here inorder to delegate the allocation of ast nodes
-AST::Identifier* AST::CreateIdentifier(std::string name) {
+AST::Identifier* AST::CreateIdentifier(Block* block, std::string name) {
 	auto result = new AST::Identifier;
 	result->name = name;
-	gIdentifiers[name] = result;
+	block->identifiers[name] = result;
 	return result;
 }
 
@@ -63,7 +65,14 @@ AST::Call* AST::CreateCall() {
 AST::IntegerLiteral* AST::CreateIntegerLiteral() {
 	auto result = new AST::IntegerLiteral();
 	result->nodeType = ASTNodeType::IntegerLiteral;
-	result->intType = (AST::TypeDefinition*)AST::FindIdentifier("S32")->node;
+	result->intType = (AST::TypeDefinition*)AST::FindIdentifier(globalScope, "S32")->node;
+	return result;
+}
+
+AST::Block* AST::CreateBlock(AST::Block* block) {
+	auto result = new AST::Block();
+	result->parent = block;
+	result->nodeType = ASTNodeType::BLOCK;
 	return result;
 }
 
@@ -77,7 +86,7 @@ AST::ReturnValue* AST::CreateReturnValue(AST::Expression* value) {
 AST::IntegerLiteral* AST::CreateIntegerLiteral(int64 value) {
 	auto result = new AST::IntegerLiteral();
 	result->nodeType = ASTNodeType::IntegerLiteral;
-	result->intType = (AST::TypeDefinition*)AST::FindIdentifier("S32")->node;
+	result->intType = (AST::TypeDefinition*)AST::FindIdentifier(globalScope, "S32")->node;
 	result->value = value;
 	return result;
 }
@@ -85,7 +94,7 @@ AST::IntegerLiteral* AST::CreateIntegerLiteral(int64 value) {
 AST::FloatLiteral* AST::CreateFloatLiteral(float64 value) {
 	auto result = new AST::FloatLiteral();
 	result->nodeType = ASTNodeType::FloatLiteral;
-	result->floatType = (AST::TypeDefinition*)AST::FindIdentifier("F32")->node;
+	result->floatType = (AST::TypeDefinition*)AST::FindIdentifier(globalScope, "F32")->node;
 	result->value = value;
 	return result;
 }

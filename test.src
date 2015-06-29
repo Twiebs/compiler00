@@ -1,4 +1,4 @@
-# Print :: () :> S32 foreign
+Print :: () :> S32 foreign
 Println :: () :> S32 foregin
 PrintlnInt :: (value : S32) :> S32 foreign
 

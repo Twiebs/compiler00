@@ -129,22 +129,35 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 	for(auto arg : function->args) {
 		args.push_back(arg->type->llvmType);
 	}
+
 	llvm::FunctionType* funcType = llvm::FunctionType::get(function->returnType->llvmType, args, false);
-	llvm::Function::LinkageTypes linkage = (function->body.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
-	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->identifier->name, module);
+	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
+	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, module);
+
+	uint32 i = 0;
+	for(auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++){
+		iter->setName(function->args[i]->identifier->name);
+	}
 
 	//The function must always do something...
-	if (function->body.size() > 0) {
+	if (function->members.size() > 0) {
 		llvm::BasicBlock* block = llvm::BasicBlock::Create(module->getContext(), "entry", llvmFunc);
 		builder->SetInsertPoint(block);
+
+		// Create the allocas for our arguments!
+		uint32 j = 0;
+		for(auto iter = llvmFunc->arg_begin(); j != args.size(); iter++, j++){
+			auto alloca = builder->CreateAlloca(iter->getType(), iter, function->args[j]->identifier->name);
+			builder->CreateStore(iter, alloca);
+		}
 
 		//Create a new block insider this function and
 		//Set the IRBuilders insertion point to the block
 
 		//TODO we need to make sure that a return value is specified for the function!
 		//(if it has one...)
-		for(uint32 i = 0; i < function->body.size(); i++) {
-			auto node = function->body[i];
+		for(uint32 i = 0; i < function->members.size(); i++) {
+			auto node = function->members[i];
 			Codegen(node);
 		}
 	}
@@ -153,9 +166,9 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 }
 
 llvm::Value* CodeGenerator::Codegen(AST::Call* call) {
-	llvm::Function* function = module->getFunction(call->function->identifier->name);
+	llvm::Function* function = module->getFunction(call->function->ident->name);
 		if (function == 0) {
-			LOG_ERROR("Call to undefined function(" << call->function->identifier->name<< ")");
+			LOG_ERROR("Call to undefined function(" << call->function->ident->name<< ")");
 			return nullptr;
 		}
 
