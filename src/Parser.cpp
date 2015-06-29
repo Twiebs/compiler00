@@ -77,8 +77,7 @@ AST::Node* Parser::ParseStatement() {
 			}
 
 			ident = AST::CreateIdentifier(currentScope, identifierName);
-			auto var = AST::CreateVariable();
-			//Actually this is kind of fucked... Identifiers should only be able to point to expressions
+			auto var = AST::CreateVariable(currentScope);	//Add to scope!
 			ident->node = var;	//TODO add an AssignIdentifierToNode() type of thing??
 			var->identifier = ident;
 			var->type = type;
@@ -106,17 +105,17 @@ AST::Node* Parser::ParseStatement() {
 		else if (lexer->token == Token::TypeDefine) {
 			LOG_VERBOSE("Parsing TypeDefine");
 			//First we make sure that the identifier has not been resolved yet
-			auto identifier = AST::FindIdentifier(currentScope, identifierName);
-			if (identifier != nullptr) {
-				if(identifier->node == nullptr) {
-					LOG_INFO("An idenfitier called: " << identifier->name << " was allready declared at " << identifier->position << " but has not been resolved!  We are now defining it!");
+			auto ident = AST::FindIdentifier(currentScope, identifierName);
+			if (ident != nullptr) {
+				if(ident->node == nullptr) {
+					LOG_INFO("An idenfitier called: " << ident->name << " was allready declared at " << ident->position << " but has not been resolved!  We are now defining it!");
 				} else {
-					LOG_ERROR(lexer->filePos << "Identifier '" << identifierName << "' was already defined at" << identifier->position);
+					LOG_ERROR(lexer->filePos << "Identifier '" << identifierName << "' was already defined at" << ident->position);
 					return nullptr;   //The identifier has already been defined!  It can not be type assigned
 				}
 			} else {
 				//The identifier was not already created so we are now able to create one!
-				identifier = AST::CreateIdentifier(currentScope, identifierName);
+				ident = AST::CreateIdentifier(currentScope, identifierName);
 			}
 
 			lexer->NextToken();
@@ -129,9 +128,9 @@ AST::Node* Parser::ParseStatement() {
 			if (lexer->token == Token::ParenOpen) {
 				LOG_VERBOSE("Parsing FunctionDefinition");
 				//Note since we have already checked against the identifierTable we know this function has not yet been defined
-				AST::Function* function = AST::CreateFunction();
-				identifier->node = function;
-				function->ident = identifier;
+				AST::Function* function = AST::CreateFunction(currentScope);
+				ident->node = function;
+				function->ident = ident;
 				currentScope = function;
 
 				//PARSE FUNCTION DEFN ARGUMENTS!
@@ -147,6 +146,9 @@ AST::Node* Parser::ParseStatement() {
 						}
 						auto var = (AST::Variable*) node;
 						function->args.push_back(var);
+					} else {
+						LOG_ERROR(lexer->filePos << " Could not parse function arguments for funcion " << identifierName);
+						return nullptr;
 					}
 				}
 				//Eat the close ')'
@@ -161,8 +163,10 @@ AST::Node* Parser::ParseStatement() {
 
 					AST::Identifier* returnTypeIdentifier = AST::FindIdentifier(currentScope, lexer->tokenString);
 					if (returnTypeIdentifier == nullptr) {
-						LOG_ERROR("...Unknown identifier");
+						LOG_ERROR(lexer->filePos << " Unknown identifier when expecting a return type!");
 						return nullptr;
+					} else if (returnTypeIdentifier->node->nodeType != ASTNodeType::TypeDefinition) {
+						LOG_ERROR(lexer->filePos << " Identifier '" << lexer->tokenString << "' is not a type! It was declared at " << returnTypeIdentifier->position);
 					}
 
 					function->returnType = (AST::TypeDefinition*) returnTypeIdentifier->node;
@@ -191,7 +195,7 @@ AST::Node* Parser::ParseStatement() {
 
 						AST::Node* node = ParseStatement();
 						if (node == nullptr) {
-							LOG_ERROR(lexer->filePos << " Could not generate code for statement inside function body: " << identifier->name);
+							LOG_ERROR(lexer->filePos << " Could not generate code for statement inside function body: " << ident->name);
 							return nullptr;
 						}
 						function->members.push_back(node);
@@ -199,7 +203,14 @@ AST::Node* Parser::ParseStatement() {
 
 				} else if (lexer->token != Token::Foreign) {
 					LOG_ERROR("Expected a new scope to open '{' after function definition!");
+					LOG_INFO("Did you misspell foreign?");
 					return nullptr;
+				} else {
+					if(function->parent->parent != nullptr) {
+						//TODO why wouldn't we allow this?
+						LOG_ERROR("Cannot create a foreign function nested in another block!  Foreign functions must be declared in the global scope!");
+						return nullptr;
+					}
 				}
 
 				lexer->NextToken();	//Eats the foreign or the end of the scope
@@ -409,15 +420,13 @@ AST::Expression* Parser::ParsePrimaryExpression() {
 	return nullptr;
 }
 
-//URGENT(As soon as the compiler runs again resolve this!)
-//What the fuck is this?
 void Parser::ParseFile() {
 	lexer->NextToken();	//Kicks of parsing... Grabs the first token in the file
 	while (lexer->token != Token::EndOfFile) {
 		ParseStatement();
 	}
-
-	if (llvm::verifyModule(*module))
+	llvm::raw_os_ostream stream(std::cout);
+	if (llvm::verifyModule(*module, &stream))
 		LOG_ERROR("LLVMModule verification failed!");
 
 	std::cout << "\x1b[33m" << "\n";

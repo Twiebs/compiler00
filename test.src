@@ -1,17 +1,33 @@
 Print :: () :> S32 foreign
-Println :: () :> S32 foregin
+Println :: () :> S32 foreign
 PrintlnInt :: (value : S32) :> S32 foreign
 
-DoThingsWithVar :: (myVar : S32) :> S32 {
-    return myVar
+
+#Functions now have proper scope!
+#Notice that DoThings and DoStuff both take a foo
+DoThings :: (foo : S32) :> S32 {
+    return foo
+}
+
+DoStuff :: (foo : S32) :> S32 {
+    return foo + 57
 }
 
 main :: () :> S32 {
     foo : S32 = 4
-    PrintlnInt(foo)
 
-    result : S32 = DoThingsWithVar(foo)
-    PrintlnInt(result)
+    #Store functions in variables and then print them
+    resultA : S32 = DoThings(foo)
+    resultB : S32 = DoStuff(foo)
+    PrintlnInt(resultA)
+    PrintlnInt(resultB)
+    PrintlnInt(resultA * resultB)
+
+    #Call the functions directly and print them
+    PrintlnInt(DoThings(foo))
+    PrintlnInt(DoStuff(foo))
+    PrintlnInt(DoThings(foo))
+    PrintlnInt(DoThings(foo) * DoStuff(foo))
 
     return 0
 }

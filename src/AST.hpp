@@ -47,6 +47,14 @@ struct Identifier {
 	Node* node = nullptr;		//What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
 };
 
+//It is now time to have somesort of notion of scope!
+struct Block : public Node {
+	Block* parent;	//null if the global scope
+	std::vector<Node*> members;
+	std::unordered_map<std::string, Identifier*> identifiers;
+};
+
+
 struct Expression : public Node{
 
 };
@@ -58,24 +66,21 @@ struct BinaryOperation : public Expression{
 	Expression* rhs;
 };
 
-struct TypeDefinition : public Node{
+struct TypeDefinition : public Node {
 	Identifier* identifier;
 	llvm::Type* llvmType;
 };
 
+
+
 struct Variable : public Expression {
 	Identifier* identifier;
+	Block* block;
 	TypeDefinition* type;
 	Expression* initalExpression;
 	llvm::AllocaInst* allocaInst;
 };
 
-//It is now time to have somesort of notion of scope!
-struct Block : public Node {
-	Block* parent;	//null if the global scope
-	std::vector<Node*> members;
-	std::unordered_map<std::string, Identifier*> identifiers;
-};
 
 struct ReturnValue : public Expression {
 	Expression* value;
@@ -109,17 +114,17 @@ struct FloatLiteral : public Expression {
 };
 
 void InitalizeLanguagePrimitives(llvm::Module* module);
-void CreateType(std::string name, llvm::Type* type);
+void CreateType(AST::Block* block, std::string name, llvm::Type* type);
 
 Identifier* FindIdentifier(Block* block, std::string name);
 Identifier* CreateIdentifier(Block* block, std::string name);
-Variable* CreateVariable();
+Variable* CreateVariable(Block* block);
 Block* CreateBlock(AST::Block* block);
 BinaryOperation* CreateBinaryOperation(Token binop, AST::Expression* lhs, AST::Expression* rhs);
 ReturnValue* CreateReturnValue(AST::Expression* value);
 
 VariableMutation* CreateVariableMutation(Token op, AST::Variable* variable, AST::Expression* expr);
-Function* CreateFunction();
+Function* CreateFunction(AST::Block* block);
 Call* CreateCall();
 
 IntegerLiteral* CreateIntegerLiteral();

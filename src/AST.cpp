@@ -6,21 +6,22 @@ void AST::InitalizeLanguagePrimitives(llvm::Module* module) {
 	// NOTE we probably should not initialize the globalScope here...
 	globalScope = CreateBlock(nullptr);
 
-	AST::CreateType("Void", llvm::Type::getVoidTy(module->getContext()));
+	AST::CreateType(globalScope, "Void", llvm::Type::getVoidTy(module->getContext()));
 
-	AST::CreateType("S8", llvm::Type::getInt8Ty(module->getContext()));
-	AST::CreateType("S16", llvm::Type::getInt16Ty(module->getContext()));
-	AST::CreateType("S32", llvm::Type::getInt32Ty(module->getContext()));
-	AST::CreateType("S64", llvm::Type::getInt64Ty(module->getContext()));
+	AST::CreateType(globalScope, "S8", llvm::Type::getInt8Ty(module->getContext()));
+	AST::CreateType(globalScope, "S16", llvm::Type::getInt16Ty(module->getContext()));
+	AST::CreateType(globalScope, "S32", llvm::Type::getInt32Ty(module->getContext()));
+	AST::CreateType(globalScope, "S64", llvm::Type::getInt64Ty(module->getContext()));
 
-	AST::CreateType("F16", llvm::Type::getHalfTy(module->getContext()));
-	AST::CreateType("F32", llvm::Type::getFloatTy(module->getContext()));
-	AST::CreateType("F64", llvm::Type::getDoubleTy(module->getContext()));
-	AST::CreateType("F128", llvm::Type::getFP128Ty(module->getContext()));
+	AST::CreateType(globalScope, "F16", llvm::Type::getHalfTy(module->getContext()));
+	AST::CreateType(globalScope, "F32", llvm::Type::getFloatTy(module->getContext()));
+	AST::CreateType(globalScope, "F64", llvm::Type::getDoubleTy(module->getContext()));
+	AST::CreateType(globalScope, "F128", llvm::Type::getFP128Ty(module->getContext()));
 }
 
-void AST::CreateType(std::string name, llvm::Type* type) {
+void AST::CreateType(AST::Block* block, std::string name, llvm::Type* type) {
 	auto typeDefn = new AST::TypeDefinition;
+	typeDefn->nodeType = ASTNodeType::TypeDefinition;
 	typeDefn->llvmType = type;
 	auto identifier = AST::CreateIdentifier(globalScope, name);
 	identifier->node = typeDefn;
@@ -51,9 +52,10 @@ AST::BinaryOperation* AST::CreateBinaryOperation(Token binop, AST::Expression* l
 	return result;
 }
 
-AST::Function* AST::CreateFunction() {
+AST::Function* AST::CreateFunction(AST::Block* block) {
 	AST::Function* function = new AST::Function;
 	function->nodeType = ASTNodeType::Function;
+	function->parent = block;
 	return function;
 }
 AST::Call* AST::CreateCall() {
@@ -99,9 +101,10 @@ AST::FloatLiteral* AST::CreateFloatLiteral(float64 value) {
 	return result;
 }
 
-AST::Variable* AST::CreateVariable() {
+AST::Variable* AST::CreateVariable(AST::Block* block) {
 	auto result = new AST::Variable;
 	result->nodeType = ASTNodeType::Variable;
+	result->block = block;
 	result->allocaInst = nullptr;
 	return result;
 }

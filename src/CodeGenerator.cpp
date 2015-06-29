@@ -134,26 +134,25 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
 	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, module);
 
+	if(function->members.size() > 0) {
+		llvm::BasicBlock* block = llvm::BasicBlock::Create(module->getContext(), "entry", llvmFunc);
+		builder->SetInsertPoint(block);
+	}
+
+	// Create the allocas for our arguments!
 	uint32 i = 0;
 	for(auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++){
 		iter->setName(function->args[i]->identifier->name);
+
+		//Only emit code for function arguments if the function is not foregin!
+		if(function->members.size() > 0) {
+			function->args[i]->allocaInst = builder->CreateAlloca(iter->getType(), iter, function->args[i]->identifier->name);
+			builder->CreateStore(iter, function->args[i]->allocaInst);
+		}
 	}
 
 	//The function must always do something...
 	if (function->members.size() > 0) {
-		llvm::BasicBlock* block = llvm::BasicBlock::Create(module->getContext(), "entry", llvmFunc);
-		builder->SetInsertPoint(block);
-
-		// Create the allocas for our arguments!
-		uint32 j = 0;
-		for(auto iter = llvmFunc->arg_begin(); j != args.size(); iter++, j++){
-			auto alloca = builder->CreateAlloca(iter->getType(), iter, function->args[j]->identifier->name);
-			builder->CreateStore(iter, alloca);
-		}
-
-		//Create a new block insider this function and
-		//Set the IRBuilders insertion point to the block
-
 		//TODO we need to make sure that a return value is specified for the function!
 		//(if it has one...)
 		for(uint32 i = 0; i < function->members.size(); i++) {
@@ -161,6 +160,8 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 			Codegen(node);
 		}
 	}
+	//TODO sanity check to make sure this function was foregin if it did not have a body
+	//Also do a sainy check to make sure that it has created return values for all flow paths
 
 	return llvmFunc;
 }
@@ -173,7 +174,7 @@ llvm::Value* CodeGenerator::Codegen(AST::Call* call) {
 		}
 
 		if (call->args.size() != function->arg_size()) {
-			LOG_ERROR("Function Call contains incorrect number of arguments!");
+			LOG_ERROR("Function Call to '" << call->function->ident->name << "' contains incorrect number of arguments!");
 			return nullptr;
 		}
 
