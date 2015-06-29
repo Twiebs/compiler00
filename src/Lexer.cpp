@@ -70,11 +70,10 @@ Token Lexer::GetToken() {
 		//The nextChar is now somthing that is not alphanum so the end of our token is reached
 		//Check to see if this token is a keyword
 		//If its not any keywords then it must be a identifier
-		if (tokenString == "func") return Token::Func;
-		if (tokenString == "foreign") return Token::Foreign;
-		if (tokenString == "if") return Token::If;
-		if (tokenString == "else") return Token::Else;
-
+		if (tokenString == "foreign") 	return Token::Foreign;
+		if (tokenString == "if") 		return Token::IF;
+		if (tokenString == "else") 		return Token::ELSE;
+		if (tokenString == "return")	return Token::RETURN;
 		return Token::Identifier;
 	}
 
@@ -87,18 +86,14 @@ Token Lexer::GetToken() {
 	}
 
 	//COMMENTS
-	if (nextChar == '/') {
-		EatNext();	//Eat the '/ 'char
-		// Check to see if the next char is another '/' If so this token is a comment
-		if (nextChar == '/') {
-			EatNext(); //Eats the second '/'
-			while(nextChar != EOF && nextChar != '\n' && nextChar != '\r') {
-				EatNext();	//Now we eat the comment body itself
-			}
-			//We have reached the end of the comment.  If is not the end of the file get the next token
-			if(nextChar != EOF) {
-				return GetToken();
-			}
+	if (nextChar == '#') {
+		EatNext();	//Eat the '# 'char
+		while(nextChar != EOF && nextChar != '\n' && nextChar != '\r') {
+			EatNext();	//Now we eat the comment body itself
+		}
+		//We have reached the end of the comment.  If is not the end of the file get the next token
+		if(nextChar != EOF) {
+			return GetToken();
 		}
 	}
 
@@ -122,10 +117,50 @@ Token Lexer::GetToken() {
 		}
 	}
 
-	//ASSIGNMENT OPERATOR
+	//BIN OPS
 	else if(nextChar == '=') {
 		AppendNext();
-		return Token::AssignmentOpperator;
+		return Token::EQUALS;
+	}
+	else if(nextChar == '+') {
+		AppendNext();
+		if(nextChar == '=') {
+			AppendNext();
+			return Token::ADD_EQUALS;
+		}
+		return Token::ADD;
+	}
+	else if(nextChar == '-') {
+		AppendNext();
+		if(nextChar == '=') {
+			AppendNext();
+			return Token::SUB_EQUALS;
+		}
+		return Token::SUB;
+	}
+	else if(nextChar == '*') {
+		AppendNext();
+		if(nextChar == '=') {
+			AppendNext();
+			return Token::MUL_EQUALS;
+		}
+		return Token::MUL;
+	}
+	else if(nextChar == '/') {
+		AppendNext();
+		if(nextChar == '=') {
+			AppendNext();
+			return Token::DIV_EQUALS;
+		}
+		return Token::DIV;
+	}
+	else if(nextChar == '%') {
+		AppendNext();
+		if(nextChar == '=') {
+			AppendNext();
+			return Token::MOD_EQUALS;
+		}
+		return Token::MOD;
 	}
 
 	//BRACES, BRACKETS, SUBSCRIPTS

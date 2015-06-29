@@ -10,15 +10,24 @@ Parser::Parser(llvm::Module* module, std::string filename, std::ifstream* stream
 
 	AST::InitalizeLanguagePrimitives(module);
 
-	operatorPrecedence[(int32) BinOp::ADD] = 20;
-	operatorPrecedence[(int32) BinOp::SUB] = 20;
-	operatorPrecedence[(int32) BinOp::MUL] = 40;
-	operatorPrecedence[(int32) BinOp::DIV] = 40;
+	precedenceMap[(int32)Token::ADD] = 20;
+	precedenceMap[(int32)Token::SUB] = 20;
+	precedenceMap[(int32)Token::MUL] = 40;
+	precedenceMap[(int32)Token::DIV] = 40;
 }
 
 Parser::~Parser() {
 	delete lexer;
 	delete codeGenerator;
+}
+
+int32 Parser::GetCurrentTokenPrecedence() {
+	auto result = precedenceMap[(int32)lexer->token];
+	if(result <= 0) {
+		//If the token is not an operator we return -1 because is it exempt from these types of things!
+		return -1;
+	}
+	return result;
 }
 
 //NOTE Parse Primary assumes the the lexer has already been incremented to the next token!
@@ -57,23 +66,31 @@ AST::Node* Parser::ParseStatement() {
 			//The type of the declaration has already been resolved
 			auto type = (AST::TypeDefinition*) typeIdentifier->node;
 
+			//We now need to ensure that this indentifier does not yet exist
+
 			//We have gotten this far so we know that we are declaring a identifier of a type that has been resolved!
-			auto identifier = AST::CreateIdentifier(identifierName);
+			auto ident = AST::FindIdentifier(identifierName);
+			if(ident != nullptr) {
+				LOG_ERROR("Redefintion of identifier " << identifierName << " declared at " << ident->position);
+				return nullptr;
+			}
+
+			ident = AST::CreateIdentifier(identifierName);
 			auto var = AST::CreateVariable();
 			//Actually this is kind of fucked... Identifiers should only be able to point to expressions
-			identifier->node = var;	//TODO add an AssignIdentifierToNode() type of thing??
-			var->identifier = identifier;
+			ident->node = var;	//TODO add an AssignIdentifierToNode() type of thing??
+			var->identifier = ident;
 			var->type = type;
 
 			//Now we check to see if this identifier will be assigned a default value!
 			//We need to save an expression that represents the value that this identifier will store because it might be a function expression that has not been resolved yet!
 			lexer->NextToken();	//Eat the type
-			if (lexer->token == Token::AssignmentOpperator) {
+			if (lexer->token == Token::EQUALS) {
 				lexer->NextToken();	//Eat the assignment operator
 				var->initalExpression = ParseExpression();
-				LOG_INFO(identifier->position << "Identifier(" << identifier->name << ") of Type(" << type->identifier->name << ") declared with an expression!");
+				LOG_INFO(ident->position << "Identifier(" << ident->name << ") of Type(" << type->identifier->name << ") declared with an inital expression specified!");
 			} else {
-				LOG_INFO(identifier->position << "Identifier(" << identifier->name << ") of Type(" << type->identifier->name << ") declared!");
+				LOG_INFO(ident->position << "Identifier(" << ident->name << ") of Type(" << type->identifier->name << ") declared!");
 			}
 			return var;
 		}
@@ -159,6 +176,16 @@ AST::Node* Parser::ParseStatement() {
 				if (lexer->token == Token::ScopeOpen) {
 					//A new scope has been opened...
 					lexer->NextToken(); //Eat the scope
+
+					//WAIT ALL OF THIS IS WRONG!
+					//We need to codegen the function here!
+					//But what if we cant?
+					//There is no reason to not allready make the function here...
+					//What if we have to resolve a dependency somewhere down the line and can not emit
+					//Code for members?
+					//Well... then we wait? and pick up from where we were? that might be find
+
+
 					while (lexer->token != Token::ScopeClose && lexer->token != Token::EndOfFile) {
 
 						AST::Node* node = ParseStatement();
@@ -213,12 +240,50 @@ AST::Node* Parser::ParseStatement() {
 			return call;
 		}
 
+		//Do a switch here!
+		switch(lexer->token) {
+		case Token::EQUALS:
+		case Token::ADD_EQUALS:
+		case Token::SUB_EQUALS:
+		case Token::MUL_EQUALS:
+		case Token::DIV_EQUALS:
+		case Token::MOD_EQUALS:
+ 			lexer->NextToken();	//Eat the assignment operator!
+			auto ident = AST::FindIdentifier(identifierName);
+
+			if(ident == nullptr) {
+				LOG_ERROR("Could not assign a value to unkown variable " << identifierName);
+				return nullptr;
+			}
+
+			auto var = (AST::Variable*)ident->node;
+			if(var->nodeType != ASTNodeType::Variable) {
+				LOG_ERROR("Recognized identifier " << identifierName << " but it is not a variable!");
+			}
+
+			auto expr = ParseExpression();
+			if(expr == nullptr) {
+				LOG_ERROR("Could not parse expression on the right of the assignment operator");
+				return nullptr;
+			}
+			return AST::CreateVariableMutation(lexer->token, var, expr);
+		}
+
 		//We have gotten past all our routines
 		//THIS SHOULD NEVER HAPPEN!
 		LOG_ERROR(lexer->filePos << " Unknown token after identifier '" << identifierName << "' [ '" << lexer->tokenString << "' ]");
 		return nullptr;
 	}
 		break;
+
+	case Token::RETURN:
+	{
+		LOG_VERBOSE(lexer->filePos << " Parsing a return value");
+		lexer->NextToken();	//Eat the return
+		auto expr = ParseExpression();
+		auto returnVal = AST::CreateReturnValue(expr);
+		return returnVal;
+	} break;
 	default:
 		LOG_ERROR(lexer->filePos << " Failed to parse Statement '" << lexer->tokenString << "', the statement did not begin with an identifier or a keyword!!!");
 		lexer->NextToken();
@@ -226,8 +291,54 @@ AST::Node* Parser::ParseStatement() {
 	}
 }
 
-//NOTE Parse Primary assumes the the lexer has already been incremented to the next token!
+AST::Expression* Parser::ParseExpressionRHS(int32 exprPrec, AST::Expression* lhs) {
+	while(true) {
+		//If the token prec is less than 0 that means that this is not a binary opperator
+		//And we dont have to do anything aside from returning the allready parsed expression
+		auto tokenPrec = GetCurrentTokenPrecedence();
+		if(tokenPrec < 0) {
+			return lhs;
+		}
+
+		//We know that the currentToken is a binop
+		auto binop = lexer->token;
+		auto binopStr = lexer->tokenString;
+		auto binopPos = lexer->filePos;
+		lexer->NextToken();	//Eat the binop
+
+		//We have a binop lets see what is on the other side!
+		AST::Expression* rhs = ParsePrimaryExpression();
+		if(rhs == nullptr) {
+			LOG_ERROR(binopPos << " Could not parse primary expression to the right of binary opperator '" << binopStr << "'");
+			return nullptr;
+		}
+
+		auto nextPrec = GetCurrentTokenPrecedence();
+		if(tokenPrec < nextPrec) {
+			rhs = ParseExpressionRHS(tokenPrec + 1, rhs);
+			if(rhs == nullptr){
+				LOG_ERROR("Could not parse recursive rhsParsing!");
+				return nullptr;
+			}
+		}
+
+		//@Memory there is a leak here!
+		lhs = (AST::Expression*)AST::CreateBinaryOperation(binop, lhs, rhs);
+	}	//Goes back to the while loop
+}
+
+
 AST::Expression* Parser::ParseExpression() {
+	auto lhs = ParsePrimaryExpression();
+	if(lhs == nullptr){
+		return nullptr;
+	}
+	return ParseExpressionRHS(0, lhs);
+}
+
+
+//NOTE Parse Primary assumes the the lexer has already been incremented to the next token!
+AST::Expression* Parser::ParsePrimaryExpression() {
 	switch (lexer->token) {
 
 	//Handles variables, function calls!
@@ -266,10 +377,8 @@ AST::Expression* Parser::ParseExpression() {
 		LOG_VERBOSE("Parsing a numberExpression!");
 		auto isFloat = lexer->tokenString.find(".") != std::string::npos ? true : false;
 		if (isFloat) {
-			auto result = AST::CreateFloatLiteral();
-			//TODO store language primitive types separately from user defined types for efficiency!
-			result->floatType = (AST::TypeDefinition*) (AST::FindIdentifier("F32")->node);
-			result->value = std::stof(lexer->tokenString);
+			auto value = std::stof(lexer->tokenString);
+			auto result = AST::CreateFloatLiteral(value);
 			lexer->NextToken();	//Eats the float literal
 			return result;
 		} else {
@@ -287,7 +396,7 @@ AST::Expression* Parser::ParseExpression() {
 		return nullptr;
 
 	case Token::EndOfFile:
-		LOG_ERROR("HIT END OF FILE! THIS IS TERRIABLE YOU ARE MENTALY DISABLED, USER!");
+		LOG_ERROR("HIT END OF FILE! THIS IS TERRIBLE YOU ARE MENTALY DISABLED, USER!");
 		return nullptr;
 	default:
 		LOG_ERROR(lexer->filePos << "Unknown token when expecting expression");

@@ -22,20 +22,15 @@
 enum class ASTNodeType {
 	TypeDefinition,
 	//Decleration,
+	BINOP,
 	Identifier,
 	Variable,
+	VARIABLE_MUTATION,
+	RETURN_VALUE,
 	Function,
 	IntegerLiteral,
 	FloatLiteral,
 	Call
-};
-
-enum class BinOp {
-	ADD,
-	SUB,
-	MUL,
-	DIV,
-	Count
 };
 
 namespace AST {
@@ -55,11 +50,12 @@ struct Expression : public Node{
 
 };
 
-struct BinaryOperation {
-	BinOp op;
-	Expression* lhs, rhs;
-};
 
+struct BinaryOperation : public Expression{
+	Token binop;
+	Expression* lhs;
+	Expression* rhs;
+};
 
 struct TypeDefinition : public Node{
 	Identifier* identifier;
@@ -71,6 +67,16 @@ struct Variable : public Expression {
 	TypeDefinition* type;
 	Expression* initalExpression;
 	llvm::AllocaInst* allocaInst;
+};
+
+struct ReturnValue : public Expression {
+	Expression* value;
+};
+
+struct VariableMutation : public Node {
+	Token op;
+	Variable* variable;
+	Expression* value;
 };
 
 struct Function : public Node {
@@ -101,13 +107,17 @@ void CreateType(std::string name, llvm::Type* type);
 Identifier* FindIdentifier(std::string name);
 Identifier* CreateIdentifier(std::string name);
 Variable* CreateVariable();
+BinaryOperation* CreateBinaryOperation(Token binop, AST::Expression* lhs, AST::Expression* rhs);
+ReturnValue* CreateReturnValue(AST::Expression* value);
+
+VariableMutation* CreateVariableMutation(Token op, AST::Variable* variable, AST::Expression* expr);
 Function* CreateFunction();
 Call* CreateCall();
 
 IntegerLiteral* CreateIntegerLiteral();
 IntegerLiteral* CreateIntegerLiteral(int64 value);
 
-FloatLiteral* CreateFloatLiteral();
+FloatLiteral* CreateFloatLiteral(float64 value);
 }
 
 #endif //AST_HPP

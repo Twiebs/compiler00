@@ -26,7 +26,10 @@ public:
 	~CodeGenerator();
 
 	llvm::Value* Codegen(AST::Node* node);
+	llvm::Value* Codegen(AST::BinaryOperation* binop);
+	llvm::Value* Codegen(AST::ReturnValue* retVal);
 	llvm::Value* Codegen(AST::Variable* var);
+	llvm::Value* Codegen(AST::VariableMutation* mut);
 	llvm::Value* Codegen(AST::Call* call);
 	llvm::Value* Codegen(AST::IntegerLiteral* intLiteral);
 	llvm::Value* Codegen(AST::FloatLiteral* floatLiteral);

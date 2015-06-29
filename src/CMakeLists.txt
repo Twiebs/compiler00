@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 2.8.8)
 project(LLVMLang)
 
+if(NOT CMAKE_ECLIPSE_VERSION)
+    add_definitions(-DENABLE_COLOR_OUTPUT)
+endif()
+
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Uisng LLVMConfig.cmake in: ${LLVM_DIR}")

@@ -40,6 +40,15 @@ AST::Identifier* AST::CreateIdentifier(std::string name) {
 	return result;
 }
 
+AST::BinaryOperation* AST::CreateBinaryOperation(Token binop, AST::Expression* lhs, AST::Expression* rhs) {
+	auto result = new AST::BinaryOperation();
+	result->nodeType = ASTNodeType::BINOP;
+	result->binop = binop;
+	result->lhs = lhs;
+	result->rhs = rhs;
+	return result;
+}
+
 AST::Function* AST::CreateFunction() {
 	AST::Function* function = new AST::Function;
 	function->nodeType = ASTNodeType::Function;
@@ -58,6 +67,13 @@ AST::IntegerLiteral* AST::CreateIntegerLiteral() {
 	return result;
 }
 
+AST::ReturnValue* AST::CreateReturnValue(AST::Expression* value) {
+	auto result = new AST::ReturnValue();
+	result->nodeType = ASTNodeType::RETURN_VALUE;
+	result->value = value;
+	return result;
+}
+
 AST::IntegerLiteral* AST::CreateIntegerLiteral(int64 value) {
 	auto result = new AST::IntegerLiteral();
 	result->nodeType = ASTNodeType::IntegerLiteral;
@@ -66,9 +82,11 @@ AST::IntegerLiteral* AST::CreateIntegerLiteral(int64 value) {
 	return result;
 }
 
-AST::FloatLiteral* AST::CreateFloatLiteral() {
+AST::FloatLiteral* AST::CreateFloatLiteral(float64 value) {
 	auto result = new AST::FloatLiteral();
 	result->nodeType = ASTNodeType::FloatLiteral;
+	result->floatType = (AST::TypeDefinition*)AST::FindIdentifier("F32")->node;
+	result->value = value;
 	return result;
 }
 
@@ -76,5 +94,14 @@ AST::Variable* AST::CreateVariable() {
 	auto result = new AST::Variable;
 	result->nodeType = ASTNodeType::Variable;
 	result->allocaInst = nullptr;
+	return result;
+}
+
+AST::VariableMutation* AST::CreateVariableMutation(Token op, AST::Variable* variable, AST::Expression* expr) {
+	auto result = new AST::VariableMutation();
+	result->nodeType = ASTNodeType::VARIABLE_MUTATION;
+	result->op = op;
+	result->variable = variable;
+	result->value = expr;
 	return result;
 }

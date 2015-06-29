@@ -1,12 +1,17 @@
-Print :: () :> S32 foreign
-Println :: () :> S32 foreign
+# Print :: () :> S32 foreign
+Println :: () :> S32 foregin
 PrintlnInt :: (value : S32) :> S32 foreign
 
-MyFunction :: () :> S32 {
-      Println()
+DoThingsWithVar :: (myVar : S32) :> S32 {
+    return myVar
 }
 
 main :: () :> S32 {
-      result : S32 = MyFunction()
-      PrintlnInt(result)
+    foo : S32 = 4
+    PrintlnInt(foo)
+
+    result : S32 = DoThingsWithVar(foo)
+    PrintlnInt(result)
+
+    return 0
 }

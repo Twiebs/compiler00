@@ -18,7 +18,6 @@ typedef uint64_t  uint64;
 typedef float 	  float32;
 typedef double 	  float64;
 
-
 #define LOG_LEVEL_NONE    0
 #define LOG_LEVEL_ERROR   1
 #define LOG_LEVEL_INFO    2
@@ -27,27 +26,42 @@ typedef double 	  float64;
 
 #define LOG_LEVEL LOG_LEVEL_VERBOSE
 
-
 #if LOG_LEVEL > 0
+#ifdef ENABLE_COLOR_OUTPUT
 #define LOG_ERROR(x) std::cout << "\x1b[31mERROR: " << x << "\033[39m\n"
+#else
+#define LOG_ERROR(x) std::cout << "ERROR: " << x << "\n"
+#endif
 #else
 #define LOG_ERROR(x)
 #endif
 
 #if LOG_LEVEL > 1
+#ifdef ENABLE_COLOR_OUTPUT
 #define LOG_INFO(x) std::cout << "\x1b[36mINFO: " << x << "\033[39m\n"
+#else
+#define LOG_INFO(x) std::cout << "INFO: " << x << "\n"
+#endif	//COLOR_OUTPUT
 #else
 #define LOG_INFO(x)
 #endif
 
 #if LOG_LEVEL > 2
+#ifdef ENABLE_COLOR_OUTPUT
 #define LOG_DEBUG(x) std::cout << "DEBUG: " << x << "\n"
+#else
+#define LOG_DEBUG(x) std::cout << "DEBUG: " << x << "\n"
+#endif
 #else
 #define LOG_DEBUG(x)
 #endif
 
 #if LOG_LEVEL > 3
+#ifdef ENABLE_COLOR_OUTPUT
 #define LOG_VERBOSE(x) std::cout << "\x1b[30mVERBOSE: " << x << "\033[39m\n"
+#else
+#define LOG_VERBOSE(x) std::cout << "VERBOSE: " << x << "\n"
+#endif
 #else
 #define LOG_VERBOSE(x)
 #endif

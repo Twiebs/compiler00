@@ -12,8 +12,12 @@ CodeGenerator::~CodeGenerator() {
 
 llvm::Value* CodeGenerator::Codegen(AST::Node* node) {
 	switch(node->nodeType) {
+	case ASTNodeType::BINOP:
+		return Codegen((AST::BinaryOperation*)node);
 	case ASTNodeType::Variable:
 		return Codegen((AST::Variable*) node);
+	case ASTNodeType::VARIABLE_MUTATION:
+		return Codegen((AST::VariableMutation*)node);
 	case ASTNodeType::Function:
 		return Codegen((AST::Function*) node);
 	case ASTNodeType::Call:
@@ -22,37 +26,100 @@ llvm::Value* CodeGenerator::Codegen(AST::Node* node) {
 		return Codegen((AST::IntegerLiteral*) node);
 	case ASTNodeType::FloatLiteral:
 		return Codegen((AST::FloatLiteral*) node);
+	case ASTNodeType::RETURN_VALUE:
+		return Codegen((AST::ReturnValue*)node);
 	default:
 		LOG_ERROR("UNHANDLED CODEGEN OF NODE");
 		return nullptr;
 	}
 }
 
+llvm::Value* CodeGenerator::Codegen(AST::BinaryOperation* binop)  {
+	llvm::Value* lhs = Codegen(binop->lhs);
+	llvm::Value* rhs = Codegen(binop->rhs);
+
+	if(lhs == nullptr || rhs == nullptr) {
+		LOG_ERROR("Failed to emit code for binary operation!");
+		return nullptr;
+	}
+
+	switch(binop->binop) {
+		case Token::ADD:
+			return builder->CreateAdd(lhs, rhs, "addtmp");
+		case Token::SUB:
+			return builder->CreateSub(lhs, rhs, "subtmp");
+		case Token::MUL:
+			return builder->CreateMul(lhs, rhs, "multmp");
+		case Token::DIV:	//Note dive might be broken because it wont do integer div or fp div
+			return builder->CreateFDiv(lhs, rhs, "divtmp");
+		default:
+			LOG_ERROR("Invalid binary operator");
+			return nullptr;
+	}
+}
+
 llvm::Value* CodeGenerator::Codegen(AST::Variable* var) {
-	//If this variable already has been pushed to the stack we return that inst
-	if(var->allocaInst != nullptr) {
+	//This variable is being declared!
+	//TODO sanity check flag that ensures that this is indeed a declaration
+	if(var->allocaInst == nullptr) {
+		var->allocaInst = builder->CreateAlloca(var->type->llvmType, 0, var->identifier->name);
+		//This variable is being allocated on the stack but does not have an expr associated with it
+		//We need to generate a default initializer for it!
+		if(var->initalExpression == nullptr) {
+			if(var->type->llvmType->isIntegerTy()) {
+				var->initalExpression = AST::CreateIntegerLiteral(0);
+			} else if (var->type->llvmType->isFloatingPointTy()) {
+				var->initalExpression = AST::CreateFloatLiteral(0);
+			}
+			auto value = Codegen(var->initalExpression);
+			builder->CreateStore(value, var->allocaInst);
+			var->initalExpression = nullptr;//Make sure to set the expression that the variable is storing to null so it can be reused!
+		}
+	}
+
+	//This variable has been allocated on the stack allready or was newly allocated
+	if(var->initalExpression != nullptr) {
+		auto value = Codegen(var->initalExpression);
+		builder->CreateStore(value, var->allocaInst);
+		var->initalExpression = nullptr;
+		return var->allocaInst;
+		//If the expression that this var is not null then we need to store the value of that expr
+		//This should never be used anywhere since its an assignment
+		//NOTE this might not be the case when we and increment opperators as those are used inline as they are
+		//assigned values so we might want to emit a load for this variable however for now we will assume that it will not
+		//be used and might actually catch some extra errors that way!
+	} else {
+		//The expr is null so this is just a plain-old-load
 		return builder->CreateLoad(var->allocaInst);
 	}
 
-	if(var->initalExpression == nullptr) {
-		//@HACK expressions are given some stuff!
-		//Interger is assumed!
-		//Initialize to zero!
-		auto intLiteral = AST::CreateIntegerLiteral(0);
-		var->initalExpression = intLiteral;
-	}
-
-	auto allocaInst = builder->CreateAlloca(var->type->llvmType, 0, var->identifier->name);
-	auto value = Codegen(var->initalExpression);
-	builder->CreateStore(value, allocaInst);
-	var->allocaInst = allocaInst;	//This variable has been codegened and will use this as its
-	//value from now on!
-
-	//This is probably not what i want to do!
-	//Why does codegen care what is emitted?
-	return allocaInst;
+	LOG_ERROR("Failed to emit code for varaible: " << var->identifier->name);
+	return nullptr;
 }
 
+llvm::Value* CodeGenerator::Codegen(AST::VariableMutation* mut) {
+	if(mut->variable->allocaInst == nullptr) {
+		LOG_ERROR("Cannot assign a value to an unitialized variable!");
+		return nullptr;
+	}
+	//TODO optional load flag!
+	auto value = Codegen(mut->value);
+	if(value == nullptr) {
+		LOG_ERROR("Could not emit code for expression when assigning value to " << mut->variable->identifier);
+	}
+	builder->CreateStore(value, mut->variable->allocaInst);
+	return mut->variable->allocaInst;
+}
+
+llvm::Value* CodeGenerator::Codegen(AST::ReturnValue* retVal) {
+	auto value = Codegen(retVal->value);
+	if (value != nullptr) {
+		builder->CreateRet(value);
+		return value;
+	}
+	LOG_ERROR("Unable to create return value for function ....");
+	return nullptr;
+}
 
 
 llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
@@ -66,6 +133,7 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 	llvm::Function::LinkageTypes linkage = (function->body.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
 	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->identifier->name, module);
 
+	//The function must always do something...
 	if (function->body.size() > 0) {
 		llvm::BasicBlock* block = llvm::BasicBlock::Create(module->getContext(), "entry", llvmFunc);
 		builder->SetInsertPoint(block);
@@ -73,27 +141,15 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 		//Create a new block insider this function and
 		//Set the IRBuilders insertion point to the block
 
-		for (AST::Node* node : function->body) {
+		//TODO we need to make sure that a return value is specified for the function!
+		//(if it has one...)
+		for(uint32 i = 0; i < function->body.size(); i++) {
+			auto node = function->body[i];
 			Codegen(node);
-		}
-
-		llvm::Value* returnValue = llvm::ConstantInt::get(function->returnType->llvmType, 1);
-		if (returnValue) {
-			builder->CreateRet(returnValue);
-			llvm::raw_os_ostream* stream = new llvm::raw_os_ostream(std::cout);
-			llvm::verifyModule(*module, stream);
-			return llvmFunc;
 		}
 	}
 
 	return llvmFunc;
-
-	//There was an error reading the body of the function
-	//Remove the function
-//	function->eraseFromParent();
-//	LOG_ERROR("Error parsing body of function");
-	return nullptr;
-
 }
 
 llvm::Value* CodeGenerator::Codegen(AST::Call* call) {

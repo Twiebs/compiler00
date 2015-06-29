@@ -7,14 +7,6 @@
 
 #include "Common.hpp"
 
-enum class Type {
-	Undefined,
-	Int32,
-	Int64,
-	Float32,
-	Float64,
-};
-
 enum class Token {
 	Unkown,
 
@@ -25,16 +17,26 @@ enum class Token {
 	TypeInfer,
 	TypeReturn,
 
-	Plus,
-	Minus,
+	//BinOps
+	EQUALS,
+	ADD,
+	SUB,
+	MUL,
+	DIV,
+	MOD,
+	ADD_EQUALS,
+	SUB_EQUALS,
+	MUL_EQUALS,
+	DIV_EQUALS,
+	MOD_EQUALS,
 
-	Func,
+	//Control flow
+	IF,
+	ELSE,
+	RETURN,
+
 	Foreign,
 	Number,
-	AssignmentOpperator,
-
-	If,
-	Else,
 
 	ParenOpen,
 	ParenClose,
@@ -44,7 +46,9 @@ enum class Token {
 	EndOfFile
 };
 
-
+// Represents a site in a file with a lineNumber and a columNumber
+// Can be printed through standard output.  The lexer is resposible for this bookeeping
+// And ASTNodes will copy the value of the lexers fileposition when they are incepted
 struct FilePosition {
 	std::string filename;
 	uint32 lineNumber;
@@ -55,6 +59,7 @@ struct FilePosition {
 	}
 };
 
+
 class Lexer {
 public:
 	std::string tokenString;
@@ -64,7 +69,6 @@ public:
 	FilePosition filePos;
 	Lexer(std::string filename, std::ifstream* stream);
 	~Lexer();
-
 
 	void NextToken();
 
@@ -82,9 +86,6 @@ private:
 	void AppendNext();
 	void EatNext();
 	void EatWhitespaces();
-
-
-
 };
 
 #endif //LEXER_HPP

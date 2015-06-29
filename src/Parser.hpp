@@ -19,12 +19,17 @@ private:
 	CodeGenerator* codeGenerator;
 	Lexer* lexer;
 
-	int32 operatorPrecedence[(int32)BinOp::Count];
+	std::unordered_map<int32, int32> precedenceMap;
 
 	AST::Node* ParseStatement();
-	AST::Expression* ParseExpression();
 
-	int32 GetBinopPrecedence();
+	AST::Expression* ParseExpression();
+	AST::Expression* ParseExpressionRHS(int32 exprPrec, AST::Expression* lhs);
+
+	AST::Expression* ParsePrimaryExpression();
+
+
+	int32 GetCurrentTokenPrecedence();
 
 	void CreateType(std::string name, llvm::Type* type);
 	//TODO these probably should not exist inside the parser.

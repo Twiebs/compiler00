@@ -1,3 +1,4 @@
+#! /usr/bin/python
 import subprocess
 
 subprocess.call("build/LLVMLang test.src", shell=True)
