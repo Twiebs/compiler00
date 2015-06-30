@@ -42,7 +42,7 @@ AST::Node* Parser::ParseStatement() {
 		std::string identifierName = lexer->tokenString;
 		lexer->NextToken(); //Eat the identifier
 
-		// TYPE_DECLARE
+		// @TYPE_DECLARE
 		if (lexer->token == Token::TypeDeclare) {
 			LOG_VERBOSE("Parsing TypeDeclare");
 			lexer->NextToken();	//Eat the type assignment operator and get the type token
@@ -95,13 +95,13 @@ AST::Node* Parser::ParseStatement() {
 			return var;
 		}
 
-		//TYPE INFER
+		//@TYPE INFER
 		else if (lexer->token == Token::TypeInfer) {
 			//TODO type inference
 			return nullptr;
 		}
 
-		//TYPE DEFINE
+		//@TYPE DEFINE
 		else if (lexer->token == Token::TypeDefine) {
 			LOG_VERBOSE("Parsing TypeDefine");
 			//First we make sure that the identifier has not been resolved yet
@@ -128,8 +128,8 @@ AST::Node* Parser::ParseStatement() {
 			if (lexer->token == Token::ParenOpen) {
 				LOG_VERBOSE("Parsing FunctionDefinition");
 				//Note since we have already checked against the identifierTable we know this function has not yet been defined
-				AST::Function* function = AST::CreateFunction(currentScope);
-				ident->node = function;
+				AST::Function* function = AST::CreateFunction(ident, currentScope);
+				//Create a function with that identifier and put it in the curretnScope;
 				function->ident = ident;
 				currentScope = function;
 
@@ -228,27 +228,34 @@ AST::Node* Parser::ParseStatement() {
 			}
 		}
 
-		//FunctionCall!
+		//@FunctionCall!
 		else if (lexer->token == Token::ParenOpen) {
-			LOG_VERBOSE("Parsing Call to: " << identifierName);
-			auto identifier = AST::FindIdentifier(currentScope, identifierName);
-			if(identifier == nullptr) {
+			LOG_VERBOSE("Attemping to parse call to : " << identifierName);
+			auto ident = AST::FindIdentifier(currentScope, identifierName);
+			//This is where we would actualy create an identifer but not set its node so it is a unresolved identifier!
+			//This is probably what i should start handling next
+			//First typeInfrence!
+			if (ident == nullptr) {
 				LOG_ERROR("Function: " << identifierName << " does not exist");
 				return nullptr;
 			}
 
+			//We cant posibly know what our call is going to be to at this point!
+			//Or wait... what if we did this at codegen time!
 			AST::Call* call = AST::CreateCall();
-			call->function = (AST::Function*) identifier->node;
-
+			call->ident = ident;
+			//We dont care about the calls function anymore
+			//call->function = (AST::Function*) identifier->node;
 			lexer->NextToken();
 			while (lexer->token != Token::ParenClose && lexer->token != Token::Unkown && lexer->token != Token::EndOfFile) {
 				AST::Expression* expression = ParseExpression();
 				if(expression == nullptr) {
-					LOG_ERROR(lexer->filePos << " Could not resolve expression for argument at index " << call->args.size() << " in call to function " << identifier->name);
+					LOG_ERROR(lexer->filePos << " Could not resolve expression for argument at index " << call->args.size() << " in call to function " << ident->name);
 					return nullptr;
 				}
 				call->args.push_back(expression);
-			}
+			}	//We push back all the arguments and dont care about what function we are actualy going to end up calling...
+				//We may or may not actualy find the function that we are looking for!
 			lexer->NextToken();	//Eat the close ')'
 			return call;
 		}
@@ -369,7 +376,7 @@ AST::Expression* Parser::ParsePrimaryExpression() {
 		if(lexer->token == Token::ParenOpen) {
 			LOG_VERBOSE("Parsing Call to: " << ident->name);
 			AST::Call* call = AST::CreateCall();
-			call->function = (AST::Function*) ident->node;
+			call->ident = ident;
 
 			lexer->NextToken();
 			while (lexer->token != Token::ParenClose && lexer->token != Token::Unkown && lexer->token != Token::EndOfFile) {

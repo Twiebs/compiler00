@@ -52,12 +52,19 @@ AST::BinaryOperation* AST::CreateBinaryOperation(Token binop, AST::Expression* l
 	return result;
 }
 
-AST::Function* AST::CreateFunction(AST::Block* block) {
+AST::Function* AST::CreateFunction(AST::Identifier* ident, AST::Block* block) {
 	AST::Function* function = new AST::Function;
 	function->nodeType = ASTNodeType::Function;
 	function->parent = block;
+	if (ident->node == nullptr) {
+		auto funcSet = new FunctionSet;
+		funcSet->ident = ident;
+		funcSet->functions.push_back(function);
+		ident->node = funcSet;
+	}
 	return function;
 }
+
 AST::Call* AST::CreateCall() {
 	AST::Call* call = new AST::Call;
 	call->nodeType = ASTNodeType::Call;

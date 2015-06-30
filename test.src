@@ -5,29 +5,34 @@ PrintlnInt :: (value : S32) :> S32 foreign
 
 #Functions now have proper scope!
 #Notice that DoThings and DoStuff both take a foo
-DoThings :: (foo : S32) :> S32 {
-    return foo
-}
+#DoThings :: (foo : S32) :> S32 {
+ #   return foo
+#
 
-DoStuff :: (foo : S32) :> S32 {
-    return foo + 57
-}
+#DoStuff :: (foo : S32) :> S32 {
+ #   return foo + 57
+#}
 
 main :: () :> S32 {
-    foo : S32 = 4
+      foo : S32 = 4
+      PrintlnInt(foo)
+}
 
-    #Store functions in variables and then print them
-    resultA : S32 = DoThings(foo)
-    resultB : S32 = DoStuff(foo)
-    PrintlnInt(resultA)
-    PrintlnInt(resultB)
-    PrintlnInt(resultA * resultB)
+#main :: () :> S32 {
+ #   foo : S32 = 4
+#
+ #   #Store functions in variables and then print them
+  #  resultA : S32 = DoThings(foo)
+   # resultB : S32 = DoStuff(foo)
+    #PrintlnInt(resultA)
+   # PrintlnInt(resultB)
+   # PrintlnInt(resultA * resultB)
 
     #Call the functions directly and print them
-    PrintlnInt(DoThings(foo))
-    PrintlnInt(DoStuff(foo))
-    PrintlnInt(DoThings(foo))
-    PrintlnInt(DoThings(foo) * DoStuff(foo))
-
-    return 0
-}
+   # PrintlnInt(DoThings(foo))
+   # PrintlnInt(DoStuff(foo))
+   # PrintlnInt(DoThings(foo))
+   # PrintlnInt(DoThings(foo) * DoStuff(foo))
+#
+ #   return 0
+#}

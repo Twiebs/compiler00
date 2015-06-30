@@ -160,31 +160,47 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 			Codegen(node);
 		}
 	}
-	//TODO sanity check to make sure this function was foregin if it did not have a body
+	//TODO sanity check to make sure this function was foreign if it did not have a body
 	//Also do a sainy check to make sure that it has created return values for all flow paths
 
+	function->code = llvmFunc;
 	return llvmFunc;
 }
 
 llvm::Value* CodeGenerator::Codegen(AST::Call* call) {
-	llvm::Function* function = module->getFunction(call->function->ident->name);
-		if (function == 0) {
-			LOG_ERROR("Call to undefined function(" << call->function->ident->name<< ")");
-			return nullptr;
+	auto funcSet = (AST::FunctionSet*)call->ident->node;
+	AST::Function* function;
+	for(auto func : funcSet->functions) {
+		bool argumentsMatch = true;
+		if(func->args.size() == call->args.size()) {
+			for(uint32 i = 0; i < func->args.size(); i++) {
+				if(func->args[i]->type != call->args[i]->type) {
+					argumentsMatch = false;
+				}
+			}
 		}
+		if(argumentsMatch) {
+			function = func;
+		}
+	}
+	//We need to do some crazy naming convention?
+	//Or just idx the order in which they appear
+	//FindVariable()
+	//FindType()	//Use these api things instead to provide much better error handleing and clean up this stuff?
+	//FindFunction(std::string name, args..)
+	auto func = function->code;
+	if (func == 0) {
+		LOG_ERROR("Call to undefined function(" << function->ident->name<< ")");
+		return nullptr;
+	}
 
-		if (call->args.size() != function->arg_size()) {
-			LOG_ERROR("Function Call to '" << call->function->ident->name << "' contains incorrect number of arguments!");
+	std::vector<llvm::Value*> argsV;
+	for (uint32 i = 0, e = func->arg_size(); i != e; i++) {
+		argsV.push_back(Codegen(call->args[i]));
+		if (argsV.back() == 0)
 			return nullptr;
-		}
-
-		std::vector<llvm::Value*> argsV;
-		for (uint32 i = 0, e = function->arg_size(); i != e; i++) {
-			argsV.push_back(Codegen(call->args[i]));
-			if (argsV.back() == 0)
-				return nullptr;
-		}
-		return builder->CreateCall(function, argsV, "calltmp");
+	}
+	return builder->CreateCall(func, argsV, "calltmp");
 }
 
 llvm::Value* CodeGenerator::Codegen(AST::IntegerLiteral* intNode) {
