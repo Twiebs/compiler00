@@ -1,21 +1,8 @@
-#include <iostream>
-
 //C Lirary for the language
+#include <iostream>
+#include <cmath>
 
-extern "C"
-int PrintlnInt(int value) {
-    std::cout << value << "\n";
-    return 0;
-}
-
-extern "C"
-int Println () {
-  std::cout << "This is the println function from C!" << "\n";
-  return 0;
-}
-
-extern "C"
-int Print () {
-  std::cout << "This is the print function from C!";
-  return 0;
-}
+//Print functions!
+extern "C" void __PrintlnInt(int value) { std::cout << value << "\n"; }
+extern "C" void __PrintlnFloat(float value) { std::cout << value << "\n"; }
+extern "C" void __Print () { std::cout << "This is the print function from C!"; }

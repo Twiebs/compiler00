@@ -35,7 +35,7 @@ AST::Identifier* AST::FindIdentifier(AST::Block* block, std::string name) {
 	return ident;
 }
 
-//Were going to add these Create things here inorder to delegate the allocation of ast nodes
+//Were going to add these Create things here in order to delegate the allocation of ast nodes
 AST::Identifier* AST::CreateIdentifier(Block* block, std::string name) {
 	auto result = new AST::Identifier;
 	result->name = name;
@@ -52,16 +52,10 @@ AST::BinaryOperation* AST::CreateBinaryOperation(Token binop, AST::Expression* l
 	return result;
 }
 
-AST::Function* AST::CreateFunction(AST::Identifier* ident, AST::Block* block) {
+AST::Function* AST::CreateFunction(AST::Block* block) {
 	AST::Function* function = new AST::Function;
 	function->nodeType = ASTNodeType::Function;
 	function->parent = block;
-	if (ident->node == nullptr) {
-		auto funcSet = new FunctionSet;
-		funcSet->ident = ident;
-		funcSet->functions.push_back(function);
-		ident->node = funcSet;
-	}
 	return function;
 }
 
@@ -70,16 +64,9 @@ AST::Call* AST::CreateCall() {
 	call->nodeType = ASTNodeType::Call;
 	return call;
 }
-
-AST::IntegerLiteral* AST::CreateIntegerLiteral() {
-	auto result = new AST::IntegerLiteral();
-	result->nodeType = ASTNodeType::IntegerLiteral;
-	result->intType = (AST::TypeDefinition*)AST::FindIdentifier(globalScope, "S32")->node;
-	return result;
-}
-
 AST::Block* AST::CreateBlock(AST::Block* block) {
 	auto result = new AST::Block();
+	result->depth = (block == nullptr) ? 0 : block->depth + 1;
 	result->parent = block;
 	result->nodeType = ASTNodeType::BLOCK;
 	return result;
@@ -95,7 +82,7 @@ AST::ReturnValue* AST::CreateReturnValue(AST::Expression* value) {
 AST::IntegerLiteral* AST::CreateIntegerLiteral(int64 value) {
 	auto result = new AST::IntegerLiteral();
 	result->nodeType = ASTNodeType::IntegerLiteral;
-	result->intType = (AST::TypeDefinition*)AST::FindIdentifier(globalScope, "S32")->node;
+	result->type = (AST::TypeDefinition*)AST::FindIdentifier(globalScope, "S32")->node;
 	result->value = value;
 	return result;
 }
@@ -103,7 +90,7 @@ AST::IntegerLiteral* AST::CreateIntegerLiteral(int64 value) {
 AST::FloatLiteral* AST::CreateFloatLiteral(float64 value) {
 	auto result = new AST::FloatLiteral();
 	result->nodeType = ASTNodeType::FloatLiteral;
-	result->floatType = (AST::TypeDefinition*)AST::FindIdentifier(globalScope, "F32")->node;
+	result->type = (AST::TypeDefinition*)AST::FindIdentifier(globalScope, "F32")->node;
 	result->value = value;
 	return result;
 }
@@ -122,5 +109,15 @@ AST::VariableMutation* AST::CreateVariableMutation(Token op, AST::Variable* vari
 	result->op = op;
 	result->variable = variable;
 	result->value = expr;
+	return result;
+}
+
+//Control flow
+AST::IfStatement* AST::CreateIfStatement(AST::Expression* expr) {
+	auto result = new AST::IfStatement;
+	result->nodeType = ASTNodeType::IF;
+	result->expr = expr;
+	result->ifBlock = nullptr;
+	result->elseBlock = nullptr;
 	return result;
 }

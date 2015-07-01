@@ -22,6 +22,9 @@ llvm::Value* CodeGenerator::Codegen(AST::Node* node) {
 		return Codegen((AST::Function*) node);
 	case ASTNodeType::Call:
 		return Codegen((AST::Call*) node);
+	case ASTNodeType::IF:
+		LOG_ERROR("Attemping to genericly code gen an if! Note this is very very bad");
+		return nullptr;
 	case ASTNodeType::IntegerLiteral:
 		return Codegen((AST::IntegerLiteral*) node);
 	case ASTNodeType::FloatLiteral:
@@ -146,20 +149,39 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 
 		//Only emit code for function arguments if the function is not foregin!
 		if(function->members.size() > 0) {
-			function->args[i]->allocaInst = builder->CreateAlloca(iter->getType(), iter, function->args[i]->identifier->name);
+			function->args[i]->allocaInst = builder->CreateAlloca(iter->getType(), 0, function->args[i]->identifier->name);
 			builder->CreateStore(iter, function->args[i]->allocaInst);
 		}
 	}
 
 	//The function must always do something...
+	bool returnInstructionSeen = false;
 	if (function->members.size() > 0) {
-		//TODO we need to make sure that a return value is specified for the function!
-		//(if it has one...)
 		for(uint32 i = 0; i < function->members.size(); i++) {
 			auto node = function->members[i];
+			if(node->nodeType == ASTNodeType::IF) {
+				auto mergeBlock = llvm::BasicBlock::Create(module->getContext(), "merge", llvmFunc);
+				Codegen((AST::IfStatement*)node, mergeBlock, llvmFunc);
+				builder->SetInsertPoint(mergeBlock);
+				continue;
+			}
+
+			if(node->nodeType == ASTNodeType::RETURN_VALUE) {
+				returnInstructionSeen = true;
+			}
 			Codegen(node);
 		}
 	}
+
+	auto voidType = (AST::TypeDefinition*)AST::FindIdentifier(AST::globalScope, "Void")->node;
+	if(!returnInstructionSeen) {
+		if(function->returnType == voidType) {
+			builder->CreateRetVoid();
+		} else {
+			LOG_ERROR("Non-void functions must have a return statement!");
+		}
+	}
+
 	//TODO sanity check to make sure this function was foreign if it did not have a body
 	//Also do a sainy check to make sure that it has created return values for all flow paths
 
@@ -168,44 +190,86 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 }
 
 llvm::Value* CodeGenerator::Codegen(AST::Call* call) {
-	auto funcSet = (AST::FunctionSet*)call->ident->node;
-	AST::Function* function;
-	for(auto func : funcSet->functions) {
-		bool argumentsMatch = true;
-		if(func->args.size() == call->args.size()) {
-			for(uint32 i = 0; i < func->args.size(); i++) {
-				if(func->args[i]->type != call->args[i]->type) {
-					argumentsMatch = false;
-				}
-			}
-		}
-		if(argumentsMatch) {
-			function = func;
-		}
-	}
-	//We need to do some crazy naming convention?
-	//Or just idx the order in which they appear
-	//FindVariable()
-	//FindType()	//Use these api things instead to provide much better error handleing and clean up this stuff?
-	//FindFunction(std::string name, args..)
-	auto func = function->code;
+	auto func = call->function->code;
 	if (func == 0) {
-		LOG_ERROR("Call to undefined function(" << function->ident->name<< ")");
+		LOG_ERROR("Call to undefined function(" << call->ident->name<< ")");
 		return nullptr;
 	}
 
 	std::vector<llvm::Value*> argsV;
 	for (uint32 i = 0, e = func->arg_size(); i != e; i++) {
-		argsV.push_back(Codegen(call->args[i]));
-		if (argsV.back() == 0)
+		auto argV = Codegen(call->args[i]);
+		if(argV == nullptr) {
+			LOG_DEBUG("Failed to emit code for call argument!");
 			return nullptr;
+		}
+		argsV.push_back(argV);
 	}
-	return builder->CreateCall(func, argsV, "calltmp");
+
+	auto voidType = (AST::TypeDefinition*)AST::FindIdentifier(AST::globalScope, "Void")->node;
+	if(call->function->returnType != voidType) {
+		return builder->CreateCall(func, argsV, "calltmp");
+	} else {
+		return builder->CreateCall(func, argsV);
+	}
+}
+
+llvm::Value* CodeGenerator::Codegen(AST::IfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
+	auto condV = Codegen(ifStatement->expr);
+	if(condV == nullptr) {
+		LOG_ERROR("Could not emit code for if statement expression");
+		return 0;
+	}
+	auto compare = builder->CreateICmpEQ(condV, llvm::ConstantInt::getTrue(module->getContext()), "ifcond");
+	auto ifBlock = llvm::BasicBlock::Create(module->getContext(), "if", function);
+	auto elseBlock = mergeBlock;
+	if(ifStatement->elseBlock != nullptr) {
+		0 = llvm::BasicBlock::Create(module->getContext(), "else", function);
+	}
+	builder->CreateCondBr(compare, ifBlock, elseBlock);
+	builder->SetInsertPoint(ifBlock);
+	for(auto node : ifStatement->ifBlock->members) {
+		if(node->nodeType == ASTNodeType::IF) {
+			ifBlock = llvm::BasicBlock::Create(module->getContext(), "merge", function);
+			Codegen((AST::IfStatement*)node, ifBlock, function);
+			builder->SetInsertPoint(ifBlock);
+			continue;
+		}
+		auto value = Codegen(node);
+		if(!value) {
+			LOG_DEBUG("Failed to emit code for value in body of ifstatement!");
+		}
+	}
+
+	builder->CreateBr(mergeBlock);
+
+	if(ifStatement->elseBlock != nullptr) {
+		builder->SetInsertPoint(elseBlock);
+		if(ifStatement->elseBlock->nodeType == ASTNodeType::IF) {
+			Codgen((AST::IfStatement*)ifStatement->elseBlock);
+		}
+
+
+		for(auto node : ifStatement->elseBlock->members) {
+			if(node->nodeType == ASTNodeType::IF) {
+				elseBlock = llvm::BasicBlock::Create(module->getContext(), "merge", function);
+				Codegen((AST::IfStatement*)node, elseBlock, function);
+				builder->SetInsertPoint(elseBlock);
+				continue;
+			}
+			auto value = Codegen(node);
+			if(!value) {
+				LOG_DEBUG("Failed to emit code for value in body of ifstatement!");
+			}
+		}
+		builder->CreateBr(mergeBlock);
+	}
+	return mergeBlock;
 }
 
 llvm::Value* CodeGenerator::Codegen(AST::IntegerLiteral* intNode) {
-	return llvm::ConstantInt::get(intNode->intType->llvmType, intNode->value);
+	return llvm::ConstantInt::get(intNode->type->llvmType, intNode->value);
 }
 llvm::Value* CodeGenerator::Codegen(AST::FloatLiteral* floatNode) {
-	return llvm::ConstantFP::get(floatNode->floatType->llvmType, floatNode->value);
+	return llvm::ConstantFP::get(floatNode->type->llvmType, floatNode->value);
 }

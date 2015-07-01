@@ -1,38 +1,36 @@
-Print :: () :> S32 foreign
-Println :: () :> S32 foreign
-PrintlnInt :: (value : S32) :> S32 foreign
+
+# ==============================
+#       Standard Library
+# ==============================
+
+# STD IO library helper functions
+# Println() wraps c implementation of std::cout
+# and forwards the arguments to the respective C functions!
+# These will eventually be tucked away inside a namespace
+
+# Maths!
+#Sin :: (x : F32) :> F32 { return 0.0 }
+#Cos :: (x : F32) :> F32 { return 0.0 }
+#Tan :: (x : F32) :> F32 { return 0.0 }
+
+__PrintlnInt :: (value : S32) foreign
+__PrintlnFloat :: (value : F32) foreign
+Println :: (msg : S32) { __PrintlnInt(msg) }
+Println :: (msg : F32) { __PrintlnFloat(msg) }
 
 
-#Functions now have proper scope!
-#Notice that DoThings and DoStuff both take a foo
-#DoThings :: (foo : S32) :> S32 {
- #   return foo
-#
-
-#DoStuff :: (foo : S32) :> S32 {
- #   return foo + 57
-#}
+#===========================#
+#       Test Program        #
+#===========================#
 
 main :: () :> S32 {
-      foo : S32 = 4
-      PrintlnInt(foo)
+
+  if 0 {
+    Println(1)
+  } else if 1 {
+    Println(2)
+  }
+
+
+  return 0
 }
-
-#main :: () :> S32 {
- #   foo : S32 = 4
-#
- #   #Store functions in variables and then print them
-  #  resultA : S32 = DoThings(foo)
-   # resultB : S32 = DoStuff(foo)
-    #PrintlnInt(resultA)
-   # PrintlnInt(resultB)
-   # PrintlnInt(resultA * resultB)
-
-    #Call the functions directly and print them
-   # PrintlnInt(DoThings(foo))
-   # PrintlnInt(DoStuff(foo))
-   # PrintlnInt(DoThings(foo))
-   # PrintlnInt(DoThings(foo) * DoStuff(foo))
-#
- #   return 0
-#}

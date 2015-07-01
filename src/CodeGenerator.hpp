@@ -31,10 +31,11 @@ public:
 	llvm::Value* Codegen(AST::Variable* var);
 	llvm::Value* Codegen(AST::VariableMutation* mut);
 	llvm::Value* Codegen(AST::Call* call);
+	llvm::Value* Codegen(AST::IfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
 	llvm::Value* Codegen(AST::IntegerLiteral* intLiteral);
 	llvm::Value* Codegen(AST::FloatLiteral* floatLiteral);
 	llvm::Function* Codegen(AST::Function* function);
-
+	llvm::Value* Codegen(AST::Block* block);
 
 private:
 	llvm::Module* module;

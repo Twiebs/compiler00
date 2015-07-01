@@ -10,6 +10,7 @@ Parser::Parser(llvm::Module* module, std::string filename, std::ifstream* stream
 
 	AST::InitalizeLanguagePrimitives(module);
 	currentScope = AST::globalScope;
+	previousScope = currentScope;
 
 	precedenceMap[(int32)Token::ADD] = 20;
 	precedenceMap[(int32)Token::SUB] = 20;
@@ -104,31 +105,31 @@ AST::Node* Parser::ParseStatement() {
 		//@TYPE DEFINE
 		else if (lexer->token == Token::TypeDefine) {
 			LOG_VERBOSE("Parsing TypeDefine");
-			//First we make sure that the identifier has not been resolved yet
-			auto ident = AST::FindIdentifier(currentScope, identifierName);
-			if (ident != nullptr) {
-				if(ident->node == nullptr) {
-					LOG_INFO("An idenfitier called: " << ident->name << " was allready declared at " << ident->position << " but has not been resolved!  We are now defining it!");
-				} else {
-					LOG_ERROR(lexer->filePos << "Identifier '" << identifierName << "' was already defined at" << ident->position);
-					return nullptr;   //The identifier has already been defined!  It can not be type assigned
-				}
-			} else {
-				//The identifier was not already created so we are now able to create one!
-				ident = AST::CreateIdentifier(currentScope, identifierName);
-			}
-
 			lexer->NextToken();
-			//If the token is a openParen then this is a function definition
-			//FUNCTION DEFINITION
-			//TODO Parse Closures here {}...
-			//Move parse Function inline?
-			//Thats probably a good idea because its only ever going to be called from right here anyway!
 
+
+			//TODO Parse Closures here {}...
+			//@FUNCTION DEFINITION
 			if (lexer->token == Token::ParenOpen) {
 				LOG_VERBOSE("Parsing FunctionDefinition");
+				auto ident = AST::FindIdentifier(currentScope, identifierName);
+				if(ident == nullptr) {
+					ident = AST::CreateIdentifier(currentScope, identifierName);
+					//@Memory - Unhandled heap allocation!
+					auto funcSet = new AST::FunctionSet;
+					ident->node = funcSet;
+					funcSet->nodeType = ASTNodeType::Function;	//NOTE function sets treated as functions!
+					funcSet->ident = ident;
+				} else if(ident->node == nullptr){
+					LOG_ERROR("There is something screwy happeng in function defines!");
+					LOG_INFO("Its probably because a variable was declared but not resolved of the same name as the function that the user is now defining!");
+				}
+
+				//We need to make sure that the current function with the given arguments does not yet exist within the function table!
+				//For now assume the user is right!
+				//NOTE ^bad philosiphy! the user is never right!
 				//Note since we have already checked against the identifierTable we know this function has not yet been defined
-				AST::Function* function = AST::CreateFunction(ident, currentScope);
+				AST::Function* function = AST::CreateFunction(currentScope);
 				//Create a function with that identifier and put it in the curretnScope;
 				function->ident = ident;
 				currentScope = function;
@@ -139,9 +140,10 @@ AST::Node* Parser::ParseStatement() {
 					// If this is a function defn then it should only have decleartions in its argument lsit!
 					// Its assumed parsePrimary will handle any EOF / unknowns
 					AST::Node* node = ParseStatement();
+					//Function arguments are always declerations which are statements not expressions!
 					if (node != nullptr) {
 						if (node->nodeType != ASTNodeType::Variable) {
-							LOG_ERROR("Function definition arguments must be variables!");
+							LOG_ERROR("Function definition arguments must be variable declerations!");
 							return nullptr;
 						}
 						auto var = (AST::Variable*) node;
@@ -178,24 +180,44 @@ AST::Node* Parser::ParseStatement() {
 					function->returnType = (AST::TypeDefinition*) (AST::FindIdentifier(currentScope, "Void")->node);
 				}
 
+				auto FindFunction = [function](AST::Identifier* ident) -> AST::Function* {
+					auto funcSet = (AST::FunctionSet*)ident->node;
+					for(auto func : funcSet->functions) {
+						bool functionsMatch = true;
+						if(func->args.size() == function->args.size()) {
+							for(uint32 i = 0; i < func->args.size(); i++) {
+								if(func->args[i]->type != function->args[i]->type) {
+									functionsMatch = false;
+								}
+							}
+						} else functionsMatch = false;
+						if(functionsMatch) {
+							if(func->returnType != function->returnType) {
+								LOG_ERROR("Cannot overload function return types!  Arguments must differ!");
+								return nullptr;
+							}
+							return func;
+						}
+					}
+					return nullptr;
+				};
+
+				auto func = FindFunction(ident);
+				if(func != nullptr) {
+					LOG_ERROR("Function re-definition!  Overloaded function " << identifierName << "was already defined!");
+				} else {
+					auto funcSet = (AST::FunctionSet*)ident->node;
+					funcSet->functions.push_back(function);
+				}
+
 				if (lexer->token == Token::ScopeOpen) {
 					//A new scope has been opened...
 					lexer->NextToken(); //Eat the scope
 
-					//WAIT ALL OF THIS IS WRONG!
-					//We need to codegen the function here!
-					//But what if we cant?
-					//There is no reason to not allready make the function here...
-					//What if we have to resolve a dependency somewhere down the line and can not emit
-					//Code for members?
-					//Well... then we wait? and pick up from where we were? that might be find
-
-
 					while (lexer->token != Token::ScopeClose && lexer->token != Token::EndOfFile) {
-
 						AST::Node* node = ParseStatement();
 						if (node == nullptr) {
-							LOG_ERROR(lexer->filePos << " Could not generate code for statement inside function body: " << ident->name);
+							LOG_ERROR(lexer->filePos << " Could not parse statement inside function body: " << ident->name);
 							return nullptr;
 						}
 						function->members.push_back(node);
@@ -230,37 +252,65 @@ AST::Node* Parser::ParseStatement() {
 
 		//@FunctionCall!
 		else if (lexer->token == Token::ParenOpen) {
-			LOG_VERBOSE("Attemping to parse call to : " << identifierName);
+			LOG_VERBOSE("Attempting to parse call to : " << identifierName);
 			auto ident = AST::FindIdentifier(currentScope, identifierName);
-			//This is where we would actualy create an identifer but not set its node so it is a unresolved identifier!
-			//This is probably what i should start handling next
-			//First typeInfrence!
 			if (ident == nullptr) {
-				LOG_ERROR("Function: " << identifierName << " does not exist");
+				LOG_ERROR("function named " << identifierName << " does not exist");
 				return nullptr;
 			}
-
-			//We cant posibly know what our call is going to be to at this point!
-			//Or wait... what if we did this at codegen time!
+			//Create the call and now determine its arguments
 			AST::Call* call = AST::CreateCall();
 			call->ident = ident;
-			//We dont care about the calls function anymore
-			//call->function = (AST::Function*) identifier->node;
-			lexer->NextToken();
+
+			lexer->NextToken(); //Eat the open Paren
 			while (lexer->token != Token::ParenClose && lexer->token != Token::Unkown && lexer->token != Token::EndOfFile) {
 				AST::Expression* expression = ParseExpression();
 				if(expression == nullptr) {
 					LOG_ERROR(lexer->filePos << " Could not resolve expression for argument at index " << call->args.size() << " in call to function " << ident->name);
-					return nullptr;
+					//DONT return here... just keep going so we can find more errors'
+					continue;	//But we do skip pushing the expression on to the function arguments
+					//it might be better to keep the nullptr so that we can determine the actually amount of arrugments that were specified by the user for better error reporting!
 				}
 				call->args.push_back(expression);
-			}	//We push back all the arguments and dont care about what function we are actualy going to end up calling...
-				//We may or may not actualy find the function that we are looking for!
+			}	//We push back all the arguments and don't care about what function we are actually going to end up calling...
+				//We may or may not actually find the function that we are looking for!
 			lexer->NextToken();	//Eat the close ')'
+
+
+			auto funcSet = (AST::FunctionSet*)ident->node;
+			if(funcSet->functions.size() == 0) {
+				LOG_ERROR("There are no functions named " << identifierName);
+				delete call;
+				return nullptr;
+			} else {
+				for(auto func : funcSet->functions) {
+					bool functionMatches = true;
+					if(func->args.size() == call->args.size()) {
+						for(uint32 i = 0; i < func->args.size(); i++) {
+							if(func->args[i]->type != call->args[i]->type) {
+								functionMatches = false;
+							}
+						}
+					} else {
+						functionMatches = false;
+					}
+
+					if(functionMatches) {
+						call->function = func;
+						break;
+					}
+				}
+
+				if(call->function == nullptr) {
+					LOG_ERROR("A function named " << ident->name << " exits but it does not take the provided arguments!");
+					delete call;
+					return nullptr;
+				}
+			}
+
 			return call;
 		}
 
-		//Do a switch here!
 		switch(lexer->token) {
 		case Token::EQUALS:
 		case Token::ADD_EQUALS:
@@ -281,9 +331,19 @@ AST::Node* Parser::ParseStatement() {
 				LOG_ERROR("Recognized identifier " << identifierName << " but it is not a variable!");
 			}
 
+			// TODO
+			//This is actualy a good spot to return null because these are top level errors!
+			//Make a new error called top level error that specifies actual errors in the program
+			//Secondary errors might not be actual errors once you fix primary errors
 			auto expr = ParseExpression();
 			if(expr == nullptr) {
 				LOG_ERROR("Could not parse expression on the right of the assignment operator");
+				return nullptr;
+			} else if (expr->type == nullptr) {
+				LOG_ERROR("Could not determine type of expression to the right of " << var->identifier->name);
+			}
+				else if (expr->type != var->type) {
+				LOG_ERROR("Type mismatch! Could not assign a value of '" << expr->type->identifier->name << "' to variable '" << var->identifier->name << "' of type '" << var->type->identifier->name << "' !");
 				return nullptr;
 			}
 			return AST::CreateVariableMutation(lexer->token, var, expr);
@@ -295,6 +355,66 @@ AST::Node* Parser::ParseStatement() {
 		return nullptr;
 	}
 		break;
+
+	case Token::IF:
+	{
+		LOG_VERBOSE(lexer->filePos << " Parsing an if statement!");
+		lexer->NextToken();	//Eat the if
+
+		auto expr = ParseExpression();
+		if(!expr) {
+			LOG_ERROR("Could not evaluate expression when parsing if statement!");
+			return nullptr;
+		}
+
+		if(lexer->token == Token::ScopeOpen) {
+			lexer->NextToken(); //Eat the open scope
+			auto ifStatement = AST::CreateIfStatement(expr);
+			ifStatement->ifBlock = AST::CreateBlock(currentScope);
+			previousScope = currentScope;
+			currentScope = ifStatement->ifBlock;
+			while(lexer->token != Token::ScopeClose) {
+				auto node = ParseStatement();
+				if(!node) {
+					LOG_ERROR("Could not parse statement inside of IF statement");
+				} else {
+					currentScope->members.push_back(node);
+				}
+			}
+
+			currentScope = currentScope->parent;
+			lexer->NextToken();	//Eat the '}'
+			if(lexer->token == Token::ELSE) {
+				LOG_VERBOSE("Parsing else statement");
+				lexer->NextToken();	//Eat the else keyword!
+				if(lexer->token == Token::ScopeOpen) {
+					lexer->NextToken(); //Eat the '{'
+					ifStatement->elseBlock = AST::CreateBlock(currentScope);
+					previousScope = currentScope;
+					currentScope = ifStatement->elseBlock;
+					while(lexer->token != Token::ScopeClose) {
+						auto node = ParseStatement();
+						if(!node) {
+							LOG_ERROR("Could not parse statement inside of IF statement");
+						} else {
+							currentScope->members.push_back(node);
+						}
+					}
+					currentScope = currentScope->parent;
+					lexer->NextToken();	//Eat the '}'
+				} else if (lexer->token == Token::IF){
+					ifStatement->elseBlock = (AST::Block*)ParseStatement();
+				} else {
+					LOG_ERROR("Expected a new scope to open after else keyword or the if keyword!! for else if statements dawggggggggggg!!!");
+				}
+			}
+			return ifStatement;
+		} else {
+			LOG_ERROR("expected an open scope after if expression!");
+			return nullptr;
+		}
+
+	} break;
 
 	case Token::RETURN:
 	{
@@ -340,6 +460,11 @@ AST::Expression* Parser::ParseExpressionRHS(int32 exprPrec, AST::Expression* lhs
 				LOG_ERROR("Could not parse recursive rhsParsing!");
 				return nullptr;
 			}
+		}
+
+		if(lhs->type != rhs->type) {
+			LOG_ERROR("Type mismatch! Can not convert '" << lhs->type->identifier->name << "' to " << rhs->type->identifier->name << "' !");
+			//TODO return null here?
 		}
 
 		//@Memory there is a leak here!
@@ -395,16 +520,20 @@ AST::Expression* Parser::ParsePrimaryExpression() {
 	//This is a numeric literal!
 	case Token::Number: {
 		LOG_VERBOSE("Parsing a numberExpression!");
-		auto isFloat = lexer->tokenString.find(".") != std::string::npos ? true : false;
+		auto dotPos = lexer->tokenString.find(".");
+		bool isFloat = dotPos == std::string::npos ? false : true;
 		if (isFloat) {
+			if(lexer->tokenString.substr(dotPos + 1).find(".") != std::string::npos) {
+				LOG_ERROR("Floating Point value contains two decimal points!");
+			}
 			auto value = std::stof(lexer->tokenString);
 			auto result = AST::CreateFloatLiteral(value);
 			lexer->NextToken();	//Eats the float literal
 			return result;
 		} else {
-			auto result = AST::CreateIntegerLiteral();
-			result->intType = (AST::TypeDefinition*) (AST::FindIdentifier(currentScope, "S32")->node);
-			result->value = std::stoi(lexer->tokenString);
+			auto value = std::stoi(lexer->tokenString);
+			auto result = AST::CreateIntegerLiteral(value);
+			result->type = (AST::TypeDefinition*) (AST::FindIdentifier(currentScope, "S32")->node);
 			lexer->NextToken(); // Eats the integer literal
 			return result;
 		}

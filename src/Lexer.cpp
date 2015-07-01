@@ -63,8 +63,8 @@ Token Lexer::GetToken() {
 
 	//KEYWORD, IDENTIFIER, TYPE
 	//If the character begins with a letter it must be a keyword, type, or identifier
-	if(isalpha(nextChar)) {
-		while (isalnum(nextChar)) {
+	if(isalpha(nextChar) || nextChar == '_') {
+		while (isalnum(nextChar) || nextChar == '_') {
 			AppendNext();
 		}
 		//The nextChar is now somthing that is not alphanum so the end of our token is reached
@@ -79,9 +79,9 @@ Token Lexer::GetToken() {
 
 	//NUMERIC LITERAL
 	if (isdigit(nextChar)) { //Character was not alpha so we already know that it will not be an identifier
-		while(isdigit(nextChar)) {
+		while(isdigit(nextChar) || nextChar == '.') {
 			AppendNext();
-		}	//TODO dont worry about FP for now
+		}
 		return Token::Number;
 	}
 

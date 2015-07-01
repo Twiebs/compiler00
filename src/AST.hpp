@@ -23,6 +23,12 @@ enum class ASTNodeType {
 	BLOCK,
 	TypeDefinition,
 	//Decleration,
+
+	IF,
+	ELSE,
+	FOR,
+	WHILE,
+
 	BINOP,
 	Identifier,
 	Variable,
@@ -74,16 +80,22 @@ struct Expression : public Node {
 
 //It is now time to have somesort of notion of scope!
 struct Block : public Node {
+	uint8 depth;
 	Block* parent;	//null if the global scope
 	std::vector<Node*> members;
 	std::unordered_map<std::string, Identifier*> identifiers;
+};
+
+struct IfStatement : Node {
+	Expression* expr;
+	Block* ifBlock;
+	Block* elseBlock;
 };
 
 
 struct Variable : public Expression {
 	Identifier* identifier;
 	Block* block;
-	TypeDefinition* type;
 	Expression* initalExpression;
 	llvm::AllocaInst* allocaInst;
 };
@@ -128,16 +140,15 @@ struct VariableMutation : public Node {
 
 struct Call : public Node {
 	Identifier* ident;
+	Function* function;
 	std::vector<Expression*> args;
 };
 
 struct IntegerLiteral : public Expression {
-	TypeDefinition* intType;
 	int64 value;
 };
 
 struct FloatLiteral : public Expression {
-	TypeDefinition* floatType;
 	float64 value;
 };
 
@@ -151,14 +162,17 @@ Block* CreateBlock(AST::Block* block);
 BinaryOperation* CreateBinaryOperation(Token binop, AST::Expression* lhs, AST::Expression* rhs);
 ReturnValue* CreateReturnValue(AST::Expression* value);
 
+//Conrol flow
+IfStatement* CreateIfStatement(Expression* expr);
+
 VariableMutation* CreateVariableMutation(Token op, AST::Variable* variable, AST::Expression* expr);
-Function* CreateFunction(Identifier* ident, AST::Block* block);
+Function* CreateFunction(AST::Block* block);
 Call* CreateCall();
 
-IntegerLiteral* CreateIntegerLiteral();
-IntegerLiteral* CreateIntegerLiteral(int64 value);
 
+IntegerLiteral* CreateIntegerLiteral(int64 value);
 FloatLiteral* CreateFloatLiteral(float64 value);
+//TODO string literals!
 
 
 extern AST::Block* globalScope;
