@@ -237,7 +237,7 @@ llvm::Value* CodeGenerator::Codegen(AST::IfStatement* ifStatement, llvm::BasicBl
 		}
 		auto value = Codegen(node);
 		if(!value) {
-			LOG_DEBUG("Failed to emit code for value in body of if statement!");
+			LOG_DEBUG("Failed to emit code for value in body of ifstatement!");
 		}
 	}
 
@@ -246,13 +246,15 @@ llvm::Value* CodeGenerator::Codegen(AST::IfStatement* ifStatement, llvm::BasicBl
 	if(ifStatement->elseBlock != nullptr) {
 		builder->SetInsertPoint(elseBlock);
 		if(ifStatement->elseBlock->nodeType == ASTNodeType::IF) {
-			auto elseIf = (AST::IfStatement*)ifStatement->elseBlock;
+			auto ifElse = (AST::IfStatement*)ifStatement->elseBlock;
+			auto condition = Codegen(ifElse->expr);
+			auto comp = builder->CreateICmpEQ(condition, llvm::ConstantInt::getTrue(module->getContext()), "elseifcond");
+			auto elseIfBlock = llvm::BasicBlock::Create(module->getContext(), "elseif", function);
+			if(ifElse->elseBlock != nullptr) {
 
-			Codegen(, elseBlock, function);
-			builder->SetInsertPoint(elseBlock);
-			//builder->CreateBr(mergeBlock);
-			return elseBlock;
+			}
 		}
+
 
 		for(auto node : ifStatement->elseBlock->members) {
 			if(node->nodeType == ASTNodeType::IF) {

@@ -13,10 +13,13 @@
 #Cos :: (x : F32) :> F32 { return 0.0 }
 #Tan :: (x : F32) :> F32 { return 0.0 }
 
+#IO
 __PrintlnInt :: (value : S32) foreign
 __PrintlnFloat :: (value : F32) foreign
 Println :: (msg : S32) { __PrintlnInt(msg) }
 Println :: (msg : F32) { __PrintlnFloat(msg) }
+#OS
+CreateWindow :: () :> S32 foreign
 
 
 #===========================#
@@ -24,13 +27,7 @@ Println :: (msg : F32) { __PrintlnFloat(msg) }
 #===========================#
 
 main :: () :> S32 {
-
-  if 0 {
-    Println(1)
-  } else if 1 {
-    Println(2)
-  }
-
-
+  Println(5)
+  CreateWindow()
   return 0
 }
