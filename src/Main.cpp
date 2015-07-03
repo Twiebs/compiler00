@@ -1,5 +1,4 @@
 //NOTE all of this stuff was created on June18 if you end of caring about that sort of thing!
-
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -28,7 +27,10 @@
 #include "Lexer.hpp"
 #include "Parser.hpp"
 
+uint32 gErrorCount = 0;
+
 int main(int argc, char** argv) {
+	gErrorCount = 0;
 	static llvm::cl::opt<std::string> inputFile(llvm::cl::Positional,
 			llvm::cl::desc("<input file>"));
 	static llvm::cl::opt<std::string> outputFile("o",
@@ -60,10 +62,15 @@ int main(int argc, char** argv) {
 	Parser parser(module, inputFile, &stream);
 	parser.ParseFile();
 
+	if(gErrorCount > 0) {
+		LOG_ERROR("There were " << gErrorCount - 1<< " errors!");
+	} else {
+		LOG_INFO("No Errors were reported!  Have a \x1b[31mW\x1b[32mo\x1b[33mn\x1b[34md\x1b[35me\x1b[36mr\x1b[31mf\x1b[32mu\x1b[33ml\x1b[34ml \x1b[39mday!");
+	}
+
 	std::error_code errorCode;
 	llvm::raw_fd_ostream ostream(outputFile, errorCode, llvm::sys::fs::F_None);
 	llvm::WriteBitcodeToFile(module, ostream);
 	LOG_INFO("Writing bitcode to file");
-	LOG_INFO("No Errors were reported!  Have a \x1b[31mW\x1b[32mo\x1b[33mn\x1b[34md\x1b[35me\x1b[36mr\x1b[31mf\x1b[32mu\x1b[33ml\x1b[34ml \x1b[39mday!");
 	return 0;
 }

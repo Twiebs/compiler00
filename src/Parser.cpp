@@ -561,11 +561,11 @@ void Parser::ParseFile() {
 	while (lexer->token != Token::EndOfFile) {
 		ParseStatement();
 	}
+	std::cout << "\x1b[31m" << "\n";
 	llvm::raw_os_ostream stream(std::cout);
-	if (llvm::verifyModule(*module, &stream))
+	if (llvm::verifyModule(*module, &stream)) {
 		LOG_ERROR("LLVMModule verification failed!");
-
+	}
 	std::cout << "\x1b[33m" << "\n";
 	module->dump();
-	LOG_INFO("Compilation Finished: There were errors");
 }

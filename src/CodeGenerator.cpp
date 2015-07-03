@@ -177,7 +177,7 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 	if(!returnInstructionSeen) {
 		if(function->returnType == voidType) {
 			builder->CreateRetVoid();
-		} else {
+		} else if (function->members.size() > 0){
 			LOG_ERROR("Non-void functions must have a return statement!");
 		}
 	}

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef _COMMON_HPP
 #define _COMMON_HPP
 
@@ -26,11 +27,13 @@ typedef double 	  float64;
 
 #define LOG_LEVEL LOG_LEVEL_VERBOSE
 
+extern uint32 gErrorCount;
+
 #if LOG_LEVEL > 0
 #ifdef ENABLE_COLOR_OUTPUT
-#define LOG_ERROR(x) std::cout << "\x1b[31mERROR: " << x << "\033[39m\n"
+#define LOG_ERROR(x) gErrorCount++; std::cout << "\x1b[31mERROR: " << x << "\033[39m\n"
 #else
-#define LOG_ERROR(x) std::cout << "ERROR: " << x << "\n"
+#define LOG_ERROR(x) gErrorCount++; std::cout << "ERROR: " << x << "\n"
 #endif
 #else
 #define LOG_ERROR(x)
