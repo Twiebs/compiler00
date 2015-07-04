@@ -1,5 +1,4 @@
 #include "AST.hpp"
-
 ASTDefinition* typeVoid;
 ASTDefinition* typeS32;
 ASTDefinition* typeF32;

@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
 	llvm::Module* module = new llvm::Module("LLVMLang Compiler", context);
 
 	CodeGenerator codeGenerator(module);
-	Parser parser(&codeGenerator);
+	Parser parser(module, &codeGenerator);
 	parser.ParseFile(inputFile);
 
 	std::cout << "\x1b[31m" << "\n";

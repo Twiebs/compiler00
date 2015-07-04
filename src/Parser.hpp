@@ -12,14 +12,15 @@ struct Unit {
 
 class Parser {
 public:
-	Parser(std::string filename, CodeGenerator* codeGenerator);
-  ~Parser();
+	Parser(llvm::Module* module, CodeGenerator* codeGenerator);
+      ~Parser();
 
 	void ParseFile(std::string fileName);
 
 private:
 	CodeGenerator* codeGenerator;
 	Lexer* lexer;
+	llvm::Module* module;
 
 	ASTBlock* previousScope;
 	ASTBlock* currentScope;

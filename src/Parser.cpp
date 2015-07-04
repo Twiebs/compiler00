@@ -1,7 +1,8 @@
 #include "Parser.hpp"
 
-Parser::Parser(CodeGenerator* codeGenerator) {
+Parser::Parser(llvm::Module* module, CodeGenerator* codeGenerator) {
 	this->codeGenerator = codeGenerator;
+	this->module = module;
 	precedenceMap[(int32)Token::ADD] = 20;
 	precedenceMap[(int32)Token::SUB] = 20;
 	precedenceMap[(int32)Token::MUL] = 40;
@@ -9,7 +10,6 @@ Parser::Parser(CodeGenerator* codeGenerator) {
 }
 
 Parser::~Parser() {
-	delete lexer;
 }
 
 int32 Parser::GetCurrentTokenPrecedence() {
@@ -210,7 +210,7 @@ ASTNode* Parser::ParseStatement() {
 						function->members.push_back(node);
 					}
 
-				} else if (lexer->token != Token::Foreign) {
+				} else if (lexer->token != Token::FOREIGN) {
 					LOG_ERROR("Expected a new scope to open '{' after function definition!");
 					LOG_INFO("Did you misspell foreign?");
 					return nullptr;
@@ -570,12 +570,11 @@ void Parser::ParseFile(std::string filename) {
 	parsedUnits[filename] = unit;
 	currentUnit = unit;
 	currentScope = &unit->scope;
-
+	//TODO
+	//For now this is here until i get the parsing working again!
+	InitalizeLanguagePrimitives(currentScope, module);
 
 	auto oldLexer = lexer;
-	if(oldLexer == nullptr)
-		InitalizeLanguagePrimitives(currentScope, module);
-
 	lexer = new Lexer(filename);
 	lexer->NextToken();	//Kicks of parsing... Grabs the first token in the file
 	while (lexer->token != Token::EndOfFile) {

@@ -9,7 +9,7 @@
 enum class Token {
 	UNKOWN,
 	IMPORT,
-	FOREGIN,
+	FOREIGN,
 
 	Identifier,
 

@@ -9,13 +9,11 @@
 
 Lexer::Lexer(std::string filename) {
 	this->filePos.filename = filename;
-
 	stream = new std::ifstream(filename.c_str());
 	if(!stream->is_open()) {
 		std::cout << "Error: Can not open file: " << filename << "\n";
 		abort();
 	}
-
 	this->nextChar = stream->peek();
 	this->lastChar = stream->get();
 }
@@ -67,7 +65,7 @@ Token Lexer::GetToken() {
 		while (isalnum(nextChar) || nextChar == '_')
 			AppendNext();
 		if (tokenString == "import") return Token::IMPORT;
-		if (tokenString == "foreign") 	return Token::FOREGIN;
+		if (tokenString == "foreign") 	return Token::FOREIGN;
 		if (tokenString == "if") 		return Token::IF;
 		if (tokenString == "else") 		return Token::ELSE;
 		if (tokenString == "return")	return Token::RETURN;
