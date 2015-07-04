@@ -1,12 +1,4 @@
-/*
- * CodeGenerator.hpp
- *
- *  Created on: Jun 18, 2015
- *      Author: torin
- */
-
-#ifndef _CODEGENERATOR_HPP
-#define _CODEGENERATOR_HPP
+#pragma once
 
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/raw_os_ostream.h"
@@ -25,22 +17,19 @@ public:
 	CodeGenerator(llvm::Module* module);
 	~CodeGenerator();
 
-	llvm::Value* Codegen(AST::Node* node);
-	llvm::Value* Codegen(AST::BinaryOperation* binop);
-	llvm::Value* Codegen(AST::ReturnValue* retVal);
-	llvm::Value* Codegen(AST::Variable* var);
-	llvm::Value* Codegen(AST::VariableMutation* mut);
-	llvm::Value* Codegen(AST::Call* call);
-	llvm::Value* Codegen(AST::IfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
-	llvm::Value* Codegen(AST::IntegerLiteral* intLiteral);
-	llvm::Value* Codegen(AST::FloatLiteral* floatLiteral);
-	llvm::Function* Codegen(AST::Function* function);
-	llvm::Value* Codegen(AST::Block* block);
+	llvm::Value* Codegen(ASTNode* node);
+	llvm::Value* Codegen(ASTBinaryOperation* binop);
+	llvm::Value* Codegen(ASTReturn* retVal);
+	llvm::Value* Codegen(ASTVariable* var);
+	llvm::Value* Codegen(ASTMutation* mut);
+	llvm::Value* Codegen(ASTCall* call);
+	llvm::Value* Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
+	llvm::Value* Codegen(ASTIntegerLiteral* intLiteral);
+	llvm::Value* Codegen(ASTFloatLiteral* floatLiteral);
+	llvm::Function* Codegen(ASTFunction* function);
+	llvm::Value* Codegen(ASTBlock* block);
 
 private:
 	llvm::Module* module;
 	llvm::IRBuilder<>* builder;
 };
-
-
-#endif /* CODEGENERATOR_HPP_ */

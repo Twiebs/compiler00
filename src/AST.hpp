@@ -1,48 +1,37 @@
-/*
- * AST.hpp
- *
- *  Created on: Jun 18, 2015
- *      Author: Torin Wiebelt
- */
-
-#ifndef AST_HPP_
-#define AST_HPP_
+#pragma once
 
 #include <vector>
 #include <unordered_map>
+
 #include "llvm/IR/Value.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Instructions.h"
+
 #include "Lexer.hpp"
 
-//Please note
-//This is fucking retarded!
+enum ASTNodeType {
+	AST_IDENTIFIER,
+	AST_BLOCK,
+	AST_DEFINITION,
 
-enum class ASTNodeType {
-	BLOCK,
-	TypeDefinition,
-	//Decleration,
+	AST_IF,
+	AST_FOR,
+	AST_WHILE,
 
-	IF,
-	ELSE,
-	FOR,
-	WHILE,
+	AST_FUNCTION,
+	AST_CALL,
+	AST_RETURN,
 
-	BINOP,
-	Identifier,
-	Variable,
-	VARIABLE_MUTATION,
-	RETURN_VALUE,
-	Function,
-	IntegerLiteral,
-	FloatLiteral,
-	Call
+	AST_INTEGER_LITERAL,
+	AST_FLOAT_LITERAL,
+
+	AST_VARIABLE,
+	AST_MUTATION,
+	AST_BINOP,
 };
 
-namespace AST {
-
-struct Node {
+struct ASTNode {
 	ASTNodeType nodeType;
 };
 
@@ -55,55 +44,49 @@ struct Node {
 //which will be stored elsewhere!
 //Actualy it might be better to start that flag system that could be implemented
 //Then we could get some very intersing behaviours on these identifiers!
-struct Identifier {
+struct ASTIdentifier {
 	FilePosition position;	//Where was the identifier declared
 	std::string name;				//What is the name of the identifier
 	//It might be a good idea to store information about what this identifier is actualy refering to!
-	Node* node = nullptr;		//What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
+	ASTNode* node = nullptr;		//What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
 };
 
-
-struct TypeDefinition : public Node {
-	Identifier* identifier;
+struct ASTDefinition : public ASTNode {
+	ASTIdentifier* identifier;
 	llvm::Type* llvmType;
 };
 
-struct Expression : public Node {
+struct ASTExpression : public ASTNode {
 	//We need to care about what an expression is going to evaluate to...
-	AST::TypeDefinition* type;
+	ASTDefinition* type;
 };
-
-
-
-
-
 
 //It is now time to have somesort of notion of scope!
-struct Block : public Node {
-	uint8 depth;
-	Block* parent;	//null if the global scope
-	std::vector<Node*> members;
-	std::unordered_map<std::string, Identifier*> identifiers;
+struct ASTBlock : public ASTNode {
+	uint8 depth = 0;
+	ASTBlock* parent = nullptr;	//null if the global scope
+	std::vector<ASTNode*> members;
+	std::unordered_map<std::string, ASTIdentifier*> identifiers;
 };
 
-struct IfStatement : Node {
-	Expression* expr;
-	Block* ifBlock;
-	Block* elseBlock;
+struct ASTIfStatement : public ASTNode {
+	ASTExpression* expr;
+	ASTBlock* ifBlock;
+	ASTBlock* elseBlock;
 };
 
 
-struct Variable : public Expression {
-	Identifier* identifier;
-	Block* block;
-	Expression* initalExpression;
+struct ASTVariable : public ASTExpression {
+	ASTIdentifier* identifier;
+	ASTBlock* block;
+	ASTExpression* initalExpression;
 	llvm::AllocaInst* allocaInst;
 };
 
-struct Function : public Block {
-	Identifier* ident;
-	TypeDefinition* returnType;
-	std::vector<Variable*> args;
+struct ASTFunction : public ASTBlock {
+	ASTIdentifier* ident;
+	ASTDefinition* returnType;
+	std::vector<ASTVariable*> args;
 	llvm::Function* code;
 };
 
@@ -114,69 +97,58 @@ struct Function : public Block {
 //members that are the actual concrete functions that corespond to that identifier but have diffrence function signitures
 //@Refactor this is currently designated as a node even though this data structure does not particpate in the AST
 //It is simply just a container that points to overloaded functions!
-struct FunctionSet : public Node{
-	Identifier* ident;
-	std::vector<Function*> functions;
+struct ASTFunctionSet : public ASTNode {
+	ASTIdentifier* ident;
+	std::vector<ASTFunction*> functions;
 };
 
-
-struct BinaryOperation : public Expression{
+struct ASTBinaryOperation : public ASTExpression{
 	Token binop;
-	Expression* lhs;
-	Expression* rhs;
+	ASTExpression* lhs;
+	ASTExpression* rhs;
 };
 
-
-struct ReturnValue : public Expression {
-	Expression* value;
+struct ASTReturn : public ASTExpression {
+	ASTExpression* value;
 };
 
-struct VariableMutation : public Node {
+struct ASTMutation : public ASTNode {
 	Token op;
-	Variable* variable;
-	Expression* value;
+	ASTVariable* variable;
+	ASTExpression* value;
 };
 
-
-struct Call : public Node {
-	Identifier* ident;
-	Function* function;
-	std::vector<Expression*> args;
+struct ASTCall : public ASTNode {
+	ASTIdentifier* ident;
+	ASTFunction* function;
+	std::vector<ASTExpression*> args;
 };
 
-struct IntegerLiteral : public Expression {
+struct ASTIntegerLiteral : public ASTExpression {
 	int64 value;
 };
 
-struct FloatLiteral : public Expression {
+struct ASTFloatLiteral : public ASTExpression {
 	float64 value;
 };
 
-void InitalizeLanguagePrimitives(llvm::Module* module);
-void CreateType(AST::Block* block, std::string name, llvm::Type* type);
 
-Identifier* FindIdentifier(Block* block, std::string name);
-Identifier* CreateIdentifier(Block* block, std::string name);
-Variable* CreateVariable(Block* block);
-Block* CreateBlock(AST::Block* block);
-BinaryOperation* CreateBinaryOperation(Token binop, AST::Expression* lhs, AST::Expression* rhs);
-ReturnValue* CreateReturnValue(AST::Expression* value);
+void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module);
 
-//Conrol flow
-IfStatement* CreateIfStatement(Expression* expr);
+ASTDefinition* CreateType(ASTBlock* block, std::string name, llvm::Type* type);
+ASTIdentifier* FindIdentifier(ASTBlock* block, std::string name);
+ASTIdentifier* CreateIdentifier(ASTBlock* block, std::string name);
+ASTVariable* CreateVariable(ASTBlock* block);
+ASTBlock* CreateBlock(ASTBlock* block);
+ASTBinaryOperation* CreateBinaryOperation(Token binop, ASTExpression* lhs, ASTExpression* rhs);
+ASTReturn* CreateReturnValue(ASTExpression* value);
+ASTIfStatement* CreateIfStatement(ASTExpression* expr);
+ASTMutation* CreateMutation(Token op, ASTVariable* variable, ASTExpression* expr);
+ASTFunction* CreateFunction(ASTBlock* block);
+ASTCall* CreateCall();
+ASTIntegerLiteral* CreateIntegerLiteral(int64 value);
+ASTFloatLiteral* CreateFloatLiteral(float64 value);
 
-VariableMutation* CreateVariableMutation(Token op, AST::Variable* variable, AST::Expression* expr);
-Function* CreateFunction(AST::Block* block);
-Call* CreateCall();
-
-
-IntegerLiteral* CreateIntegerLiteral(int64 value);
-FloatLiteral* CreateFloatLiteral(float64 value);
-//TODO string literals!
-
-
-extern AST::Block* globalScope;
-
-}
-
-#endif //AST_HPP
+extern ASTDefinition* typeVoid;
+	extern ASTDefinition* typeS32;
+	extern ASTDefinition* typeF32;

@@ -1,5 +1,4 @@
-#ifndef LEXER_HPP
-#define LEXER_HPP
+#pragma once
 
 #include <iostream>
 #include <istream>
@@ -8,7 +7,9 @@
 #include "Common.hpp"
 
 enum class Token {
-	Unkown,
+	UNKOWN,
+	IMPORT,
+	FOREGIN,
 
 	Identifier,
 
@@ -17,25 +18,25 @@ enum class Token {
 	TypeInfer,
 	TypeReturn,
 
-	//BinOps
-	EQUALS,
 	ADD,
 	SUB,
 	MUL,
 	DIV,
 	MOD,
+	EQUALS,
 	ADD_EQUALS,
 	SUB_EQUALS,
 	MUL_EQUALS,
 	DIV_EQUALS,
 	MOD_EQUALS,
 
-	//Control flow
 	IF,
 	ELSE,
+	FOR,
+	WHILE,
 	RETURN,
 
-	Foreign,
+
 	Number,
 
 	ParenOpen,
@@ -54,7 +55,7 @@ struct FilePosition {
 	uint32 lineNumber;
 	uint32 columNumber;
 	friend std::ostream& operator<<(std::ostream& output, const FilePosition& position) {
-		output << "[" << position.filename << "::" << position.lineNumber << ":" << position.columNumber<< "]";
+		output << "[" << position.filename << " " << position.lineNumber << ":" << position.columNumber<< "]";
 		return output;
 	}
 };
@@ -64,13 +65,14 @@ class Lexer {
 public:
 	std::string tokenString;
 	Token token;
-
-
 	FilePosition filePos;
-	Lexer(std::string filename, std::ifstream* stream);
+
+
+	Lexer(std::string filename);
 	~Lexer();
 
 	void NextToken();
+
 
 private:
 	int lineNumber = 0;
@@ -87,5 +89,3 @@ private:
 	void EatNext();
 	void EatWhitespaces();
 };
-
-#endif //LEXER_HPP

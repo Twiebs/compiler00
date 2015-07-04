@@ -50,17 +50,20 @@ int main(int argc, char** argv) {
 		outputFile = base + "bc";
 	}
 
-	std::ifstream stream(inputFile.c_str());
-	if(!stream.is_open()) {
-		std::cout << "Error: Can not open file: " << inputFile << "\n";
-		abort();
-	}
-
 	llvm::LLVMContext& context = llvm::getGlobalContext();
 	llvm::Module* module = new llvm::Module("LLVMLang Compiler", context);
 
-	Parser parser(module, inputFile, &stream);
-	parser.ParseFile();
+	CodeGenerator codeGenerator(module);
+	Parser parser(&codeGenerator);
+	parser.ParseFile(inputFile);
+
+	std::cout << "\x1b[31m" << "\n";
+	llvm::raw_os_ostream stream(std::cout);
+	if (llvm::verifyModule(*module, &stream)) {
+		LOG_ERROR("LLVMModule verification failed!");
+	}
+	std::cout << "\x1b[33m" << "\n";
+	module->dump();
 
 	if(gErrorCount > 0) {
 		LOG_ERROR("There were " << gErrorCount - 1<< " errors!");

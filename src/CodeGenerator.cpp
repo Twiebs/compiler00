@@ -10,34 +10,34 @@ CodeGenerator::~CodeGenerator() {
 	delete builder;
 }
 
-llvm::Value* CodeGenerator::Codegen(AST::Node* node) {
+llvm::Value* CodeGenerator::Codegen(ASTNode* node) {
 	switch(node->nodeType) {
-	case ASTNodeType::BINOP:
-		return Codegen((AST::BinaryOperation*)node);
-	case ASTNodeType::Variable:
-		return Codegen((AST::Variable*) node);
-	case ASTNodeType::VARIABLE_MUTATION:
-		return Codegen((AST::VariableMutation*)node);
-	case ASTNodeType::Function:
-		return Codegen((AST::Function*) node);
-	case ASTNodeType::Call:
-		return Codegen((AST::Call*) node);
-	case ASTNodeType::IF:
+	case AST_BINOP:
+		return Codegen((ASTBinaryOperation*)node);
+	case AST_VARIABLE:
+		return Codegen((ASTVariable*) node);
+	case AST_MUTATION:
+		return Codegen((ASTMutation*)node);
+	case AST_FUNCTION:
+		return Codegen((ASTFunction*) node);
+	case AST_CALL:
+		return Codegen((ASTCall*) node);
+	case AST_IF:
 		LOG_ERROR("Attemping to genericly code gen an if! Note this is very very bad");
 		return nullptr;
-	case ASTNodeType::IntegerLiteral:
-		return Codegen((AST::IntegerLiteral*) node);
-	case ASTNodeType::FloatLiteral:
-		return Codegen((AST::FloatLiteral*) node);
-	case ASTNodeType::RETURN_VALUE:
-		return Codegen((AST::ReturnValue*)node);
+	case AST_INTEGER_LITERAL:
+		return Codegen((ASTIntegerLiteral*) node);
+	case AST_FLOAT_LITERAL:
+		return Codegen((ASTFloatLiteral*) node);
+	case AST_RETURN:
+		return Codegen((ASTReturn*)node);
 	default:
 		LOG_ERROR("UNHANDLED CODEGEN OF NODE");
 		return nullptr;
 	}
 }
 
-llvm::Value* CodeGenerator::Codegen(AST::BinaryOperation* binop)  {
+llvm::Value* CodeGenerator::Codegen(ASTBinaryOperation* binop)  {
 	llvm::Value* lhs = Codegen(binop->lhs);
 	llvm::Value* rhs = Codegen(binop->rhs);
 
@@ -61,7 +61,7 @@ llvm::Value* CodeGenerator::Codegen(AST::BinaryOperation* binop)  {
 	}
 }
 
-llvm::Value* CodeGenerator::Codegen(AST::Variable* var) {
+llvm::Value* CodeGenerator::Codegen(ASTVariable* var) {
 	//This variable is being declared!
 	//TODO sanity check flag that ensures that this is indeed a declaration
 	if(var->allocaInst == nullptr) {
@@ -70,9 +70,9 @@ llvm::Value* CodeGenerator::Codegen(AST::Variable* var) {
 		//We need to generate a default initializer for it!
 		if(var->initalExpression == nullptr) {
 			if(var->type->llvmType->isIntegerTy()) {
-				var->initalExpression = AST::CreateIntegerLiteral(0);
+				var->initalExpression = CreateIntegerLiteral(0);
 			} else if (var->type->llvmType->isFloatingPointTy()) {
-				var->initalExpression = AST::CreateFloatLiteral(0);
+				var->initalExpression = CreateFloatLiteral(0);
 			}
 			auto value = Codegen(var->initalExpression);
 			builder->CreateStore(value, var->allocaInst);
@@ -100,7 +100,7 @@ llvm::Value* CodeGenerator::Codegen(AST::Variable* var) {
 	return nullptr;
 }
 
-llvm::Value* CodeGenerator::Codegen(AST::VariableMutation* mut) {
+llvm::Value* CodeGenerator::Codegen(ASTMutation* mut) {
 	if(mut->variable->allocaInst == nullptr) {
 		LOG_ERROR("Cannot assign a value to an unitialized variable!");
 		return nullptr;
@@ -114,7 +114,7 @@ llvm::Value* CodeGenerator::Codegen(AST::VariableMutation* mut) {
 	return mut->variable->allocaInst;
 }
 
-llvm::Value* CodeGenerator::Codegen(AST::ReturnValue* retVal) {
+llvm::Value* CodeGenerator::Codegen(ASTReturn* retVal) {
 	auto value = Codegen(retVal->value);
 	if (value != nullptr) {
 		builder->CreateRet(value);
@@ -125,7 +125,7 @@ llvm::Value* CodeGenerator::Codegen(AST::ReturnValue* retVal) {
 }
 
 
-llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
+llvm::Function* CodeGenerator::Codegen(ASTFunction* function) {
 	LOG_VERBOSE("Codgen Function");
 	//Push an array of llvm types derived from the argument list onto the stack
 	std::vector<llvm::Type*> args;
@@ -159,23 +159,22 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 	if (function->members.size() > 0) {
 		for(uint32 i = 0; i < function->members.size(); i++) {
 			auto node = function->members[i];
-			if(node->nodeType == ASTNodeType::IF) {
+			if(node->nodeType == AST_IF) {
 				auto mergeBlock = llvm::BasicBlock::Create(module->getContext(), "merge", llvmFunc);
-				Codegen((AST::IfStatement*)node, mergeBlock, llvmFunc);
+				Codegen((ASTIfStatement*)node, mergeBlock, llvmFunc);
 				builder->SetInsertPoint(mergeBlock);
 				continue;
 			}
 
-			if(node->nodeType == ASTNodeType::RETURN_VALUE) {
+			if(node->nodeType == AST_RETURN) {
 				returnInstructionSeen = true;
 			}
 			Codegen(node);
 		}
 	}
 
-	auto voidType = (AST::TypeDefinition*)AST::FindIdentifier(AST::globalScope, "Void")->node;
 	if(!returnInstructionSeen) {
-		if(function->returnType == voidType) {
+		if(function->returnType == typeVoid) {
 			builder->CreateRetVoid();
 		} else if (function->members.size() > 0){
 			LOG_ERROR("Non-void functions must have a return statement!");
@@ -189,7 +188,7 @@ llvm::Function* CodeGenerator::Codegen(AST::Function* function) {
 	return llvmFunc;
 }
 
-llvm::Value* CodeGenerator::Codegen(AST::Call* call) {
+llvm::Value* CodeGenerator::Codegen(ASTCall* call) {
 	auto func = call->function->code;
 	if (func == 0) {
 		LOG_ERROR("Call to undefined function(" << call->ident->name<< ")");
@@ -206,15 +205,14 @@ llvm::Value* CodeGenerator::Codegen(AST::Call* call) {
 		argsV.push_back(argV);
 	}
 
-	auto voidType = (AST::TypeDefinition*)AST::FindIdentifier(AST::globalScope, "Void")->node;
-	if(call->function->returnType != voidType) {
+	if(call->function->returnType != typeVoid) {
 		return builder->CreateCall(func, argsV, "calltmp");
 	} else {
 		return builder->CreateCall(func, argsV);
 	}
 }
 
-llvm::Value* CodeGenerator::Codegen(AST::IfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
+llvm::Value* CodeGenerator::Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
 	auto condV = Codegen(ifStatement->expr);
 	if(condV == nullptr) {
 		LOG_ERROR("Could not emit code for if statement expression");
@@ -229,9 +227,9 @@ llvm::Value* CodeGenerator::Codegen(AST::IfStatement* ifStatement, llvm::BasicBl
 	builder->CreateCondBr(compare, ifBlock, elseBlock);
 	builder->SetInsertPoint(ifBlock);
 	for(auto node : ifStatement->ifBlock->members) {
-		if(node->nodeType == ASTNodeType::IF) {
+		if(node->nodeType == AST_IF) {
 			ifBlock = llvm::BasicBlock::Create(module->getContext(), "merge", function);
-			Codegen((AST::IfStatement*)node, ifBlock, function);
+			Codegen((ASTIfStatement*)node, ifBlock, function);
 			builder->SetInsertPoint(ifBlock);
 			continue;
 		}
@@ -245,8 +243,8 @@ llvm::Value* CodeGenerator::Codegen(AST::IfStatement* ifStatement, llvm::BasicBl
 
 	if(ifStatement->elseBlock != nullptr) {
 		builder->SetInsertPoint(elseBlock);
-		if(ifStatement->elseBlock->nodeType == ASTNodeType::IF) {
-			auto ifElse = (AST::IfStatement*)ifStatement->elseBlock;
+		if(ifStatement->elseBlock->nodeType == AST_IF) {
+			auto ifElse = (ASTIfStatement*)ifStatement->elseBlock;
 			auto condition = Codegen(ifElse->expr);
 			auto comp = builder->CreateICmpEQ(condition, llvm::ConstantInt::getTrue(module->getContext()), "elseifcond");
 			auto elseIfBlock = llvm::BasicBlock::Create(module->getContext(), "elseif", function);
@@ -257,9 +255,9 @@ llvm::Value* CodeGenerator::Codegen(AST::IfStatement* ifStatement, llvm::BasicBl
 
 
 		for(auto node : ifStatement->elseBlock->members) {
-			if(node->nodeType == ASTNodeType::IF) {
+			if(node->nodeType == AST_IF) {
 				elseBlock = llvm::BasicBlock::Create(module->getContext(), "merge", function);
-				Codegen((AST::IfStatement*)node, elseBlock, function);
+				Codegen((ASTIfStatement*)node, elseBlock, function);
 				builder->SetInsertPoint(elseBlock);
 				continue;
 			}
@@ -273,9 +271,9 @@ llvm::Value* CodeGenerator::Codegen(AST::IfStatement* ifStatement, llvm::BasicBl
 	return mergeBlock;
 }
 
-llvm::Value* CodeGenerator::Codegen(AST::IntegerLiteral* intNode) {
+llvm::Value* CodeGenerator::Codegen(ASTIntegerLiteral* intNode) {
 	return llvm::ConstantInt::get(intNode->type->llvmType, intNode->value);
 }
-llvm::Value* CodeGenerator::Codegen(AST::FloatLiteral* floatNode) {
+llvm::Value* CodeGenerator::Codegen(ASTFloatLiteral* floatNode) {
 	return llvm::ConstantFP::get(floatNode->type->llvmType, floatNode->value);
 }

@@ -1,6 +1,4 @@
-#ifndef PARSER_HPP_
-#define PARSER_HPP_
-
+#pragma once
 #include <vector>
 #include <unordered_map>
 #include <fstream>
@@ -8,38 +6,34 @@
 #include "CodeGenerator.hpp"
 #include "Lexer.hpp"
 
+struct Unit {
+	ASTBlock scope;
+};
+
 class Parser {
 public:
-	Parser(llvm::Module* module, std::string filename, std::ifstream* stream);
-	virtual ~Parser();
+	Parser(std::string filename, CodeGenerator* codeGenerator);
+  ~Parser();
 
-	void ParseFile();
+	void ParseFile(std::string fileName);
+
 private:
-	llvm::Module* module;
 	CodeGenerator* codeGenerator;
 	Lexer* lexer;
 
-	AST::Block* previousScope;
-	AST::Block* currentScope;
+	ASTBlock* previousScope;
+	ASTBlock* currentScope;
+	Unit* currentUnit;
 
 	std::unordered_map<int32, int32> precedenceMap;
+	std::unordered_map<std::string, Unit*> parsedUnits;
 
-	AST::Node* ParseStatement();
-
-	AST::Expression* ParseExpression();
-	AST::Expression* ParseExpressionRHS(int32 exprPrec, AST::Expression* lhs);
-
-	AST::Expression* ParsePrimaryExpression();
+	ASTNode* ParseStatement();
+	ASTExpression* ParseExpression();
+	ASTExpression* ParseExpressionRHS(int32 exprPrec, ASTExpression* lhs);
+	ASTExpression* ParsePrimaryExpression();
 
 	int32 GetCurrentTokenPrecedence();
 
 	void SetScope();
-
-	void CreateType(std::string name, llvm::Type* type);
-	//TODO these probably should not exist inside the parser.
-	//They should be moved into a memory manager or something...
-	//or... we could strip out this whole thing and move to a much more c style syntax
-	//But considering that this is a compiler this probably is'nt the time that we want to be experimenting with that...
 };
-
-#endif /* PARSER_HPP_ */
