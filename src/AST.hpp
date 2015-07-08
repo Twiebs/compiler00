@@ -132,7 +132,6 @@ struct ASTFloatLiteral : public ASTExpression {
 	float64 value;
 };
 
-
 void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module);
 
 ASTDefinition* CreateType(ASTBlock* block, std::string name, llvm::Type* type);
@@ -150,5 +149,5 @@ ASTIntegerLiteral* CreateIntegerLiteral(int64 value);
 ASTFloatLiteral* CreateFloatLiteral(float64 value);
 
 extern ASTDefinition* typeVoid;
-	extern ASTDefinition* typeS32;
-	extern ASTDefinition* typeF32;
+extern ASTDefinition* typeS32;
+extern ASTDefinition* typeF32;

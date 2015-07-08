@@ -7,9 +7,25 @@ Parser::Parser(llvm::Module* module, CodeGenerator* codeGenerator) {
 	precedenceMap[(int32)Token::SUB] = 20;
 	precedenceMap[(int32)Token::MUL] = 40;
 	precedenceMap[(int32)Token::DIV] = 40;
+
+	primitiveUnit = new Unit;
+	parsedUnits["primitives"] = primitiveUnit;
+
+	typeVoid = CreateType(&primitiveUnit->scope, "Void", llvm::Type::getVoidTy(module->getContext()));
+
+	CreateType(&primitiveUnit->scope, "S8", llvm::Type::getInt8Ty(module->getContext()));
+	CreateType(&primitiveUnit->scope, "S16", llvm::Type::getInt16Ty(module->getContext()));
+	typeS32 = CreateType(&primitiveUnit->scope, "S32", llvm::Type::getInt32Ty(module->getContext()));
+	CreateType(&primitiveUnit->scope, "S64", llvm::Type::getInt64Ty(module->getContext()));
+
+	CreateType(&primitiveUnit->scope, "F16", llvm::Type::getHalfTy(module->getContext()));
+	typeF32 = CreateType(&primitiveUnit->scope, "F32", llvm::Type::getFloatTy(module->getContext()));
+	CreateType(&primitiveUnit->scope, "F64", llvm::Type::getDoubleTy(module->getContext()));
+	CreateType(&primitiveUnit->scope, "F128", llvm::Type::getFP128Ty(module->getContext()));
 }
 
 Parser::~Parser() {
+	delete primitiveUnit;
 }
 
 int32 Parser::GetCurrentTokenPrecedence() {
@@ -43,7 +59,7 @@ ASTNode* Parser::ParseStatement() {
 
 			//Now we check if the type the user is trying to assign has already been defined
 			//TODO this is where depends resolving for type decls need to happen!
-			auto typeIdentifier = FindIdentifier(currentScope, lexer->tokenString);
+			auto typeIdentifier = FindIdentifierInScope(currentUnit, currentScope, lexer->tokenString);
 			if (!typeIdentifier) {
 				LOG_ERROR(lexer->filePos << "identifier(" << lexer->tokenString << ")is undefined!");
 				return nullptr;
@@ -58,7 +74,7 @@ ASTNode* Parser::ParseStatement() {
 			//We now need to ensure that this indentifier does not yet exist
 
 			//We have gotten this far so we know that we are declaring a identifier of a type that has been resolved!
-			auto ident = FindIdentifier(currentScope, identifierName);
+			auto ident = FindIdentifierInScope(currentUnit, currentScope, identifierName);
 			if(ident != nullptr) {
 				LOG_ERROR("Redefintion of identifier " << identifierName << " declared at " << ident->position);
 				return nullptr;
@@ -99,7 +115,7 @@ ASTNode* Parser::ParseStatement() {
 			//@FUNCTION DEFINITION
 			if (lexer->token == Token::ParenOpen) {
 				LOG_VERBOSE("Parsing FunctionDefinition");
-				auto ident = FindIdentifier(currentScope, identifierName);
+				auto ident = FindIdentifierInScope(currentUnit, currentScope, identifierName);
 				if(ident == nullptr) {
 					ident = CreateIdentifier(currentScope, identifierName);
 					//@Memory - Unhandled heap allocation!
@@ -150,7 +166,7 @@ ASTNode* Parser::ParseStatement() {
 						return nullptr;
 					}
 
-					ASTIdentifier* returnTypeIdentifier = FindIdentifier(currentScope, lexer->tokenString);
+					ASTIdentifier* returnTypeIdentifier = FindIdentifierInScope(currentUnit, currentScope, lexer->tokenString);
 					if (returnTypeIdentifier == nullptr) {
 						LOG_ERROR(lexer->filePos << " Unknown identifier when expecting a return type!");
 						return nullptr;
@@ -164,7 +180,7 @@ ASTNode* Parser::ParseStatement() {
 
 				//There was no type return ':>' operator after the argument list
 				else {
-					function->returnType = (ASTDefinition*) (FindIdentifier(currentScope, "Void")->node);
+					function->returnType = (ASTDefinition*) (FindIdentifierInScope(currentUnit, currentScope, "Void")->node);
 				}
 
 				auto FindFunction = [function](ASTIdentifier* ident) -> ASTFunction* {
@@ -240,7 +256,7 @@ ASTNode* Parser::ParseStatement() {
 		//@FunctionCall!
 		else if (lexer->token == Token::ParenOpen) {
 			LOG_VERBOSE("Attempting to parse call to : " << identifierName);
-			auto ident = FindIdentifier(currentScope, identifierName);
+			auto ident = FindIdentifierInScope(currentUnit, currentScope, identifierName);
 			if (ident == nullptr) {
 				LOG_ERROR("function named " << identifierName << " does not exist");
 				return nullptr;
@@ -306,7 +322,7 @@ ASTNode* Parser::ParseStatement() {
 		case Token::DIV_EQUALS:
 		case Token::MOD_EQUALS:
  			lexer->NextToken();	//Eat the assignment operator!
-			auto ident = FindIdentifier(currentScope, identifierName);
+			auto ident = FindIdentifierInScope(currentUnit, currentScope, identifierName);
 
 			if(ident == nullptr) {
 				LOG_ERROR("Could not assign a value to unknown variable " << identifierName);
@@ -416,14 +432,16 @@ ASTNode* Parser::ParseStatement() {
 	case Token::IMPORT:
 		LOG_VERBOSE("Parsing an import statement!");
 		lexer->NextToken();
-		if(lexer->token != Token::Identifier) {
-			LOG_ERROR("Exepcted an identifier after import statement, got '" << lexer->tokenString << "'");
+		if(lexer->token != Token::STRING) {
+			LOG_ERROR("Exepcted a string after import statement, got '" << lexer->tokenString << "'");
 			//Dont eat the token because its probably somthing that fell trough!
 		} else {
 			auto unit = parsedUnits[lexer->tokenString];
 			if(unit == nullptr) {
-
+				ParseFile(lexer->tokenString);
 			}
+			currentUnit->importedUnits.push_back(lexer->tokenString);
+			lexer->NextToken();	//Eat the string!
 		}
 
 		break;
@@ -492,11 +510,11 @@ ASTExpression* Parser::ParseExpression() {
 ASTExpression* Parser::ParsePrimaryExpression() {
 	switch (lexer->token) {
 
-	//Handles variables, function calls!
+	// Handles variables, function calls!
 	case Token::Identifier:
 	{
 		LOG_VERBOSE("Parsing an identifier expression! for identifier -> " << lexer->tokenString);
-		auto ident = FindIdentifier(currentScope, lexer->tokenString);
+		auto ident = FindIdentifierInScope(currentUnit, currentScope, lexer->tokenString);
 		if(!ident) {
 			LOG_ERROR(lexer->filePos << " identifier " << lexer->tokenString << " does not exist!");
 			lexer->NextToken();
@@ -540,7 +558,7 @@ ASTExpression* Parser::ParsePrimaryExpression() {
 		} else {
 			auto value = std::stoi(lexer->tokenString);
 			auto result = CreateIntegerLiteral(value);
-			result->type = (ASTDefinition*) (FindIdentifier(currentScope, "S32")->node);
+			result->type = (ASTDefinition*) (FindIdentifierInScope(currentUnit, currentScope, "S32")->node);
 			lexer->NextToken(); // Eats the integer literal
 			return result;
 		}
@@ -556,23 +574,45 @@ ASTExpression* Parser::ParsePrimaryExpression() {
 		return nullptr;
 	default:
 		LOG_ERROR(lexer->filePos << "Unknown token when expecting expression");
-		lexer->NextToken(); //Increment the lexer to handle error recovery!
+		lexer->NextToken(); // Increment the lexer to handle error recovery!
 		return nullptr;
 	}
-	//This is dead code it will never happen.
+	// This is dead code it will never happen.
 	return nullptr;
 }
 
-void Parser::ParseFile(std::string filename) {
+ASTIdentifier* Parser::FindIdentifierInScope(Unit* activeUnit, ASTBlock* scope, std::string identString) {
+		auto ident = scope->identifiers[identString];
+		if(ident == nullptr) {
+			if(scope->parent != nullptr)
+				return FindIdentifierInScope(activeUnit, scope->parent, identString);
+			else {
+				for(auto unitName : activeUnit->importedUnits) {
+					auto unit = parsedUnits[unitName];
+					ident = FindIdentifierInScope(unit, &unit->scope, identString);
+					if(ident != nullptr)
+						return ident;
+				}
+			}
+		}
+
+	return ident;
+}
+
+Unit* Parser::CreateUnit(std::string filename) {
 	auto unit = parsedUnits[filename];
 	assert(unit == nullptr);
 	unit = new Unit;
+	unit->importedUnits.push_back("primitives");
 	parsedUnits[filename] = unit;
-	currentUnit = unit;
-	currentScope = &unit->scope;
-	//TODO
-	//For now this is here until i get the parsing working again!
-	InitalizeLanguagePrimitives(currentScope, module);
+	return unit;
+}
+
+
+void Parser::ParseFile(std::string filename) {
+	auto oldUnit = currentUnit;
+	currentUnit = CreateUnit(filename);
+	currentScope = &currentUnit->scope;
 
 	auto oldLexer = lexer;
 	lexer = new Lexer(filename);
@@ -580,8 +620,13 @@ void Parser::ParseFile(std::string filename) {
 	while (lexer->token != Token::EndOfFile) {
 		ParseStatement();
 	}
+
 	delete lexer;
 	if(oldLexer != nullptr) {
 		lexer = oldLexer;
+	}
+
+	if(oldUnit != nullptr) {
+		currentUnit = oldUnit;
 	}
 }

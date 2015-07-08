@@ -27,13 +27,6 @@ ASTDefinition* CreateType(ASTBlock* scope, std::string name, llvm::Type* type) {
 	return typeDefn;
 }
 
-ASTIdentifier* FindIdentifier(ASTBlock* block, std::string name) {
-	auto ident = block->identifiers[name];
-	if(ident == nullptr && block->parent != nullptr)
-		return FindIdentifier(block->parent, name);
-	return ident;
-}
-
 //Were going to add these Create things here in order to delegate the allocation of ast nodes
 ASTIdentifier* CreateIdentifier(ASTBlock* block, std::string name) {
 	auto result = new ASTIdentifier;

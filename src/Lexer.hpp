@@ -43,6 +43,9 @@ enum class Token {
 	ParenClose,
 	ScopeOpen,
 	ScopeClose,
+	STRING,
+	STRING_OPEN,
+	STRING_CLOSE,
 
 	EndOfFile
 };

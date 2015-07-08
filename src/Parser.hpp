@@ -8,12 +8,14 @@
 
 struct Unit {
 	ASTBlock scope;
+	std::string filename;
+	std::vector<std::string> importedUnits;
 };
 
 class Parser {
 public:
 	Parser(llvm::Module* module, CodeGenerator* codeGenerator);
-      ~Parser();
+  ~Parser();
 
 	void ParseFile(std::string fileName);
 
@@ -28,6 +30,11 @@ private:
 
 	std::unordered_map<int32, int32> precedenceMap;
 	std::unordered_map<std::string, Unit*> parsedUnits;
+
+	//Holds ASTDefinitions for primitave types!
+	Unit* primitiveUnit;
+	ASTIdentifier* FindIdentifierInScope(Unit* activeUnit, ASTBlock* block, std::string identString);
+	Unit* CreateUnit(std::string filename);
 
 	ASTNode* ParseStatement();
 	ASTExpression* ParseExpression();

@@ -78,6 +78,16 @@ Token Lexer::GetToken() {
 		return Token::Number;
 	}
 
+	//STRING LITERAL
+	if(nextChar == '"') {
+		EatNext();	//Eat the "
+		while(nextChar != '"') {
+			AppendNext();
+		}
+		EatNext();	//Eat the "
+		return Token::STRING;
+	}
+
 	//COMMENTS
 	if (nextChar == '#') {
 		EatNext();	//Eat the '# 'char
