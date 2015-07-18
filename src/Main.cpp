@@ -1,8 +1,9 @@
-//NOTE all of this stuff was created on June18 if you end of caring about that sort of thing!
+// NOTE all of this stuff was created on June18 if you end of caring about that sort of thing!
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <system_error>
+#include <unistd.h>
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
@@ -27,7 +28,7 @@
 #include "Lexer.hpp"
 #include "Parser.hpp"
 
-uint32 gErrorCount = 0;
+U32 gErrorCount = 0;
 
 int main(int argc, char** argv) {
 	gErrorCount = 0;
@@ -53,8 +54,11 @@ int main(int argc, char** argv) {
 	llvm::LLVMContext& context = llvm::getGlobalContext();
 	llvm::Module* module = new llvm::Module("LLVMLang Compiler", context);
 
+	std::vector<std::string> importDirectories;
+	importDirectories.push_back("");
+
 	CodeGenerator codeGenerator(module);
-	Parser parser(module, &codeGenerator);
+	Parser parser(importDirectories, module, &codeGenerator);
 	parser.ParseFile(inputFile);
 
 	std::cout << "\x1b[31m" << "\n";
@@ -75,5 +79,6 @@ int main(int argc, char** argv) {
 	llvm::raw_fd_ostream ostream(outputFile, errorCode, llvm::sys::fs::F_None);
 	llvm::WriteBitcodeToFile(module, ostream);
 	LOG_INFO("Writing bitcode to file");
+
 	return 0;
 }

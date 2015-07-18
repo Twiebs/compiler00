@@ -7,14 +7,14 @@
 #include "Lexer.hpp"
 
 struct Unit {
-	ASTBlock scope;
 	std::string filename;
 	std::vector<std::string> importedUnits;
+	ASTBlock scope;
 };
 
 class Parser {
 public:
-	Parser(llvm::Module* module, CodeGenerator* codeGenerator);
+	Parser(std::vector<std::string> importDirectories, llvm::Module* module, CodeGenerator* codeGenerator);
   ~Parser();
 
 	void ParseFile(std::string fileName);
@@ -28,7 +28,8 @@ private:
 	ASTBlock* currentScope;
 	Unit* currentUnit;
 
-	std::unordered_map<int32, int32> precedenceMap;
+	std::vector<std::string> importDirectories;
+	std::unordered_map<S32, S32> precedenceMap;
 	std::unordered_map<std::string, Unit*> parsedUnits;
 
 	//Holds ASTDefinitions for primitave types!
@@ -38,10 +39,10 @@ private:
 
 	ASTNode* ParseStatement();
 	ASTExpression* ParseExpression();
-	ASTExpression* ParseExpressionRHS(int32 exprPrec, ASTExpression* lhs);
+	ASTExpression* ParseExpressionRHS(S32 exprPrec, ASTExpression* lhs);
 	ASTExpression* ParsePrimaryExpression();
 
-	int32 GetCurrentTokenPrecedence();
+	S32 GetCurrentTokenPrecedence();
 
 	void SetScope();
 };

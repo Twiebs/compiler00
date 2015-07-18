@@ -1,6 +1,7 @@
-import "../../LLVMLang/lib.bang"
+import "lib.bang"
 
 main :: () :> S32 {
   Println(5)
+  CreateWindow()
   return 0
 }

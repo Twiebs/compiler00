@@ -63,7 +63,7 @@ struct ASTExpression : public ASTNode {
 
 //It is now time to have somesort of notion of scope!
 struct ASTBlock : public ASTNode {
-	uint8 depth = 0;
+	U8 depth = 0;
 	ASTBlock* parent = nullptr;	//null if the global scope
 	std::vector<ASTNode*> members;
 	std::unordered_map<std::string, ASTIdentifier*> identifiers;
@@ -74,7 +74,6 @@ struct ASTIfStatement : public ASTNode {
 	ASTBlock* ifBlock;
 	ASTBlock* elseBlock;
 };
-
 
 struct ASTVariable : public ASTExpression {
 	ASTIdentifier* identifier;
@@ -125,11 +124,11 @@ struct ASTCall : public ASTNode {
 };
 
 struct ASTIntegerLiteral : public ASTExpression {
-	int64 value;
+	S64 value;
 };
 
 struct ASTFloatLiteral : public ASTExpression {
-	float64 value;
+	F64 value;
 };
 
 void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module);
@@ -145,8 +144,8 @@ ASTIfStatement* CreateIfStatement(ASTExpression* expr);
 ASTMutation* CreateMutation(Token op, ASTVariable* variable, ASTExpression* expr);
 ASTFunction* CreateFunction(ASTBlock* block);
 ASTCall* CreateCall();
-ASTIntegerLiteral* CreateIntegerLiteral(int64 value);
-ASTFloatLiteral* CreateFloatLiteral(float64 value);
+ASTIntegerLiteral* CreateIntegerLiteral(S64 value);
+ASTFloatLiteral* CreateFloatLiteral(F64 value);
 
 extern ASTDefinition* typeVoid;
 extern ASTDefinition* typeS32;

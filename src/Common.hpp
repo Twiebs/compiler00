@@ -6,18 +6,16 @@
 #include <assert.h>
 #include <stdint.h>
 
-typedef int8_t    int8;
-typedef int16_t   int16;
-typedef int32_t   int32;
-typedef int64_t   int64;
-
-typedef uint8_t   uint8;
-typedef uint16_t  uint16;
-typedef uint32_t  uint32;
-typedef uint64_t  uint64;
-
-typedef float 	  float32;
-typedef double 	  float64;
+typedef int8_t    S8;
+typedef int16_t   S16;
+typedef int32_t   S32;
+typedef int64_t   S64;
+typedef uint8_t   U8;
+typedef uint16_t  U16;
+typedef uint32_t  U32;
+typedef uint64_t  U64;
+typedef float 	  F32;
+typedef double 	  F64;
 
 #define LOG_LEVEL_NONE    0
 #define LOG_LEVEL_ERROR   1
@@ -27,7 +25,7 @@ typedef double 	  float64;
 
 #define LOG_LEVEL LOG_LEVEL_VERBOSE
 
-extern uint32 gErrorCount;
+extern U32 gErrorCount;
 
 #if LOG_LEVEL > 0
 #ifdef ENABLE_COLOR_OUTPUT

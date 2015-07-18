@@ -72,7 +72,7 @@ ASTReturn* CreateReturnValue(ASTExpression* value) {
 	return result;
 }
 
-ASTIntegerLiteral* CreateIntegerLiteral(int64 value) {
+ASTIntegerLiteral* CreateIntegerLiteral(S64 value) {
 	auto result = new ASTIntegerLiteral();
 	result->nodeType = AST_INTEGER_LITERAL;
 	result->type = (ASTDefinition*)typeS32;
@@ -80,7 +80,7 @@ ASTIntegerLiteral* CreateIntegerLiteral(int64 value) {
 	return result;
 }
 
-ASTFloatLiteral* CreateFloatLiteral(float64 value) {
+ASTFloatLiteral* CreateFloatLiteral(F64 value) {
 	auto result = new ASTFloatLiteral();
 	result->nodeType = AST_FLOAT_LITERAL;
 	result->type = (ASTDefinition*)typeF32;

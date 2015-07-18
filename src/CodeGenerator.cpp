@@ -143,7 +143,7 @@ llvm::Function* CodeGenerator::Codegen(ASTFunction* function) {
 	}
 
 	// Create the allocas for our arguments!
-	uint32 i = 0;
+	U32 i = 0;
 	for(auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++){
 		iter->setName(function->args[i]->identifier->name);
 
@@ -157,7 +157,7 @@ llvm::Function* CodeGenerator::Codegen(ASTFunction* function) {
 	//The function must always do something...
 	bool returnInstructionSeen = false;
 	if (function->members.size() > 0) {
-		for(uint32 i = 0; i < function->members.size(); i++) {
+		for(U32 i = 0; i < function->members.size(); i++) {
 			auto node = function->members[i];
 			if(node->nodeType == AST_IF) {
 				auto mergeBlock = llvm::BasicBlock::Create(module->getContext(), "merge", llvmFunc);
@@ -196,7 +196,7 @@ llvm::Value* CodeGenerator::Codegen(ASTCall* call) {
 	}
 
 	std::vector<llvm::Value*> argsV;
-	for (uint32 i = 0, e = func->arg_size(); i != e; i++) {
+	for (U32 i = 0, e = func->arg_size(); i != e; i++) {
 		auto argV = Codegen(call->args[i]);
 		if(argV == nullptr) {
 			LOG_DEBUG("Failed to emit code for call argument!");

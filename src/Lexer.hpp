@@ -55,8 +55,8 @@ enum class Token {
 // And ASTNodes will copy the value of the lexers fileposition when they are incepted
 struct FilePosition {
 	std::string filename;
-	uint32 lineNumber;
-	uint32 columNumber;
+	U32 lineNumber;
+	U32 columNumber;
 	friend std::ostream& operator<<(std::ostream& output, const FilePosition& position) {
 		output << "[" << position.filename << " " << position.lineNumber << ":" << position.columNumber<< "]";
 		return output;
@@ -70,12 +70,10 @@ public:
 	Token token;
 	FilePosition filePos;
 
-
 	Lexer(std::string filename);
 	~Lexer();
 
 	void NextToken();
-
 
 private:
 	int lineNumber = 0;

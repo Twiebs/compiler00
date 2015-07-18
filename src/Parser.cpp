@@ -1,12 +1,14 @@
 #include "Parser.hpp"
 
-Parser::Parser(llvm::Module* module, CodeGenerator* codeGenerator) {
+Parser::Parser(std::vector<std::string> importDirectories, llvm::Module* module, CodeGenerator* codeGenerator) {
+	this->importDirectories = importDirectories;
 	this->codeGenerator = codeGenerator;
 	this->module = module;
-	precedenceMap[(int32)Token::ADD] = 20;
-	precedenceMap[(int32)Token::SUB] = 20;
-	precedenceMap[(int32)Token::MUL] = 40;
-	precedenceMap[(int32)Token::DIV] = 40;
+
+	precedenceMap[(S32)Token::ADD] = 20;
+	precedenceMap[(S32)Token::SUB] = 20;
+	precedenceMap[(S32)Token::MUL] = 40;
+	precedenceMap[(S32)Token::DIV] = 40;
 
 	primitiveUnit = new Unit;
 	parsedUnits["primitives"] = primitiveUnit;
@@ -28,8 +30,8 @@ Parser::~Parser() {
 	delete primitiveUnit;
 }
 
-int32 Parser::GetCurrentTokenPrecedence() {
-	auto result = precedenceMap[(int32)lexer->token];
+S32 Parser::GetCurrentTokenPrecedence() {
+	auto result = precedenceMap[(S32)lexer->token];
 	if(result <= 0) {
 		//If the token is not an operator we return -1 because is it exempt from these types of things!
 		return -1;
@@ -188,7 +190,7 @@ ASTNode* Parser::ParseStatement() {
 					for(auto func : funcSet->functions) {
 						bool functionsMatch = true;
 						if(func->args.size() == function->args.size()) {
-							for(uint32 i = 0; i < func->args.size(); i++) {
+							for(U32 i = 0; i < func->args.size(); i++) {
 								if(func->args[i]->type != function->args[i]->type) {
 									functionsMatch = false;
 								}
@@ -289,7 +291,7 @@ ASTNode* Parser::ParseStatement() {
 				for(auto func : funcSet->functions) {
 					bool functionMatches = true;
 					if(func->args.size() == call->args.size()) {
-						for(uint32 i = 0; i < func->args.size(); i++) {
+						for(U32 i = 0; i < func->args.size(); i++) {
 							if(func->args[i]->type != call->args[i]->type) {
 								functionMatches = false;
 							}
@@ -440,6 +442,7 @@ ASTNode* Parser::ParseStatement() {
 			if(unit == nullptr) {
 				ParseFile(lexer->tokenString);
 			}
+
 			currentUnit->importedUnits.push_back(lexer->tokenString);
 			lexer->NextToken();	//Eat the string!
 		}
@@ -455,7 +458,7 @@ ASTNode* Parser::ParseStatement() {
 
 }
 
-ASTExpression* Parser::ParseExpressionRHS(int32 exprPrec, ASTExpression* lhs) {
+ASTExpression* Parser::ParseExpressionRHS(S32 exprPrec, ASTExpression* lhs) {
 	while(true) {
 		//If the token prec is less than 0 that means that this is not a binary opperator
 		//And we dont have to do anything aside from returning the allready parsed expression
