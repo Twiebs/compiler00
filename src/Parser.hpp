@@ -37,6 +37,8 @@ private:
 	ASTIdentifier* FindIdentifierInScope(Unit* activeUnit, ASTBlock* block, std::string identString);
 	Unit* CreateUnit(std::string filename);
 
+	bool ExpectAndEat(Token token);
+
 	ASTNode* ParseStatement();
 	ASTExpression* ParseExpression();
 	ASTExpression* ParseExpressionRHS(S32 exprPrec, ASTExpression* lhs);

@@ -1,7 +1,13 @@
 import "lib.bang"
 
 main :: () :> S32 {
-  Println(5)
-  CreateWindow()
+  i : S32 = 1
+
+  if 0 {
+    Println(50)
+  } else {
+    Println(i)
+  }
+
   return 0
 }

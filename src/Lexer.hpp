@@ -11,7 +11,7 @@ enum class Token {
 	IMPORT,
 	FOREIGN,
 
-	Identifier,
+	IDENTIFIER,
 
 	TypeDefine,
 	TypeDeclare,
@@ -63,6 +63,17 @@ struct FilePosition {
 	}
 };
 
+typedef struct {
+	FilePosition pos;
+	char currTok;
+	char* tokStr;
+} lex_state;
+
+typedef struct {
+	std::ifstream stream;	//Why would that need to be a pointer... no one else uses it!
+	char lastChar;
+	char nextChar;
+} lex_context;
 
 class Lexer {
 public:

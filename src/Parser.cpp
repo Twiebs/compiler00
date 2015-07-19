@@ -42,7 +42,7 @@ S32 Parser::GetCurrentTokenPrecedence() {
 //NOTE Parse Primary assumes the the lexer has already been incremented to the next token!
 ASTNode* Parser::ParseStatement() {
 	switch (lexer->token) {
-	case Token::Identifier: {
+	case Token::IDENTIFIER: {
 		LOG_VERBOSE("Parsing Identifier : " << lexer->tokenString);
 		//We can't assume we can just create an identifier here so we stash the identifiers name
 		std::string identifierName = lexer->tokenString;
@@ -54,7 +54,7 @@ ASTNode* Parser::ParseStatement() {
 			lexer->NextToken();	//Eat the type assignment operator and get the type token
 
 			// If the next token provided by the lexer is not a identifier then the user is being stupid
-			if (lexer->token != Token::Identifier) {
+			if (lexer->token != Token::IDENTIFIER) {
 				LOG_ERROR(lexer->filePos << "Expected a type identifier after the Type Declare operator ':'");
 				return nullptr;
 			}
@@ -101,13 +101,13 @@ ASTNode* Parser::ParseStatement() {
 			return var;
 		}
 
-		//@TYPE INFER
+		// NOTE @TYPE INFER
 		else if (lexer->token == Token::TypeInfer) {
 			//TODO type inference
 			return nullptr;
 		}
 
-		//@TYPE DEFINE
+		// NOTE @TYPE DEFINE
 		else if (lexer->token == Token::TypeDefine) {
 			LOG_VERBOSE("Parsing TypeDefine");
 			lexer->NextToken();
@@ -132,8 +132,8 @@ ASTNode* Parser::ParseStatement() {
 
 				//We need to make sure that the current function with the given arguments does not yet exist within the function table!
 				//For now assume the user is right!
-				//NOTE ^bad philosiphy! the user is never right!
-				//Note since we have already checked against the identifierTable we know this function has not yet been defined
+				// NOTE ^bad philosiphy! the user is never right!
+				// Note since we have already checked against the identifierTable we know this function has not yet been defined
 				ASTFunction* function = CreateFunction(currentScope);
 				//Create a function with that identifier and put it in the curretnScope;
 				function->ident = ident;
@@ -163,7 +163,7 @@ ASTNode* Parser::ParseStatement() {
 
 				if (lexer->token == Token::TypeReturn) {
 					lexer->NextToken();
-					if (lexer->token != Token::Identifier) {
+					if (lexer->token != Token::IDENTIFIER) {
 						LOG_ERROR("expected a type after the return operator");
 						return nullptr;
 					}
@@ -234,7 +234,7 @@ ASTNode* Parser::ParseStatement() {
 					return nullptr;
 				} else {
 					if(function->parent->parent != nullptr) {
-						//TODO why wouldn't we allow this?
+						// TODO why wouldn't we allow this?
 						LOG_ERROR("Cannot create a foreign function nested in another block!  Foreign functions must be declared in the global scope!");
 						return nullptr;
 					}
@@ -247,7 +247,7 @@ ASTNode* Parser::ParseStatement() {
 			}
 
 			//The token is some identifier so this is a data structure definition... or something
-			if (lexer->token == Token::Identifier) {
+			if (lexer->token == Token::IDENTIFIER) {
 				//For now we will assume any custom data type being created must be a struct or something...
 				//For not we will not handle this yet
 				LOG_ERROR("Custom data types not implemented yet!");
@@ -361,6 +361,7 @@ ASTNode* Parser::ParseStatement() {
 	}
 		break;
 
+	// NOTE @IF
 	case Token::IF:
 	{
 		LOG_VERBOSE(lexer->filePos << " Parsing an if statement!");
@@ -446,6 +447,16 @@ ASTNode* Parser::ParseStatement() {
 			currentUnit->importedUnits.push_back(lexer->tokenString);
 			lexer->NextToken();	//Eat the string!
 		}
+		break;
+
+	case Token::FOR:
+		LOG_VERBOSE("Parsing a for statement");
+		lexer->NextToken();
+		if(lexer->token != Token::IDENTIFIER) {
+			LOG_ERROR("Expected an identifier after for expression");
+			return nullptr;
+		}
+			
 
 		break;
 
@@ -509,12 +520,12 @@ ASTExpression* Parser::ParseExpression() {
 }
 
 
-//NOTE Parse Primary assumes the the lexer has already been incremented to the next token!
+// NOTE Parse Primary assumes the the lexer has already been incremented to the next token!
 ASTExpression* Parser::ParsePrimaryExpression() {
 	switch (lexer->token) {
 
 	// Handles variables, function calls!
-	case Token::Identifier:
+	case Token::IDENTIFIER:
 	{
 		LOG_VERBOSE("Parsing an identifier expression! for identifier -> " << lexer->tokenString);
 		auto ident = FindIdentifierInScope(currentUnit, currentScope, lexer->tokenString);
@@ -609,6 +620,26 @@ Unit* Parser::CreateUnit(std::string filename) {
 	unit->importedUnits.push_back("primitives");
 	parsedUnits[filename] = unit;
 	return unit;
+}
+
+std::string TokenName(Token token) {
+	switch (token) {
+		case Token::IDENTIFIER: return "Identifier";
+		case Token::ParenOpen: return "(";
+		case Token::ParenClose: return ")";
+		case Token::ScopeOpen: return "{";
+		case Token::ScopeClose: return "}";
+	}
+}
+
+bool Parser::ExpectAndEat(Token token) {
+	if(lexer->token != token) {
+		LOG_ERROR("Lexer reported: " << TokenName(lexer->token) << " expected: " << TokenName(token));
+		lexer->NextToken();
+		return false;
+	}
+	lexer->NextToken();
+	return true;
 }
 
 

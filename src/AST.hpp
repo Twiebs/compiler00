@@ -75,6 +75,14 @@ struct ASTIfStatement : public ASTNode {
 	ASTBlock* elseBlock;
 };
 
+struct ASTFor : public ASTNode{
+	std::string varName;
+	ASTExpression* start;
+	ASTExpression* end;
+	ASTExpression* step;
+	ASTBlock* body;
+};
+
 struct ASTVariable : public ASTExpression {
 	ASTIdentifier* identifier;
 	ASTBlock* block;

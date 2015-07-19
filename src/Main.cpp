@@ -30,6 +30,14 @@
 
 U32 gErrorCount = 0;
 
+typedef struct {
+	u32 TabSizeInChars;
+} compile_settings;
+
+typedef struct {
+	u32 ErrorCount;
+} compile_state;
+
 int main(int argc, char** argv) {
 	gErrorCount = 0;
 	static llvm::cl::opt<std::string> inputFile(llvm::cl::Positional,

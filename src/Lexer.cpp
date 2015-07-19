@@ -59,19 +59,21 @@ Token Lexer::GetToken() {
 	filePos.lineNumber = lineNumber;
 	filePos.columNumber = colNumber;
 
-	//KEYWORD, IDENTIFIER, TYPE
 	//If the character begins with a letter it must be a keyword, type, or identifier
+	// NOTE @KEYWORD, @IDENTIFIER, @TYPE
 	if(isalpha(nextChar) || nextChar == '_') {
-		while (isalnum(nextChar) || nextChar == '_')
-			AppendNext();
-		if (tokenString == "import") return Token::IMPORT;
+		while (isalnum(nextChar) || nextChar == '_') AppendNext();
+		if (tokenString == "import") 	return Token::IMPORT;
 		if (tokenString == "foreign") 	return Token::FOREIGN;
 		if (tokenString == "if") 		return Token::IF;
 		if (tokenString == "else") 		return Token::ELSE;
+		if (tokenString == "for")		return Token::FOR;
+		if (tokenString == "while")		return Token::WHILE;
 		if (tokenString == "return")	return Token::RETURN;
-		return Token::Identifier;
+		return Token::IDENTIFIER;
 	}
-	//NUMERIC LITERAL
+
+	// NOTE NUMERIC LITERAL
 	if (isdigit(nextChar)) { //Character was not alpha so we already know that it will not be an identifier
 		while(isdigit(nextChar) || nextChar == '.')
 			AppendNext();
