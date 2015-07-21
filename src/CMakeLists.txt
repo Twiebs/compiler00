@@ -1,3 +1,5 @@
 set(SRCS Main.cpp AST.cpp CodeGenerator.cpp Lexer.cpp Parser.cpp)
-add_executable(LLVMLang ${SRCS})
-target_link_libraries(LLVMLang ${LLVM_LIBS})
+
+add_executable(bang ${SRCS})
+target_link_libraries(bang ${LLVM_LIBS})
+install(TARGETS bang DESTINATION /usr/bin)

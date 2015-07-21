@@ -1,13 +1,11 @@
-import "lib.bang"
+#import "lib.bang"
+
+__PrintlnInt :: (value : S32) foreign
+__PrintlnFloat :: (value : F32) foreign
+Println :: (msg : S32) { __PrintlnInt(msg) }
+Println :: (msg : F32) { __PrintlnFloat(msg) }
+CreateWindow :: () :> S32 foreign
 
 main :: () :> S32 {
-  i : S32 = 1
-
-  if 0 {
-    Println(50)
-  } else {
-    Println(i)
-  }
-
   return 0
 }

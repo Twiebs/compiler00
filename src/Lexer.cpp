@@ -9,13 +9,13 @@
 
 Lexer::Lexer(std::string filename) {
 	this->filePos.filename = filename;
-	stream = new std::ifstream(filename.c_str());
-	if(!stream->is_open()) {
-		std::cout << "Error: Can not open file: " << filename << "\n";
+	stream.open(std::string(rootDir + filename));
+	if(!stream.is_open()) {
+		std::cout << "Error: Can not open file: " << rootDir + filename << "\n";
 		abort();
 	}
-	this->nextChar = stream->peek();
-	this->lastChar = stream->get();
+	this->nextChar = stream.peek();
+	this->lastChar = stream.get();
 }
 
 Lexer::~Lexer() {
@@ -24,7 +24,7 @@ Lexer::~Lexer() {
 
 void Lexer::AppendNext() {
 	lastChar = nextChar;
-	nextChar = stream->get();
+	nextChar = stream.get();
 	colNumber++;
 	if (lastChar == '\n') {
 		lineNumber++;
@@ -36,7 +36,7 @@ void Lexer::AppendNext() {
 
 void Lexer::EatNext() {
 	lastChar = nextChar;
-	nextChar = stream->get();
+	nextChar = stream.get();
 
 	if (lastChar == '\n') {
 		lineNumber++;
@@ -73,7 +73,7 @@ Token Lexer::GetToken() {
 		return Token::IDENTIFIER;
 	}
 
-	// NOTE NUMERIC LITERAL
+	// NOTE @NUMERIC LITERAL
 	if (isdigit(nextChar)) { //Character was not alpha so we already know that it will not be an identifier
 		while(isdigit(nextChar) || nextChar == '.')
 			AppendNext();

@@ -32,6 +32,7 @@ llvm::Value* CodeGenerator::Codegen(ASTNode* node) {
 	case AST_RETURN:
 		return Codegen((ASTReturn*)node);
 	default:
+		assert(!"UNHANDELED CODEGEN OF UNKOWN NODE");
 		LOG_ERROR("UNHANDLED CODEGEN OF NODE");
 		return nullptr;
 	}

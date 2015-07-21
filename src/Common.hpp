@@ -34,9 +34,12 @@ typedef double   f64;
 #define LOG_LEVEL_DEBUG   3
 #define LOG_LEVEL_VERBOSE 4
 
-#define LOG_LEVEL LOG_LEVEL_VERBOSE
+#define LOG_LEVEL LOG_LEVEL_INFO
 
 extern U32 gErrorCount;
+extern std::string rootDir;
+
+#undef ENABLE_COLOR_OUTPUT
 
 #if LOG_LEVEL > 0
 #ifdef ENABLE_COLOR_OUTPUT

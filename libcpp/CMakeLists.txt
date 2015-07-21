@@ -7,5 +7,5 @@ if(NOT SDL_FOUND)
 	message("Could not find SDL")
 endif()
 
-add_library(bang STATIC ${SRCS} )
-target_link_libraries(bang ${SDL_LIBRARY})
+add_library(std STATIC ${SRCS} )
+target_link_libraries(std ${SDL_LIBRARY})

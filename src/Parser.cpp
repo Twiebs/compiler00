@@ -42,6 +42,7 @@ S32 Parser::GetCurrentTokenPrecedence() {
 //NOTE Parse Primary assumes the the lexer has already been incremented to the next token!
 ASTNode* Parser::ParseStatement() {
 	switch (lexer->token) {
+	//Statements should almost allways begin with an identifier
 	case Token::IDENTIFIER: {
 		LOG_VERBOSE("Parsing Identifier : " << lexer->tokenString);
 		//We can't assume we can just create an identifier here so we stash the identifiers name
@@ -83,6 +84,7 @@ ASTNode* Parser::ParseStatement() {
 			}
 
 			ident = CreateIdentifier(currentScope, identifierName);
+			ident->position = lexer->filePos;
 			auto var = CreateVariable(currentScope);	//Add to scope!
 			ident->node = var;	//TODO add an AssignIdentifierToNode() type of thing??
 			var->identifier = ident;
@@ -316,6 +318,7 @@ ASTNode* Parser::ParseStatement() {
 			return call;
 		}
 
+		//This is stuff that is done after the identifier
 		switch(lexer->token) {
 		case Token::EQUALS:
 		case Token::ADD_EQUALS:
@@ -362,6 +365,7 @@ ASTNode* Parser::ParseStatement() {
 		break;
 
 	// NOTE @IF
+	// If our statement does not start with an identifeir it must be a keyword
 	case Token::IF:
 	{
 		LOG_VERBOSE(lexer->filePos << " Parsing an if statement!");
@@ -456,6 +460,8 @@ ASTNode* Parser::ParseStatement() {
 			LOG_ERROR("Expected an identifier after for expression");
 			return nullptr;
 		}
+
+
 			
 
 		break;

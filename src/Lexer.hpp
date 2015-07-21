@@ -10,7 +10,6 @@ enum class Token {
 	UNKOWN,
 	IMPORT,
 	FOREIGN,
-
 	IDENTIFIER,
 
 	TypeDefine,
@@ -35,7 +34,6 @@ enum class Token {
 	FOR,
 	WHILE,
 	RETURN,
-
 
 	Number,
 
@@ -89,7 +87,7 @@ public:
 private:
 	int lineNumber = 0;
 	int colNumber = 1;
-	std::ifstream* stream;
+	std::ifstream stream;
 
 	char lastChar;
 	char nextChar;

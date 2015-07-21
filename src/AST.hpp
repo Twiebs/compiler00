@@ -75,7 +75,7 @@ struct ASTIfStatement : public ASTNode {
 	ASTBlock* elseBlock;
 };
 
-struct ASTFor : public ASTNode{
+struct ASTFor : public ASTNode {
 	std::string varName;
 	ASTExpression* start;
 	ASTExpression* end;
@@ -97,7 +97,7 @@ struct ASTFunction : public ASTBlock {
 	llvm::Function* code;
 };
 
-//REFACTOR this could use a better name
+// REFACTOR this could use a better name
 //An identifier will point to a function set which will have various functions that corespond to that identifier stored
 //within it!  This might be a pretty large falicy but for now i will certianly allow it..
 //Mabye when namespace support is added to the language it might be possible to consider a function a namespace and it has
