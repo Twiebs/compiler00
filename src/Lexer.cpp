@@ -1,11 +1,189 @@
-/*
- * Lexer.cpp
- *
- *  Created on: Jun 18, 2015
- *      Author: torin
- */
-
 #include "Lexer.hpp"
+
+//TODO EastNextChar: this doesnt look like it will set the lineNumber and the colum number correctly
+void EatNextChar(LexState& state) {
+	state.lastChar = nextChar;
+	state.nextChar = state.stream.get();
+	state.columNumber++;
+	if(state.lastChar == '\n') {
+		state.lineNumber++;
+		state.columNumber = 1;
+	}
+}
+
+void AppendNextChar(LexState& state, Token& token) {
+	state.lastChar = state.nextChar;
+	state.nextChar = state.stream.get();
+	state.colNumber++;
+	if (state.lastChar == '\n') {
+		state.lineNumber++;
+		state.colNumber = 1;
+	} else if (state.lastChar != ' ') {
+		token.string += state.lastChar;
+	}
+}
+
+//The function now explicity will operate on a token
+//This alows much more robust control of how tokens are obtained from the lexing
+void LexToken(LexState& state, Token& token) {
+	while(isspace(state.nextChar)) EatNextChar();	//Eat the whitespaces
+
+	//Setup the information about the token
+	token.string = "";  // Clear out the token string
+	token.type = TokenType::UNKOWN;
+	token.site.lineNumber = state.lineNumber;
+	token.site.columNumber = state.colNumber;
+
+	//Token type is an identifier or a language keyword
+	if(isalpha(state.nextChar) || state.nextChar == '_') {
+		while (isalnum(state.nextChar) || state.nextChar == '_') AppendNextChar(state);
+		if (token.string == "import") 	token.type = TokenType::IMPORT;
+		else if (token.string == "foreign")	 token.type = TokenType::FOREIGN;
+		else if (token.string == "if")			token.type = TokenType::IF;
+		else if (token.string == "else") 		  token.type = TokenType::ELSE;
+		else if (token.string == "for") 		  token.type = TokenType::FOR;
+		else if (token.string == "while") 		 token.type = TokenType::WHILE;
+		else if (token.string == "return")		token.type = TokenType::RETURN;
+		else token.type = TokenType::IDENTIFIER;
+	}
+
+	// Numeric literals
+	if (isdigit(state.nextChar)) { // Character was not alpha so we already know that it will not be an identifier
+		bool decimalSeen = false;
+		while(isdigit(state.nextChar) || state.nextChar == '.') {
+			if(state.nextChar == '.') {
+				if(!decimalSeen) decimalSeen = true;
+				else LOG_ERROR(token.site << "Two decimals found in numeric constant!");
+			}
+			AppendNextChar(state, token);
+		}
+		token.type = TokenType::NUMBER;
+	}
+
+
+	// NOTE STRING LITERAL
+	if(nextChar == '"') {
+		EatNextChar(state);	//Eat the "
+		while(state.nextChar != '"') {
+			AppendNextChar(state, token);
+		}
+		EatNextChar(state);	//Eat the "
+		token.type = TokenType::String
+	}
+
+	//COMMENTS
+	if (nextChar == '#') {
+		EatNextChar(state);	//Eat the '# 'char
+		while(state.nextChar != EOF && state.nextChar != '\n' && state.nextChar != '\r')
+			EatNextChar(state.state);	//Now we eat the comment body itself
+		//We have reached the end of the comment.  If is not the end of the file get the next token
+		if(state.nextChar != EOF)
+			NextToken(state);
+	}
+
+	//COLON TOKENS
+	if (state.nextChar == ':') {
+		AppendNextChar(state, token);
+		if(state.nextChar == ':') {
+			AppendNextChar(state, token);
+			token.type = TokenType::TYPE_DEFINE;
+		}
+		else if (state.nextChar == '='){
+			AppendNextChar(state, token);
+			token.type = TokenType::TYPE_INFER;
+		}
+		else if (state.nextChar == '>') {
+			AppendNextChar(state, token);
+			token.type = TokenType::TYPE_RETURN;
+		}
+		else {
+			token.type = TokenType::TYPE_DECLARE;
+		}
+	}
+
+	//BIN OPS
+	else if(state.nextChar == '=') {
+		AppendNextChar(state, token);
+		token.type = Token::EQUALS;
+	}
+	else if(state.nextChar == '+') {
+		AppendNextChar(state, token);
+		if(state.nextChar == '=') {
+			AppendNextChar(state, token);
+			token.type = TokenType::ADD_EQUALS;
+		} else {
+			token.type = TokenType::ADD;
+		}
+	}
+	else if(state.nextChar == '-') {
+		AppendNextChar(state, token);
+		if(state.nextChar == '=') {
+			AppendNextChar(state, token);
+			token.type = TokenType::SUB_EQUALS;
+		} else {
+			token.type = TokenType::SUB;
+		}
+	}
+
+	else if(state.nextChar == '*') {
+		AppendNextChar(state, token);
+		if(state.nextChar == '=') {
+			AppendNextChar(state, token);
+			token.type = TokenType::MUL_EQUALS;
+		} else {
+			token.type = TokenType::MUL;
+		}
+	}
+
+
+	else if(state.nextChar == '/') {
+		AppendNextChar(state, token);
+		if(state.nextChar == '=') {
+			AppendNextChar(state, token);
+			token.type = TokenType::DIV_EQUALS;
+		} else {
+			token.type = TokenType::DIV;
+		}
+	}
+
+	else if(state.nextChar == '%') {
+		AppendNextChar(state, token);
+		if(state.nextChar == '=') {
+			AppendNextChar(state, token);
+			token.type = TokenType::MOD_EQUALS;
+		} else {
+			token.type = TokenType::MOD;
+		}
+	}
+
+	//BRACES, BRACKETS, SUBSCRIPTS
+	else if (state.nextChar == '(') {
+		AppendNextChar(state, token);
+		token.type = TokenType::ParenOpen;
+	}
+	else if (state.nextChar == ')') {
+		AppendNextChar(state, token);
+		token.type = TokenType::ParenClose;
+	}
+	else if (state.nextChar == '{') {
+		AppendNextChar(state, token);
+		token.type = TokenType::ScopeOpen;
+	}
+	else if (state.nextChar == '}') {
+		AppendNextChar(state, token);
+		token.type = TokenType::ScopeClose;
+	}
+	else if (state.nextChar == EOF) {
+		//Dont append or ead the EOF
+		token.type = TokenType::END_OF_FILE;
+	}
+	else{
+		AppendNextChar(state, token);
+		token.type = TokenType::UNKOWN;
+	}
+}
+
+#if 0
 
 Lexer::Lexer(std::string filename) {
 	this->filePos.filename = filename;
@@ -15,11 +193,12 @@ Lexer::Lexer(std::string filename) {
 		abort();
 	}
 	this->nextChar = stream.peek();
-	this->lastChar = stream.get();
+	this->lastChar = stream.get();	//Wait does lastChar actualy meen "lastChar" //We probably dont need
+	//to store the nextChar anywhere
 }
 
 Lexer::~Lexer() {
-
+	//lol... the filehandle was never closed!
 }
 
 void Lexer::AppendNext() {
@@ -53,6 +232,7 @@ void Lexer::NextToken() {
 	token = GetToken();
 }
 
+
 Token Lexer::GetToken() {
 	tokenString = ""; //Reset the tokenstring
 	EatWhitespaces();
@@ -70,17 +250,24 @@ Token Lexer::GetToken() {
 		if (tokenString == "for")		return Token::FOR;
 		if (tokenString == "while")		return Token::WHILE;
 		if (tokenString == "return")	return Token::RETURN;
-		return Token::IDENTIFIER;
+		return Token::IDENTIFIER;	//The tokenString did not match a language keyword we assume it must be an identifier
 	}
 
 	// NOTE @NUMERIC LITERAL
-	if (isdigit(nextChar)) { //Character was not alpha so we already know that it will not be an identifier
-		while(isdigit(nextChar) || nextChar == '.')
+	if (isdigit(nextChar)) { // Character was not alpha so we already know that it will not be an identifier
+		bool decimalSeen = false;
+		while(isdigit(nextChar) || nextChar == '.') {
+			if(nextChar == '.') {
+				if(!decimalSeen) decimalSeen = true;
+				else LOG_ERROR(filePos << "Two decimals found in numeric constant!");
+			}
 			AppendNext();
+		}
 		return Token::Number;
 	}
 
-	//STRING LITERAL
+
+	// NOTE STRING LITERAL
 	if(nextChar == '"') {
 		EatNext();	//Eat the "
 		while(nextChar != '"') {
@@ -192,3 +379,5 @@ Token Lexer::GetToken() {
 		return Token::UNKOWN;
 	}
 }
+
+#endif

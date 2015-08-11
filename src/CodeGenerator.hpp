@@ -12,6 +12,11 @@
 #include "AST.hpp"
 #include "Common.hpp"
 
+
+//Lol... the codeGenerator doesnt do anything
+//execept copy a pointer and instantate a builder
+//Which we should pull out anway to remove the need for relying on
+//LLVM way to much
 class CodeGenerator {
 public:
 	CodeGenerator(llvm::Module* module);

@@ -6,6 +6,16 @@ Println :: (msg : S32) { __PrintlnInt(msg) }
 Println :: (msg : F32) { __PrintlnFloat(msg) }
 CreateWindow :: () :> S32 foreign
 
+
 main :: () :> S32 {
+  foo : S32 = 4
+  bar : S32 = foo
+  foo = 37
+
+  if 0 {
+    Println(bar)
+  } else {
+    Println(foo)
+  }
   return 0
 }

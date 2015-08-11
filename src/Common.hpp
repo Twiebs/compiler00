@@ -36,16 +36,13 @@ typedef double   f64;
 
 #define LOG_LEVEL LOG_LEVEL_INFO
 
-extern U32 gErrorCount;
-extern std::string rootDir;
-
-#undef ENABLE_COLOR_OUTPUT
+//#undef ENABLE_COLOR_OUTPUT
 
 #if LOG_LEVEL > 0
 #ifdef ENABLE_COLOR_OUTPUT
-#define LOG_ERROR(x) gErrorCount++; std::cout << "\x1b[31mERROR: " << x << "\033[39m\n"
+#define LOG_ERROR(x) std::cout << "\x1b[31mERROR: " << x << "\033[39m\n"
 #else
-#define LOG_ERROR(x) gErrorCount++; std::cout << "ERROR: " << x << "\n"
+#define LOG_ERROR(x) std::cout << "ERROR: " << x << "\n"
 #endif
 #else
 #define LOG_ERROR(x)

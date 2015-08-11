@@ -33,7 +33,6 @@
 #include "Lexer.hpp"
 #include "Parser.hpp"
 
-
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/CommandFlags.h"
 #include "llvm/CodeGen/LinkAllAsmWriterComponents.h"
@@ -65,122 +64,96 @@
 #include <memory>
 using namespace llvm;
 
-U32 gErrorCount = 0;
+//TODO move build settings into their own seperate file
+//Consider using a STU build
+// Create a MemoryManager
+//MemoryManager::CreateNode(nodeType);
+// Memory::RemoveNode()
+// Memory::AddNode()
+// Add node is really interesting because it implies that a node would be added to the scope / package
+//That you sepcificy... I think that is a really good way to go.. However; it does not imply that memory is actualy
+//being allocated and freed which might be confusing
 
-struct BangSettings {
+//TODO: Set a flag to stop Codegen from happening if the BuildManager reports errors
+
+struct BuildSettings {
+	std::string inputFile; // For now this is just a singular thing for simplicity
 	std::vector<std::string> importDirs;
 	std::vector<std::string> libDirs;
 	std::vector<std::string> libs;
 	bool emitBitcode;
 	bool emitAsm;
-	bool emitObj;
+	bool emitNativeOBJ;
 	bool createExecutable;
 };
 
-typedef struct {
-	u32 errorCount;
-} compile_state;
+struct BuildContext {
+	llvm::Module* llvmModule;
+	Package* currentPackage;
+	std::vector<Package*> packages;	//We probably dont need to store somthing like this because it will
+	std::string rootDir;
+	//end up being iside the memory manager
+	ParseState parseState;
+	U32 errorCount;
+};
 
-std::string rootDir;
+//TODO setup language bultins here.
+//or divert to acustom user tool with an api to do some preprocessor stuff or whatever
+// build tool they want to use
+//The Pre build and post build will return ints inorder to check for error codes
+int PreBuild() {
 
+}
 
-#if 1
-int main(int argc, char** argv) {
-	BangSettings settings;
-	settings.libDirs.push_back("build/libcpp");
-	settings.libs.push_back("std");
-	settings.libs.push_back("SDL");
-	settings.libs.push_back("GL");
+//TODO we can also do this exact same thing here but after the first build has been run
+// I think that this is arelly good idea nad can provide a really great exensibility
+int PostBuild() {
 
+}
 
-	gErrorCount = 0;
-	static llvm::cl::opt<std::string> inputFile(llvm::cl::Positional,
-			llvm::cl::desc("<input file>"));
-	static llvm::cl::opt<std::string> outputFile("o",
-			llvm::cl::desc("Output filename"),
-			llvm::cl::value_desc("filename"));
-	llvm::cl::ParseCommandLineOptions(argc, argv);
+//When we build we allways parse so this is where the parsing will kick off
+//After the parsing is complete we check someflags in the buildsettings to determine what to do with
+//The created llvm::Module
+void Build(const BuildSettings& settings) {
+	BuildContext context;
+	context.llvmModule = new llvm::Module("LLVMLang Compiler", llvm::getGlobalContext());
+	ParseFile(settings.inputFile, context);
 
-	if (inputFile == "") {
-		std::cout << "Error: You must specify the filename of the program to "
-		"be compiled.  Use --help to see the options.\n";
-		abort();
+	//Build the llvm::Module
+
+	if (settings.emitNativeOBJ) {
+		WriteNativeObject(context->module, )
 	}
 
-	std::string input = inputFile;
-	auto lastSlash = input.find_last_of("/");
-	if(lastSlash == std::string::npos) {
-		rootDir = "";
-	} else {
-		rootDir = input.substr(0, lastSlash + 1);
-		input.erase(0, lastSlash);
-	}
+}
 
-	if(outputFile == "") {
-		std::string base = inputFile;
-		base = base.substr(0, base.size() - 3);
-		outputFile = base + "bc";
-	}
-
-	llvm::LLVMContext& context = llvm::getGlobalContext();
-	llvm::Module* module = new llvm::Module("LLVMLang Compiler", context);
-
-	std::vector<std::string> importDirectories;
-	importDirectories.push_back("");
-
-	CodeGenerator codeGenerator(module);
-	Parser parser(importDirectories, module, &codeGenerator);
-	parser.ParseFile(input);
-
-	std::cout << "\x1b[31m" << "\n";
-	llvm::raw_os_ostream stream(std::cout);
-	if (llvm::verifyModule(*module, &stream)) {
-		LOG_ERROR("LLVMModule verification failed!");
-	}
-	std::cout << "\x1b[33m" << "\n";
-	module->dump();
-
-	if(gErrorCount > 0) {
-		LOG_ERROR("There were " << gErrorCount - 1<< " errors!");
-	} else {
-		LOG_INFO("No Errors were reported!  Have a \x1b[31mW\x1b[32mo\x1b[33mn\x1b[34md\x1b[35me\x1b[36mr\x1b[31mf\x1b[32mu\x1b[33ml\x1b[34ml \x1b[39mday!");
-	}
-
-	std::error_code errorCode;
-	llvm::raw_fd_ostream ostream(outputFile, errorCode, llvm::sys::fs::F_None);
-	//llvm::WriteBitcodeToFile(module, ostream);
-	LOG_INFO("Writing bitcode to file");
-
-	LOG_INFO("Root directory is " << rootDir);
-
-
+int WriteNativeObject(llvm::Module* module, const std::string& outFile, const BuildSettings& settings) {
 	llvm::InitializeAllTargets();
 	llvm::InitializeAllTargetMCs();
 	llvm::InitializeAllAsmPrinters();
 	llvm::InitializeAllAsmParsers();
 
-	llvm::PassRegistry *Registry = llvm::PassRegistry::getPassRegistry();
-	llvm::initializeCore(*Registry);
-	llvm::initializeCodeGen(*Registry);
-	llvm::initializeLoopStrengthReducePass(*Registry);
-	llvm::initializeLowerIntrinsicsPass(*Registry);
-	llvm::initializeUnreachableBlockElimPass(*Registry);
+	llvm::PassRegistry* registry = llvm::PassRegistry::getPassRegistry();
+	llvm::initializeCore(*registry);
+	llvm::initializeCodeGen(*registry);
+	llvm::initializeLowerIntrinsicsPass(*registry);
+	llvm::initializeLoopStrengthReducePass(*registry);
+	llvm::initializeUnreachableBlockElimPass(*registry);
 
 	cl::AddExtraVersionPrinter(TargetRegistry::printRegisteredTargetsForVersion);
 
 	// Load the module to be compiled...
-	SMDiagnostic Err;
-	Triple TheTriple;
+	SMDiagnostic err;
+	Triple triple;
 	if (MCPU == "native") MCPU = sys::getHostCPUName();
-	TheTriple.setTriple(sys::getDefaultTargetTriple());
+	triple.setTriple(sys::getDefaultTargetTriple());
 
 	// Get the target specific parser.
 	std::string errorString;
-	const Target *TheTarget = TargetRegistry::lookupTarget(MArch, TheTriple, errorString);
+	const Target *TheTarget = TargetRegistry::lookupTarget(MArch, triple, errorString);
 	if (!TheTarget) {
 		return 1;
 	}
-
 	// Package up features to be passed to target/subtarget
 	std::string featuresStr;
 	if (MAttrs.size()) {
@@ -210,7 +183,7 @@ int main(int argc, char** argv) {
 //	Options.MCOptions.MCUseDwarfDirectory = EnableDwarfDirectory;
 //	Options.MCOptions.AsmVerbose = AsmVerbose;
 
-	std::unique_ptr<TargetMachine> Target(TheTarget->createTargetMachine(TheTriple.getTriple(), MCPU, featuresStr, Options, RelocModel, CMModel, OLvl));
+	std::unique_ptr<TargetMachine> Target(TheTarget->createTargetMachine(triple.getTriple(), MCPU, featuresStr, Options, RelocModel, CMModel, OLvl));
 	assert(Target && "Could not allocate target machine!");
 
 	if (GenerateSoftFloatCalls)
@@ -223,11 +196,9 @@ int main(int argc, char** argv) {
 		openFlags |= sys::fs::F_Text;
 	}
 
-	std::string base = input;
-	base = base.substr(0, base.find_last_of("."));
-	outputFile = base + ".o";
-	auto fileOut = llvm::make_unique<tool_output_file>(rootDir + outputFile, errorCode, openFlags);
-	if(errorCode) {
+	std::error_code errorCode;
+	auto fileOut = llvm::make_unique<tool_output_file>(outFile, errorCode, openFlags);
+	if (errorCode) {
 		LOG_ERROR(errorCode.message());
 		return -1;
 	}
@@ -237,7 +208,7 @@ int main(int argc, char** argv) {
 	PassManager PM;
 
 	// Add an appropriate TargetLibraryInfo pass for the module's triple.
-	TargetLibraryInfo *TLI = new TargetLibraryInfo(TheTriple);
+	TargetLibraryInfo *TLI = new TargetLibraryInfo(triple);
 //	if (DisableSimplifyLibCalls)
 //		TLI->disableAllFunctions();
 	PM.add(TLI);
@@ -287,7 +258,7 @@ int main(int argc, char** argv) {
 	}
 
 	// Declare success.
-	fileOut->keep();
+	fileOut->keep();	// NOTE What ass-fuckery is this?
 
 	std::string libs;
 	for(auto& dir : settings.libDirs) {
@@ -300,8 +271,78 @@ int main(int argc, char** argv) {
 	std::string cmd = "clang++ test.o " + libs + " -o app";
 	system(cmd.c_str());
 	return 0;
+
 }
 
+void WriteBitcode(llvm::Module* module, const std::string& outputFile) {
+	std::error_code errorCode;
+	llvm::raw_fd_ostream ostream(outputFile, errorCode, llvm::sys::fs::F_None);
+	llvm::WriteBitcodeToFile(module, ostream);
+}
+
+int main(int argc, char** argv) {
+	BuildSettings settings;
+	settings.libDirs.push_back("build/libcpp");
+	settings.libs.push_back("std");
+	settings.libs.push_back("SDL");
+	settings.libs.push_back("GL");
+
+	BuildContext context;
+
+	//Parse LLVM Command Line Options
+	static llvm::cl::opt<std::string> inputFile(llvm::cl::Positional, llvm::cl::desc("<input file>"));
+	static llvm::cl::opt<std::string> outputFile("o", llvm::cl::desc("Output filename"), llvm::cl::value_desc("filename"));
+	llvm::cl::ParseCommandLineOptions(argc, argv);
 
 
-#endif
+	if (inputFile == "") {
+		std::cout << "Error: You must specify the filename of the program to "
+		"be compiled.  Use --help to see the options.\n";
+		abort();
+	}
+
+	std::string input = inputFile;
+	auto lastSlash = input.find_last_of("/");
+	if(lastSlash == std::string::npos) {
+		context.rootDir = "";
+	} else {
+		context.rootDir = input.substr(0, lastSlash + 1);
+		input.erase(0, lastSlash);
+	}
+
+	if(outputFile == "") {
+		std::string base = inputFile;
+		base = base.substr(0, base.size() - 3);
+		outputFile = base + "bc";
+	}
+
+	llvm::LLVMContext& llvmContext = llvm::getGlobalContext();
+	llvm::Module* module = new llvm::Module("LLVMLang Compiler", llvmContext);
+
+	std::vector<std::string> importDirectories;
+	importDirectories.push_back("");
+
+	CodeGenerator codeGenerator(module);
+	Parser parser(importDirectories, module, &codeGenerator);
+	parser.ParseFile(input);
+
+	std::cout << "\x1b[31m" << "\n";
+	llvm::raw_os_ostream stream(std::cout);
+	if (llvm::verifyModule(*module, &stream)) {
+		LOG_ERROR("LLVMModule verification failed!");
+	}
+	std::cout << "\x1b[33m" << "\n";
+	module->dump();
+
+	// if(gErrorCount > 0) {
+	// 	LOG_ERROR("There were " << gErrorCount - 1<< " errors!");
+	// } else {
+	// 	LOG_INFO("No Errors were reported!  Have a \x1b[31mW\x1b[32mo\x1b[33mn\x1b[34md\x1b[35me\x1b[36mr\x1b[31mf\x1b[32mu\x1b[33ml\x1b[34ml \x1b[39mday!");
+	// }
+
+	// LOG_INFO("Root directory is " << rootDir);
+
+	std::string base = input;
+	base = base.substr(0, base.find_last_of("."));
+	outputFile = base + ".o";
+}

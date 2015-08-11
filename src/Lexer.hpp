@@ -6,7 +6,7 @@
 
 #include "Common.hpp"
 
-enum class Token {
+enum class TokenType {
 	UNKOWN,
 	IMPORT,
 	FOREIGN,
@@ -45,34 +45,58 @@ enum class Token {
 	STRING_OPEN,
 	STRING_CLOSE,
 
-	EndOfFile
+	END_OF_FILE
 };
 
 // Represents a site in a file with a lineNumber and a columNumber
 // Can be printed through standard output.  The lexer is resposible for this bookeeping
 // And ASTNodes will copy the value of the lexers fileposition when they are incepted
-struct FilePosition {
+//TODO should we save the file position where a token came from inside a token struct
+//Instead of passing around the token enum
+
+// Represents a position in the file where the lexer has visitied
+//Change to fileSite it makes more sense IMO?
+//TODO change FilePosition to FileSite
+//The we can do site.lineNumber;
+//I like that a lot better
+
+//This is the minum information that the lexer needs to do its job properly
+//For now atleast...
+struct LexState {
+	std::ifstream stream;
+	char lastChar, nextChar;
+	U32 lineNumber, colNumber;
+};
+
+struct FileSite {
 	std::string filename;
 	U32 lineNumber;
 	U32 columNumber;
-	friend std::ostream& operator<<(std::ostream& output, const FilePosition& position) {
-		output << "[" << position.filename << " " << position.lineNumber << ":" << position.columNumber<< "]";
+	friend std::ostream& operator<<(std::ostream& output, const FileSite& site) {
+		output << "[" << site.filename << " " << site.lineNumber << ":" << site.columNumber<< "]";
 		return output;
 	}
 };
 
-typedef struct {
-	FilePosition pos;
-	char currTok;
-	char* tokStr;
-} lex_state;
+//Do somthing like this instead!
+//Tokens can now be explicityl placed and then initalized by the lexing functions
+//TODO Nest a enum in here?
+//Is that somthing that works?
+struct Token {
+	TokenType type;
+	FileSite site;
+	std::string string;
 
-typedef struct {
-	std::ifstream stream;	//Why would that need to be a pointer... no one else uses it!
-	char lastChar;
-	char nextChar;
-} lex_context;
 
+};
+
+//Consider renaming LexNextToken(lex);
+void LexToken(LexState& state, Token& token);
+void NextToken(LexState& state);
+void ExpectAndEat(LexState& state);
+
+
+#if 0
 class Lexer {
 public:
 	std::string tokenString;
@@ -82,10 +106,10 @@ public:
 	Lexer(std::string filename);
 	~Lexer();
 
-	void NextToken();
 
 private:
 	int lineNumber = 0;
+	void NextToken();
 	int colNumber = 1;
 	std::ifstream stream;
 
@@ -99,3 +123,4 @@ private:
 	void EatNext();
 	void EatWhitespaces();
 };
+#endif
