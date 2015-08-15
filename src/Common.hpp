@@ -6,6 +6,8 @@
 #include <assert.h>
 #include <stdint.h>
 
+#define global_variable static
+
 typedef int8_t    S8;
 typedef int16_t   S16;
 typedef int32_t   S32;
@@ -37,6 +39,9 @@ typedef double   f64;
 #define LOG_LEVEL LOG_LEVEL_INFO
 
 //#undef ENABLE_COLOR_OUTPUT
+
+#define INTERNAL_ERROR(msg) std::cout << "INTERNAL_ERROR: " << msg << "\n";
+
 
 #if LOG_LEVEL > 0
 #ifdef ENABLE_COLOR_OUTPUT

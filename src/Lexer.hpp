@@ -12,10 +12,10 @@ enum class TokenType {
 	FOREIGN,
 	IDENTIFIER,
 
-	TypeDefine,
-	TypeDeclare,
-	TypeInfer,
-	TypeReturn,
+	TYPE_DEFINE,
+	TYPE_DECLARE,
+	TYPE_INFER,
+	TYPE_RETURN,
 
 	ADD,
 	SUB,
@@ -35,7 +35,7 @@ enum class TokenType {
 	WHILE,
 	RETURN,
 
-	Number,
+	NUMBER,
 
 	ParenOpen,
 	ParenClose,
@@ -62,12 +62,7 @@ enum class TokenType {
 
 //This is the minum information that the lexer needs to do its job properly
 //For now atleast...
-struct LexState {
-	std::ifstream stream;
-	char lastChar, nextChar;
-	U32 lineNumber, colNumber;
-};
-
+//TODO storing a lastChar is probably compleatly irrelevant
 struct FileSite {
 	std::string filename;
 	U32 lineNumber;
@@ -78,49 +73,23 @@ struct FileSite {
 	}
 };
 
-//Do somthing like this instead!
-//Tokens can now be explicityl placed and then initalized by the lexing functions
-//TODO Nest a enum in here?
-//Is that somthing that works?
 struct Token {
-	TokenType type;
 	FileSite site;
+	TokenType type;
 	std::string string;
-
-
 };
 
-//Consider renaming LexNextToken(lex);
-void LexToken(LexState& state, Token& token);
-void NextToken(LexState& state);
-void ExpectAndEat(LexState& state);
 
-
-#if 0
 class Lexer {
 public:
-	std::string tokenString;
+	std::ifstream stream;
+	char lastChar = 0, nextChar = 0;
+	U32 lineNumber = 0, colNumber = 0;
 	Token token;
-	FilePosition filePos;
 
-	Lexer(std::string filename);
-	~Lexer();
-
+	void next();
 
 private:
-	int lineNumber = 0;
-	void NextToken();
-	int colNumber = 1;
-	std::ifstream stream;
-
-	char lastChar;
-	char nextChar;
-
-	Token GetToken();
-
-
-	void AppendNext();
-	void EatNext();
-	void EatWhitespaces();
+	void eatNextChar();
+	void appendNextChar();
 };
-#endif

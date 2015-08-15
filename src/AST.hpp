@@ -45,7 +45,7 @@ struct ASTNode {
 //Actualy it might be better to start that flag system that could be implemented
 //Then we could get some very intersing behaviours on these identifiers!
 struct ASTIdentifier {
-	FilePosition position;	//Where was the identifier declared
+	FileSite site;	// Where was the identifier declared
 	std::string name;				//What is the name of the identifier
 	//It might be a good idea to store information about what this identifier is actualy refering to!
 	ASTNode* node = nullptr;		//What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
@@ -86,7 +86,7 @@ struct ASTFor : public ASTNode {
 struct ASTVariable : public ASTExpression {
 	ASTIdentifier* identifier;
 	ASTBlock* block;
-	ASTExpression* initalExpression;
+	ASTExpression* initalExpression = nullptr;
 	llvm::AllocaInst* allocaInst;
 };
 
@@ -109,8 +109,8 @@ struct ASTFunctionSet : public ASTNode {
 	std::vector<ASTFunction*> functions;
 };
 
-struct ASTBinaryOperation : public ASTExpression{
-	Token binop;
+struct ASTBinaryOperation : public ASTExpression {
+	TokenType binop;
 	ASTExpression* lhs;
 	ASTExpression* rhs;
 };
@@ -119,8 +119,11 @@ struct ASTReturn : public ASTExpression {
 	ASTExpression* value;
 };
 
+// We dont consider mutations of variables as opperations right?
+// Or should we consider mutations the same as BinaryOperations
+// And just be strict about where we allow them?
 struct ASTMutation : public ASTNode {
-	Token op;
+	TokenType op;
 	ASTVariable* variable;
 	ASTExpression* value;
 };
@@ -141,20 +144,47 @@ struct ASTFloatLiteral : public ASTExpression {
 
 void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module);
 
-ASTDefinition* CreateType(ASTBlock* block, std::string name, llvm::Type* type);
-ASTIdentifier* FindIdentifier(ASTBlock* block, std::string name);
-ASTIdentifier* CreateIdentifier(ASTBlock* block, std::string name);
+//Make it simple for now
+//We should never actualy have to index into these manualy durring the thingy!
+template<typename T>
+class NodeAllocator {
+	NodeAllocator();
+	~NodeAllocator();
+
+	T* Alloc();
+	void Free();
+
+private:
+	U32 count;
+	U32 max;
+	T* memory;
+};
+
+//Identifiers
+ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name);
+ASTIdentifier* FindIdentifier(ASTBlock* block, const Token& token);
+ASTIdentifier* CreateIdentifier(ASTBlock* scope, const Token& token);
+ASTIdentifier* CreateIdentifier(ASTBlock* scope, const std::string& name);
+ASTIdentifier* FindIdentifier(const std::string& name);
+ASTIdentifier* CreateIdentifier(const std::string& name);
+void ResolveIdentifier(ASTBlock* block, const std::string& name);	//WTF
+
+ASTDefinition* CreateType(ASTBlock* block, const std::string& name, llvm::Type* type);
+
 ASTVariable* CreateVariable(ASTBlock* block);
 ASTBlock* CreateBlock(ASTBlock* block);
-ASTBinaryOperation* CreateBinaryOperation(Token binop, ASTExpression* lhs, ASTExpression* rhs);
+ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
 ASTReturn* CreateReturnValue(ASTExpression* value);
 ASTIfStatement* CreateIfStatement(ASTExpression* expr);
-ASTMutation* CreateMutation(Token op, ASTVariable* variable, ASTExpression* expr);
+ASTMutation* CreateMutation(TokenType op, ASTVariable* variable, ASTExpression* expr);
 ASTFunction* CreateFunction(ASTBlock* block);
 ASTCall* CreateCall();
 ASTIntegerLiteral* CreateIntegerLiteral(S64 value);
 ASTFloatLiteral* CreateFloatLiteral(F64 value);
 
-extern ASTDefinition* typeVoid;
-extern ASTDefinition* typeS32;
-extern ASTDefinition* typeF32;
+std::string ToString(ASTNodeType nodeType);
+
+extern ASTBlock global_defaultGlobalScope;
+extern ASTDefinition* global_voidType;
+extern ASTDefinition* global_S32Type;
+extern ASTDefinition* global_F32Type;
