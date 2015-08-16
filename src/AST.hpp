@@ -16,8 +16,7 @@ enum ASTNodeType {
 	AST_DEFINITION,
 
 	AST_IF,
-	AST_FOR,
-	AST_WHILE,
+	AST_ITER,
 
 	AST_FUNCTION,
 	AST_CALL,
@@ -75,8 +74,8 @@ struct ASTIfStatement : public ASTNode {
 	ASTBlock* elseBlock;
 };
 
-struct ASTFor : public ASTNode {
-	std::string varName;
+struct ASTIter : public ASTNode {
+	ASTIdentifier* varIdent;
 	ASTExpression* start;
 	ASTExpression* end;
 	ASTExpression* step;
@@ -160,6 +159,11 @@ private:
 	T* memory;
 };
 
+extern ASTBlock global_defaultGlobalScope;
+extern ASTDefinition* global_voidType;
+extern ASTDefinition* global_S32Type;
+extern ASTDefinition* global_F32Type;
+
 //Identifiers
 ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name);
 ASTIdentifier* FindIdentifier(ASTBlock* block, const Token& token);
@@ -171,20 +175,18 @@ void ResolveIdentifier(ASTBlock* block, const std::string& name);	//WTF
 
 ASTDefinition* CreateType(ASTBlock* block, const std::string& name, llvm::Type* type);
 
-ASTVariable* CreateVariable(ASTBlock* block);
 ASTBlock* CreateBlock(ASTBlock* block);
-ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
-ASTReturn* CreateReturnValue(ASTExpression* value);
-ASTIfStatement* CreateIfStatement(ASTExpression* expr);
-ASTMutation* CreateMutation(TokenType op, ASTVariable* variable, ASTExpression* expr);
 ASTFunction* CreateFunction(ASTBlock* block);
+ASTIfStatement* CreateIfStatement(ASTExpression* expr);
+ASTIter* CreateIter(ASTExpression* start, ASTExpression* end, ASTExpression* step);
+ASTReturn* CreateReturnValue(ASTExpression* value);
+
 ASTCall* CreateCall();
+ASTVariable* CreateVariable(ASTBlock* block);
+ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
+ASTMutation* CreateMutation(TokenType op, ASTVariable* variable, ASTExpression* expr);
+
 ASTIntegerLiteral* CreateIntegerLiteral(S64 value);
 ASTFloatLiteral* CreateFloatLiteral(F64 value);
 
 std::string ToString(ASTNodeType nodeType);
-
-extern ASTBlock global_defaultGlobalScope;
-extern ASTDefinition* global_voidType;
-extern ASTDefinition* global_S32Type;
-extern ASTDefinition* global_F32Type;

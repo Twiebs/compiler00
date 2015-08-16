@@ -14,25 +14,26 @@
 
 int GetTokenPrecedence(const Token& token);
 ASTNode* ParseStatement(ParseState& parseState, Lexer& lex);
-ASTExpression* ParseExpression(ParseState& parseState, Lexer& lex);
+ASTExpression* ParseExpr(ParseState& parseState, Lexer& lex);
 ASTNode* ParseReturn(ParseState& parseState, Lexer& lex);
 
 ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex);
 ASTNode* ParseIF(ParseState& parseState, Lexer& lex);
+ASTNode* ParseIter(ParseState& state, Lexer& lex);
 
 // Determines the precedence level of the provided token
 int GetTokenPrecedence(const Token& token) {
-    if (token.type == TokenType::ADD) return 20;
-    if (token.type == TokenType::SUB) return 20;
-    if (token.type == TokenType::MUL) return 40;
-    if (token.type == TokenType::DIV) return 40;
+    if (token.type == TOKEN_ADD) return 20;
+    if (token.type == TOKEN_SUB) return 20;
+    if (token.type == TOKEN_MUL) return 40;
+    if (token.type == TOKEN_DIV) return 40;
     return -1;
 }
 
 void ParseFile(ParseState& parseState, Lexer& lex) {
 	auto& token = lex.token;
 	lex.next();
-    while (token.type != TokenType::END_OF_FILE) {
+    while (token.type != TOKEN_END_OF_FILE) {
         ParseStatement(parseState, lex);
     }
 }
@@ -40,9 +41,10 @@ void ParseFile(ParseState& parseState, Lexer& lex) {
 ASTNode* ParseStatement(ParseState& parseState, Lexer& lex) {
 	LOG_INFO(lex.token.site << ": Parsing statement begining with: " << lex.token.string);
 	switch(lex.token.type) {
-	case TokenType::IDENTIFIER: return ParseIdentifier(parseState, lex);
-	case TokenType::IF: 		return ParseIF(parseState, lex);
-	case TokenType::RETURN: 	return ParseReturn(parseState, lex);
+	case TOKEN_IDENTIFIER: return ParseIdentifier(parseState, lex);
+	case TOKEN_IF: 		return ParseIF(parseState, lex);
+  case TOKEN_ITER:  return ParseIter(parseState, lex);
+	case TOKEN_RETURN: 	return ParseReturn(parseState, lex);
 	default:
 		LOG_ERROR("Could not parse statement for token: " << lex.token.string);
 		lex.next();
@@ -54,15 +56,15 @@ ASTNode* ParseStatement(ParseState& parseState, Lexer& lex) {
 ASTNode* ParseReturn(ParseState& parseState, Lexer& lex) {
     LOG_VERBOSE(token.site << ": Parsing a return statement");
     lex.next();
-    auto expr = ParseExpression(parseState, lex);
+    auto expr = ParseExpr(parseState, lex);
     auto returnVal = CreateReturnValue(expr);
     return returnVal;
 }
 
-ASTExpression* ParseExpression(ParseState& parseState, Lexer& lex) {
+ASTExpression* ParseExpr(ParseState& parseState, Lexer& lex) {
 	auto parseExpr = [&parseState, &lex]() -> ASTExpression* {
 		   switch (lex.token.type) {
-		    case TokenType::IDENTIFIER: {
+		    case TOKEN_IDENTIFIER: {
 		        LOG_VERBOSE("Parsing an identifier expression! for identifier: " << token.string);
 		        auto ident = FindIdentifier(parseState.currentScope, lex.token.string);
 		        if (!ident) {	// TODO defer identifier resolution
@@ -71,14 +73,14 @@ ASTExpression* ParseExpression(ParseState& parseState, Lexer& lex) {
 		        }
 
 		        lex.next(); // Eat the identifier
-		        if(lex.token.type == TokenType::ParenOpen) {
+		        if(lex.token.type == TOKEN_ParenOpen) {
 		            LOG_VERBOSE("Parsing Call to: " << ident->name);
 		            ASTCall* call = CreateCall();
 		            call->ident = ident;
 
 		            lex.next();
-		            while (lex.token.type != TokenType::ParenClose && lex.token.type != TokenType::UNKOWN && lex.token.type!= TokenType::END_OF_FILE) {
-		                ASTExpression* expression = ParseExpression(parseState, lex);
+		            while (lex.token.type != TOKEN_ParenClose && lex.token.type != TOKEN_UNKOWN && lex.token.type!= TOKEN_END_OF_FILE) {
+		                ASTExpression* expression = ParseExpr(parseState, lex);
 		                if (expression == nullptr) {
 		                    LOG_ERROR(lex.token.site << " Could not resolve expression at argument index" << call->args.size() << "in call to function " << ident->name);
 		                    return nullptr;
@@ -96,7 +98,7 @@ ASTExpression* ParseExpression(ParseState& parseState, Lexer& lex) {
 		        return (ASTExpression*)ident->node;
 		    } break;
 
-		    case TokenType::NUMBER: {
+		    case TOKEN_NUMBER: {
 		        LOG_VERBOSE("Parsing a numberExpression!");
 		        auto dotPos = lex.token.string.find(".");
 		        bool isFloat = dotPos == std::string::npos ? false : true;
@@ -118,11 +120,11 @@ ASTExpression* ParseExpression(ParseState& parseState, Lexer& lex) {
 		    }
 		        break;
 
-		    case TokenType::ScopeOpen:
+		    case TOKEN_ScopeOpen:
 		        LOG_VERBOSE(lex.tokenSite << "Parsing a new scope :: BADDDDDD!!!!!!");
 		        return nullptr;
 
-		    case TokenType::END_OF_FILE:
+		    case TOKEN_END_OF_FILE:
 		        LOG_ERROR("HIT END OF FILE! THIS IS TERRIBLE YOU ARE MENTALY DISABLED, USER!");
 		        return nullptr;
 		    default:
@@ -207,7 +209,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 	// The identifier that we are parsing may exist, may exit but be unresolved, or not exist at all
 	// Depending on what we do with the identifer will determine if these factors matter
 	switch(lex.token.type) {
-	case TokenType::TYPE_DECLARE: {
+	case TOKEN_TYPE_DECLARE: {
 		//When we delcare an identifier with a type it cannot exist in the scope allready so we check
 		// To see if its not null.  It is not this is a redefinition of an identifier and we report an error
 		if(ident != nullptr) {
@@ -231,7 +233,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 		// It must be declared or unresolved in the scope above ours! We cannot resolve a variable later down the Line
 		// Inside our local functions.  This is kind of crazy i should just get it working again!
 		ASTIdentifier* typeIdent = nullptr;
-		if (lex.token.type != TokenType::IDENTIFIER) {
+		if (lex.token.type != TOKEN_IDENTIFIER) {
 			LOG_ERROR(lex.token.site << " Expected identifier represting a type after type assignment operator");
 			parseState.flags |= PACKAGE_INVALID;
 		} else {
@@ -251,9 +253,9 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 
 		// Now we determine if this variable will be initalzied
 		lex.next(); //eat type
-		if (lex.token.type == TokenType::EQUALS) {
+		if (lex.token.type == TOKEN_EQUALS) {
 			lex.next();    //Eat the assignment operator
-			var->initalExpression = ParseExpression(parseState, lex);	// We parse the inital expression for the variable!
+			var->initalExpression = ParseExpr(parseState, lex);	// We parse the inital expression for the variable!
 			LOG_INFO(ident->site << "Identifier(" << ident->name << ") of Type(" << typeIdent->name << ") declared with an inital expression specified!");
 		} else {
 			LOG_INFO(ident->site << "Identifier(" << ident->name << ") of Type(" << typeIdent->name << ") declared!");
@@ -262,16 +264,16 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 	} break;
 
 
-	case TokenType::TYPE_INFER: {
+	case TOKEN_TYPE_INFER: {
 		LOG_ERROR("Unsupported type inference feature!");
 		return nullptr;
 	} break;
 
 
-	case TokenType::TYPE_DEFINE: {
+	case TOKEN_TYPE_DEFINE: {
 		LOG_VERBOSE("Parsing TypeDefine");
 		lex.next(); //Eat the typedef
-		if (lex.token.type == TokenType::ParenOpen) {
+		if (lex.token.type == TOKEN_ParenOpen) {
 			LOG_VERBOSE("Parsing FunctionDefinition");
 			if(ident == nullptr) {
 				// This is the global scope so lets create a new identifier in it
@@ -303,7 +305,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 
 			//PARSE FUNCTION DEFN ARGUMENTS!
 			lex.next(); //Eat the open paren
-			while (lex.token.type != TokenType::ParenClose) {
+			while (lex.token.type != TOKEN_ParenClose) {
 				// If this is a function defn then it should only have decleartions in its argument lsit!
 				// Its assumed parsePrimary will handle any EOF / unknowns
 				ASTNode* node = ParseStatement(parseState, lex);
@@ -323,9 +325,9 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 			//Eat the close ')'
 			lex.next();
 
-			if (lex.token.type == TokenType::TYPE_RETURN) {
+			if (lex.token.type == TOKEN_TYPE_RETURN) {
 				lex.next();
-				if (lex.token.type != TokenType::IDENTIFIER) {
+				if (lex.token.type != TOKEN_IDENTIFIER) {
 					LOG_ERROR("expected a type after the return operator");
 					return nullptr;
 				}
@@ -345,7 +347,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 
 			// There was no type return ':>' operator after the argument list but an expected token followed.
 			// We assume it was intentional and that the return type is implicitly void
-			else if (lex.token.type == TokenType::ScopeOpen || lex.token.type == TokenType::FOREIGN){
+			else if (lex.token.type == TOKEN_ScopeOpen || lex.token.type == TOKEN_FOREIGN){
 				function->returnType = global_voidType;
 			}
 
@@ -384,11 +386,11 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 			funcSet->functions.push_back(function);
 		}
 
-		if (lex.token.type == TokenType::ScopeOpen) {
+		if (lex.token.type == TOKEN_ScopeOpen) {
 			//A new scope has been opened...
 			lex.next(); //Eat the scope
 
-			while (lex.token.type != TokenType::ScopeClose && lex.token.type != TokenType::END_OF_FILE) {
+			while (lex.token.type != TOKEN_ScopeClose && lex.token.type != TOKEN_END_OF_FILE) {
 				ASTNode* node = ParseStatement(parseState, lex);
 				if (node == nullptr) {
 					LOG_ERROR(lex.token.site << " Could not parse statement inside function body: " << ident->name);
@@ -397,7 +399,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 				function->members.push_back(node);
 			}
 
-		} else if (lex.token.type != TokenType::FOREIGN) {
+		} else if (lex.token.type != TOKEN_FOREIGN) {
 			LOG_ERROR("Expected a new scope to open after function definition!");
 			LOG_INFO("Did you misspell foreign?");
 			return nullptr;
@@ -415,7 +417,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 	}
 } break;
 
-	case TokenType::ParenOpen:  {
+	case TOKEN_ParenOpen:  {
 		LOG_VERBOSE("Attempting to parse call to : " << identToken.string);
 		if (ident == nullptr) {
 			LOG_ERROR("function named " << identToken.string << " does not exist");
@@ -427,8 +429,8 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 		call->ident = ident;
 
 		lex.next(); //Eat the open Paren
-		while (lex.token.type != TokenType::ParenClose && lex.token.type != TokenType::UNKOWN && lex.token.type != TokenType::END_OF_FILE) {
-			ASTExpression* expr = ParseExpression(parseState, lex);
+		while (lex.token.type != TOKEN_ParenClose && lex.token.type != TOKEN_UNKOWN && lex.token.type != TOKEN_END_OF_FILE) {
+			ASTExpression* expr = ParseExpr(parseState, lex);
 			if(expr == nullptr) {
 				LOG_ERROR(lex.token.site << " Could not resolve expression for argument at index " << call->args.size() << " in call to function " << ident->name);
 				//DONT return here... just keep going so we can find more errors'
@@ -474,12 +476,12 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 		return call;
 	} break;
 
-	case TokenType::EQUALS:
-	case TokenType::ADD_EQUALS:
-	case TokenType::SUB_EQUALS:
-	case TokenType::MUL_EQUALS:
-	case TokenType::DIV_EQUALS:
-	case TokenType::MOD_EQUALS:
+	case TOKEN_EQUALS:
+	case TOKEN_ADD_EQUALS:
+	case TOKEN_SUB_EQUALS:
+	case TOKEN_MUL_EQUALS:
+	case TOKEN_DIV_EQUALS:
+	case TOKEN_MOD_EQUALS:
 		if(ident == nullptr) {
 			LOG_ERROR(lex.token.site << "cannot parse variable mutation on unkown identifier" << identToken.string);
 			parseState.flags |= PACKAGE_INVALID;
@@ -495,7 +497,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 		//This is actualy a good spot to return null because these are top level errors!
 		//Make a new error called top level error that specifies actual errors in the program
 		//Secondary errors might not be actual errors once you fix primary errors
-		auto expr = ParseExpression(parseState, lex);
+		auto expr = ParseExpr(parseState, lex);
 		if (expr == nullptr) {
 			//For now binops will auto resolve themselves based on the respective rhs and lhs expressions inthe
 			//operation
@@ -528,21 +530,21 @@ ASTNode* ParseIF(ParseState& parseState, Lexer& lex) {
     LOG_VERBOSE(lex.token.site << " Parsing an if statement!");
     lex.next();	//Eat the IF token
 
-	auto expr = ParseExpression(parseState, lex);
+	auto expr = ParseExpr(parseState, lex);
 	if (!expr) {
 		LOG_ERROR("Could not evaluate expression when parsing if statement!");
 		return nullptr;
 	}
 
 
-    if(lex.token.type == TokenType::ScopeOpen) {
+    if(lex.token.type == TOKEN_ScopeOpen) {
         lex.next(); //Eat the open scope
         auto ifStatement = CreateIfStatement(expr);
         ifStatement->ifBlock = CreateBlock(parseState.currentScope);
 
         auto previousScope = parseState.currentScope;
         parseState.currentScope = ifStatement->ifBlock;
-		while (lex.token.type != TokenType::ScopeClose) {
+		while (lex.token.type != TOKEN_ScopeClose) {
             auto node = ParseStatement(parseState, lex);
             if (!node) {
                 LOG_ERROR("Could not parse statement inside of IF statement");
@@ -553,15 +555,15 @@ ASTNode* ParseIF(ParseState& parseState, Lexer& lex) {
 
         parseState.currentScope = previousScope;
         lex.next(); //Eat the '}'
-        if (lex.token.type == TokenType::ELSE) {
+        if (lex.token.type == TOKEN_ELSE) {
             LOG_VERBOSE("Parsing else statement");
             lex.next(); //Eat the else keyword!
-            if (lex.token.type == TokenType::ScopeOpen) {
+            if (lex.token.type == TOKEN_ScopeOpen) {
                 lex.next();//Eat the '{'
                 ifStatement->elseBlock = CreateBlock(parseState.currentScope);
                 previousScope = parseState.currentScope;
                 parseState.currentScope = ifStatement->elseBlock;
-                while(lex.token.type != TokenType::ScopeClose) {
+                while(lex.token.type != TOKEN_ScopeClose) {
                     auto node = ParseStatement(parseState, lex);
                     if (!node) {
                         LOG_ERROR("Could not parse statement inside of IF statement");
@@ -571,7 +573,7 @@ ASTNode* ParseIF(ParseState& parseState, Lexer& lex) {
                 }
                 parseState.currentScope = previousScope;
                 lex.next(); //Eat the '}'
-            } else if (lex.token.type == TokenType::IF){
+            } else if (lex.token.type == TOKEN_IF){
             	//Interestingly enough this actualy is slightly cleaner
                 ifStatement->elseBlock = (ASTBlock*)ParseStatement(parseState, lex);
             } else {
@@ -583,6 +585,24 @@ ASTNode* ParseIF(ParseState& parseState, Lexer& lex) {
         LOG_ERROR("expected an open scope after if expression!");
         return nullptr;
     }
+}
+
+ASTNode* ParseIter(ParseState& state, Lexer& lex, bool identDecl) {
+  LOG_VERBOSE(lex.token.site << "Parsing a iter statement");
+  lex.next(); //Eat the iter
+
+  auto expr = ParseExpr(state, lex);
+  if (!expr) LOG_ERROR(lex.token.site << "Could not parse expression to the right of iter");
+
+  if (lex.token.type == TOKEN_TO) {
+    if (!identDecl) LOG_ERROR(lex.token.site << "iter statement was not declared with a identifier!");
+    auto endExpr = ParseExpr(state, lex);
+    if (!endExpr) LOG_ERROR(lex.token.site << "Could not parse Expression after TO keyword");
+  } else {
+
+  }
+
+  return expr;
 }
 
 //Does a parseContext make more sense in this case?
@@ -601,7 +621,7 @@ ASTNode* ParseIF(ParseState& parseState, Lexer& lex) {
 ASTNode* ParseStatement(ParseState& state, LexState& lexState) {
     Token token = GetNextToken(lexState);
     switch (token.type) {
-    case TokenType::IDENTIFIER: {
+    case TOKEN_IDENTIFIER: {
         LOG_VERBOSE("Parsing Identifier : " << token.string);
 
         // We can check right off the bat if this identifier has allready been screen
@@ -615,12 +635,12 @@ ASTNode* ParseStatement(ParseState& state, LexState& lexState) {
         token = GetNextToken(lexState);
 
         //The token after the identifier was a TypeDecl
-        if (token.type == TokenType::TypeDeclare) {
+        if (token.type == TOKEN_TypeDeclare) {
             LOG_VERBOSE("Parsing TypeDeclare");
             // If the next token provided by the lexer is not a identifier then the user is being stupid
             // The Compiler expects an identifier pointing to a type
 			ASTIdentifier* typeIdent;
-            if (token.type != TokenType::IDENTIFIER) {
+            if (token.type != TOKEN_IDENTIFIER) {
                 LOG_ERROR(token.site << "Expected a type identifier after the Type Declare operator ':'");
             } else {
 				// Now we check to see if we already know about this identifier
@@ -1472,7 +1492,7 @@ void ParseFile(const std::string& filename, BuildContext& context) {
         lex.lastChar = lex.stream.get();    // I think doing some oop sutff here might be ok...
 
         Token token;
-        while (token.type != TokenType::END_OF_FILE) {
+        while (token.type != TOKEN_END_OF_FILE) {
             LexToken(lex, token);
             ParseStatement(state);
         }

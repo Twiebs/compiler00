@@ -161,6 +161,15 @@ ASTIfStatement* CreateIfStatement(ASTExpression* expr) {
 	return result;
 }
 
+ASTIter* CreateIter(ASTExpression* start, ASTExpression* end, ASTExpression* step) {
+	auto result = new ASTIter;
+	result->nodeType = AST_ITER;
+	result->start = start;
+	result->end = end;
+	result->step = step;
+	return result;
+}
+
 std::string ToString(ASTNodeType nodeType) {
 	switch(nodeType) {
 	case AST_IDENTIFIER: return "Identifier";

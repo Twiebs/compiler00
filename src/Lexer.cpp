@@ -47,24 +47,24 @@ void Lexer::appendNextChar() {
 }
 
 void Lexer::next() {
-	while(isspace(nextChar)) eatNextChar();	//Eat the whitespaces
+	while (isspace(nextChar)) eatNextChar();	//Eat the whitespaces
 
 	token.string = "";
-	token.type = TokenType::UNKOWN;
+	token.type = TOKEN_UNKOWN;
 	token.site.lineNumber = lineNumber;
 	token.site.columNumber = colNumber;
 
 	// The Current Token is an Identifier or a Language Keyword
-	if(isalpha(nextChar) || nextChar == '_') {
+	if (isalpha(nextChar) || nextChar == '_') {
 		while (isalnum(nextChar) || nextChar == '_') appendNextChar();
-		if 			(token.string == "import") 		token.type = TokenType::IMPORT;
-		else if (token.string == "foreign")	 	token.type = TokenType::FOREIGN;
-		else if (token.string == "if")				token.type = TokenType::IF;
-		else if (token.string == "else") 		  token.type = TokenType::ELSE;
-		else if (token.string == "for") 		  token.type = TokenType::FOR;
-		else if (token.string == "while") 		token.type = TokenType::WHILE;
-		else if (token.string == "return")		token.type = TokenType::RETURN;
-		else token.type = TokenType::IDENTIFIER;
+		if 			(token.string == "import") 		token.type = TOKEN_IMPORT;
+		else if (token.string == "foreign")	 	token.type = TOKEN_FOREIGN;
+		else if (token.string == "if")				token.type = TOKEN_IF;
+		else if (token.string == "else") 		  token.type = TOKEN_ELSE;
+		else if (token.string == "iter")			token.type = TOKEN_ITER;
+		else if (token.string == "to")				token.type = TOKEN_TO;
+		else if (token.string == "return")		token.type = TOKEN_RETURN;
+		else token.type = TOKEN_IDENTIFIER;
 	}
 
 	// The Current Token is a Numeric Literal
@@ -79,7 +79,7 @@ void Lexer::next() {
 			}
 			appendNextChar();
 		}
-		token.type = TokenType::NUMBER;
+		token.type = TOKEN_NUMBER;
 	}
 
 	// The Current Token is a String Literal
@@ -89,16 +89,16 @@ void Lexer::next() {
 			appendNextChar();
 		}
 		eatNextChar();	//Eat the "
-		token.type = TokenType::STRING;
+		token.type = TOKEN_STRING;
 	}
 
-		//COMMENTS
+	// COMMENTS
 	else if (this->nextChar == '#') {
 		eatNextChar();	//Eat the '# 'char
-		while(this->nextChar != EOF && this->nextChar != '\n' && this->nextChar != '\r')
+		while (this->nextChar != EOF && this->nextChar != '\n' && this->nextChar != '\r')
 			eatNextChar();	//Now we eat the comment body itself
 		//We have reached the end of the comment.  If is not the end of the file get the next token
-		if(this->nextChar != EOF)
+		if (this->nextChar != EOF)
 			return next();
 	}
 
@@ -107,31 +107,31 @@ void Lexer::next() {
 		appendNextChar();
 		if (this->nextChar == ':') {
 			appendNextChar();
-			token.type = TokenType::TYPE_DEFINE;
+			token.type = TOKEN_TYPE_DEFINE;
 		} else if (this->nextChar == '=') {
 			appendNextChar();
-			token.type = TokenType::TYPE_INFER;
+			token.type = TOKEN_TYPE_INFER;
 		} else if (this->nextChar == '>') {
 			appendNextChar();
-			token.type = TokenType::TYPE_RETURN;
+			token.type = TOKEN_TYPE_RETURN;
 		} else {
-			token.type = TokenType::TYPE_DECLARE;
+			token.type = TOKEN_TYPE_DECLARE;
 		}
 	}
 
 	//BIN OPS
 	else if (this->nextChar == '=') {
 		appendNextChar();
-		token.type = TokenType::EQUALS;
+		token.type = TOKEN_EQUALS;
 	}
 
 	else if (this->nextChar == '+') {
 		appendNextChar();
 		if (this->nextChar == '=') {
 			appendNextChar();
-			token.type = TokenType::ADD_EQUALS;
+			token.type = TOKEN_ADD_EQUALS;
 		} else {
-			token.type = TokenType::ADD;
+			token.type = TOKEN_ADD;
 		}
 	}
 
@@ -139,9 +139,9 @@ void Lexer::next() {
 		appendNextChar();
 		if (this->nextChar == '=') {
 			appendNextChar();
-			token.type = TokenType::SUB_EQUALS;
+			token.type = TOKEN_SUB_EQUALS;
 		} else {
-			token.type = TokenType::SUB;
+			token.type = TOKEN_SUB;
 		}
 	}
 
@@ -149,9 +149,9 @@ void Lexer::next() {
 		appendNextChar();
 		if (this->nextChar == '=') {
 			appendNextChar();
-			token.type = TokenType::MUL_EQUALS;
+			token.type = TOKEN_MUL_EQUALS;
 		} else {
-			token.type = TokenType::MUL;
+			token.type = TOKEN_MUL;
 		}
 	}
 
@@ -160,9 +160,9 @@ void Lexer::next() {
 		appendNextChar();
 		if (this->nextChar == '=') {
 			appendNextChar();
-			token.type = TokenType::DIV_EQUALS;
+			token.type = TOKEN_DIV_EQUALS;
 		} else {
-			token.type = TokenType::DIV;
+			token.type = TOKEN_DIV;
 		}
 	}
 
@@ -170,31 +170,31 @@ void Lexer::next() {
 		appendNextChar();
 		if (this->nextChar == '=') {
 			appendNextChar();
-			token.type = TokenType::MOD_EQUALS;
+			token.type = TOKEN_MOD_EQUALS;
 		} else {
-			token.type = TokenType::MOD;
+			token.type = TOKEN_MOD;
 		}
 	}
 
 	//BRACES, BRACKETS, SUBSCRIPTS
 	else if (this->nextChar == '(') {
 		appendNextChar();
-		token.type = TokenType::ParenOpen;
+		token.type = TOKEN_ParenOpen;
 	} else if (this->nextChar == ')') {
 		appendNextChar();
-		token.type = TokenType::ParenClose;
+		token.type = TOKEN_ParenClose;
 	} else if (this->nextChar == '{') {
 		appendNextChar();
-		token.type = TokenType::ScopeOpen;
+		token.type = TOKEN_ScopeOpen;
 	} else if (this->nextChar == '}') {
 		appendNextChar();
-		token.type = TokenType::ScopeClose;
+		token.type = TOKEN_ScopeClose;
 	} else if (this->nextChar == EOF) {
 		//Dont append or ead the EOF
-		token.type = TokenType::END_OF_FILE;
+		token.type = TOKEN_END_OF_FILE;
 	} else {
 		appendNextChar();
-		token.type = TokenType::UNKOWN;
+		token.type = TOKEN_UNKOWN;
 	}
 }
 
@@ -205,21 +205,21 @@ void Lexer::next() {
 //	// Set the site of the token and default its values
 //	Token token = {};
 //	token.string = "";
-//	token.type = TokenType::UNKOWN;
+//	token.type = TOKEN_UNKOWN;
 //	token.site.lineNumber = state.lineNumber;
 //	token.site.columNumber = state.colNumber;
 //
 //	// The Current Token is an Identifier or a Language Keyword
 //	if(isalpha(state.nextChar) || state.nextChar == '_') {
 //		while (isalnum(state.nextChar) || state.nextChar == '_') AppendToken(token, state);
-//		if 			(token.string == "import") 		token.type = TokenType::IMPORT;
-//		else if (token.string == "foreign")	 	token.type = TokenType::FOREIGN;
-//		else if (token.string == "if")				token.type = TokenType::IF;
-//		else if (token.string == "else") 		  token.type = TokenType::ELSE;
-//		else if (token.string == "for") 		  token.type = TokenType::FOR;
-//		else if (token.string == "while") 		token.type = TokenType::WHILE;
-//		else if (token.string == "return")		token.type = TokenType::RETURN;
-//		else token.type = TokenType::IDENTIFIER;
+//		if 			(token.string == "import") 		token.type = TOKEN_IMPORT;
+//		else if (token.string == "foreign")	 	token.type = TOKEN_FOREIGN;
+//		else if (token.string == "if")				token.type = TOKEN_IF;
+//		else if (token.string == "else") 		  token.type = TOKEN_ELSE;
+//		else if (token.string == "for") 		  token.type = TOKEN_FOR;
+//		else if (token.string == "while") 		token.type = TOKEN_WHILE;
+//		else if (token.string == "return")		token.type = TOKEN_RETURN;
+//		else token.type = TOKEN_IDENTIFIER;
 //		return token;
 //	}
 //
@@ -233,7 +233,7 @@ void Lexer::next() {
 //			}
 //			AppendToken(token, state);
 //		}
-//		token.type = TokenType::NUMBER;
+//		token.type = TOKEN_NUMBER;
 //		return token;
 //	}
 //
@@ -244,7 +244,7 @@ void Lexer::next() {
 //			AppendToken(token, state);
 //		}
 //		EatNextChar(state);	//Eat the "
-//		token.type = TokenType::STRING;
+//		token.type = TOKEN_STRING;
 //		return token;
 //	}
 //
@@ -263,42 +263,42 @@ void Lexer::next() {
 //		AppendToken(token, state);
 //		if(state.nextChar == ':') {
 //			AppendToken(token, state);
-//			token.type = TokenType::TYPE_DEFINE;
+//			token.type = TOKEN_TYPE_DEFINE;
 //		}
 //		else if (state.nextChar == '='){
 //			AppendToken(token, state);
-//			token.type = TokenType::TYPE_INFER;
+//			token.type = TOKEN_TYPE_INFER;
 //		}
 //		else if (state.nextChar == '>') {
 //			AppendToken(token, state);
-//			token.type = TokenType::TYPE_RETURN;
+//			token.type = TOKEN_TYPE_RETURN;
 //		}
 //		else {
-//			token.type = TokenType::TYPE_DECLARE;
+//			token.type = TOKEN_TYPE_DECLARE;
 //		}
 //	}
 //
 //	//BIN OPS
 //	else if(state.nextChar == '=') {
 //		AppendToken(token, state);
-//		token.type = TokenType::EQUALS;
+//		token.type = TOKEN_EQUALS;
 //	}
 //	else if(state.nextChar == '+') {
 //		AppendToken(token, state);
 //		if(state.nextChar == '=') {
 //			AppendToken(token, state);
-//			token.type = TokenType::ADD_EQUALS;
+//			token.type = TOKEN_ADD_EQUALS;
 //		} else {
-//			token.type = TokenType::ADD;
+//			token.type = TOKEN_ADD;
 //		}
 //	}
 //	else if(state.nextChar == '-') {
 //		AppendToken(token, state);
 //		if(state.nextChar == '=') {
 //			AppendToken(token, state);
-//			token.type = TokenType::SUB_EQUALS;
+//			token.type = TOKEN_SUB_EQUALS;
 //		} else {
-//			token.type = TokenType::SUB;
+//			token.type = TOKEN_SUB;
 //		}
 //	}
 //
@@ -306,9 +306,9 @@ void Lexer::next() {
 //		AppendToken(token, state);
 //		if(state.nextChar == '=') {
 //			AppendToken(token, state);
-//			token.type = TokenType::MUL_EQUALS;
+//			token.type = TOKEN_MUL_EQUALS;
 //		} else {
-//			token.type = TokenType::MUL;
+//			token.type = TOKEN_MUL;
 //		}
 //	}
 //
@@ -317,9 +317,9 @@ void Lexer::next() {
 //		AppendToken(token, state);
 //		if(state.nextChar == '=') {
 //			AppendToken(token, state);
-//			token.type = TokenType::DIV_EQUALS;
+//			token.type = TOKEN_DIV_EQUALS;
 //		} else {
-//			token.type = TokenType::DIV;
+//			token.type = TOKEN_DIV;
 //		}
 //	}
 //
@@ -327,36 +327,36 @@ void Lexer::next() {
 //		AppendToken(token, state);
 //		if(state.nextChar == '=') {
 //			AppendToken(token, state);
-//			token.type = TokenType::MOD_EQUALS;
+//			token.type = TOKEN_MOD_EQUALS;
 //		} else {
-//			token.type = TokenType::MOD;
+//			token.type = TOKEN_MOD;
 //		}
 //	}
 //
 //	//BRACES, BRACKETS, SUBSCRIPTS
 //	else if (state.nextChar == '(') {
 //		AppendToken(token, state);
-//		token.type = TokenType::ParenOpen;
+//		token.type = TOKEN_ParenOpen;
 //	}
 //	else if (state.nextChar == ')') {
 //		AppendToken(token, state);
-//		token.type = TokenType::ParenClose;
+//		token.type = TOKEN_ParenClose;
 //	}
 //	else if (state.nextChar == '{') {
 //		AppendToken(token, state);
-//		token.type = TokenType::ScopeOpen;
+//		token.type = TOKEN_ScopeOpen;
 //	}
 //	else if (state.nextChar == '}') {
 //		AppendToken(token, state);
-//		token.type = TokenType::ScopeClose;
+//		token.type = TOKEN_ScopeClose;
 //	}
 //	else if (state.nextChar == EOF) {
 //		//Dont append or ead the EOF
-//		token.type = TokenType::END_OF_FILE;
+//		token.type = TOKEN_END_OF_FILE;
 //	}
 //	else{
 //		AppendToken(token, state);
-//		token.type = TokenType::UNKOWN;
+//		token.type = TOKEN_UNKOWN;
 //	}
 //	state.token = token;
 //	return token;

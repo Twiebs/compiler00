@@ -54,10 +54,10 @@ llvm::Value* Codegen(ASTBinaryOperation* binop, const BuildContext& context)  {
 	// Checking types is important when doing this
 	// Perhaps to simplifiy the language no implict casts will be allowed
 	switch(binop->binop) {
-		case TokenType::ADD: return builder->CreateAdd(lhs, rhs, "addtmp");
-		case TokenType::SUB: return builder->CreateSub(lhs, rhs, "subtmp");
-		case TokenType::MUL: return builder->CreateMul(lhs, rhs, "multmp");
-		case TokenType::DIV: return builder->CreateSDiv(lhs, rhs, "divtmp");
+		case TOKEN_ADD: return builder->CreateAdd(lhs, rhs, "addtmp");
+		case TOKEN_SUB: return builder->CreateSub(lhs, rhs, "subtmp");
+		case TOKEN_MUL: return builder->CreateMul(lhs, rhs, "multmp");
+		case TOKEN_DIV: return builder->CreateSDiv(lhs, rhs, "divtmp");
 
 
 		default:
@@ -288,6 +288,22 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 		builder->CreateBr(mergeBlock);
 	}
 	return mergeBlock;
+}
+
+llvm::Value* Codegen(ASTIter* iter, const BuildContext& context) {
+	auto builder = context.builder;
+
+
+	auto startValue = Codegen(iter.start);
+	if(!startValue) return nullptr;
+
+	auto parentBlock = builder->GetInsertBlock()->getParent();
+	auto loopBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "loop", parentBlock);
+
+	builder->CreateBr(loopBlock);
+	builder->SetInsertPoint(lookBlock);
+
+
 }
 
 llvm::Value* Codegen(ASTIntegerLiteral* intNode, const BuildContext& context) {

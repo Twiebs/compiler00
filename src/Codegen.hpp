@@ -21,6 +21,7 @@ llvm::Value* Codegen(ASTNode* node, const BuildContext& context);
 llvm::Value* Codegen(ASTBlock* block, const BuildContext& context);
 llvm::Value* Codegen(ASTReturn* retVal, const BuildContext& context);
 llvm::Value* Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function, const BuildContext& context);
+llvm::Value* Codegen(ASTIter* iter, const BuildContext& context);
 llvm::Function* Codegen(ASTFunction* function, const BuildContext& context);
 
 llvm::Value* Codegen(ASTBinaryOperation* binop, const BuildContext& context);
@@ -29,5 +30,3 @@ llvm::Value* Codegen(ASTMutation* mut, const BuildContext& context);
 llvm::Value* Codegen(ASTCall* call, const BuildContext& context);
 llvm::Value* Codegen(ASTIntegerLiteral* intLiteral, const BuildContext& context);
 llvm::Value* Codegen(ASTFloatLiteral* floatLiteral, const BuildContext& context);
-
-
