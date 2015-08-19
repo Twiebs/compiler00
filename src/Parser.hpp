@@ -1,7 +1,4 @@
 #pragma once
-#include <vector>
-#include <unordered_map>
-#include <fstream>
 
 #include "AST.hpp"
 #include "Build.hpp"
@@ -23,8 +20,9 @@ enum ParseFlags {
 //Mabye pass a pointer to a tokenstruct that gets initalized when the lexer lexes a file and then the result of the lexing
 //Is stored inside ofthat token struct!
 struct ParseState {
-	ASTBlock* currentScope;
-	U32 flags;
+	ASTBlock* currentScope = nullptr;
+	U32 errorCount = 0;
+	U32 flags = 0;
 };
 
 void ParseFile(ParseState& parseState, Lexer& lexState);

@@ -25,7 +25,6 @@ ASTDefinition* CreateType(ASTBlock* scope, const std::string& name, llvm::Type* 
 	typeDefn->llvmType = type;
 	auto identifier = CreateIdentifier(scope, name);
 	identifier->node = typeDefn;
-	typeDefn->identifier = identifier;
 	return typeDefn;
 }
 
@@ -89,6 +88,65 @@ ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, A
 	return result;
 }
 
+ASTStruct* CreateStruct() {
+	auto result = new ASTStruct;
+	result->nodeType = AST_STRUCT;
+	return result;
+}
+
+ASTMemberAccess* CreateMemberAccess(ASTVariable* structVar) {
+	auto result = new ASTMemberAccess;
+	result->nodeType = AST_MEMBER_ACCESS;
+	result->structVar = structVar;
+	return result;
+}
+
+ASTMemberAccess* CreateMemberAccess(ASTVariable* structVar, U32 index, AccessMode mode) {
+	auto result = new ASTMemberAccess;
+	result->nodeType = AST_MEMBER_ACCESS;
+	result->structVar = structVar;
+	result->mode = mode;
+	return result;
+}
+
+ASTMemberExpr* CreateMemberExpr(ASTVariable* structVar, U32 memberIndex) {
+	auto result = new ASTMemberExpr();
+	result->nodeType = AST_MEMBER_EXPR;
+	result->structVar = structVar;
+
+	auto structDefn = (ASTStruct*)structVar->type;
+	auto memberType = structDefn->memberTypes[memberIndex];
+	result->type = memberType;
+	return result;
+}
+
+
+ASTMemberExpr* CreateMemberExpr(ASTVariable* structVar) {
+	auto result = new ASTMemberExpr();
+	result->nodeType = AST_MEMBER_EXPR;
+	result->structVar = structVar;
+	auto structDefn = (ASTStruct*)structVar->type;
+	return result;
+}
+
+
+S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
+	for (auto i = 0; i < structDefn->memberNames.size(); i++) {
+		auto& structMemberName = structDefn->memberNames[i];
+		if (!structMemberName.compare(memberName)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+ASTVarExpr* CreateVarExpr(ASTVariable* var) {
+	auto result = new ASTVarExpr;
+	result->nodeType = AST_VAR_EXPR;
+	result->var = var;
+	return result;
+}
+
 ASTFunction* CreateFunction(ASTBlock* block) {
 	ASTFunction* function = new ASTFunction;
 	function->nodeType = AST_FUNCTION;
@@ -142,16 +200,17 @@ ASTVariable* CreateVariable(ASTBlock* block) {
 	return result;
 }
 
-ASTMutation* CreateMutation(TokenType op, ASTVariable* variable, ASTExpression* expr) {
+// This is just analogous for a store
+// Why do we need to use this notation / jargon
+ASTMutation* CreateMutation(ASTVariable* variable, ASTExpression* expr) {
 	auto result = new ASTMutation();
 	result->nodeType = AST_MUTATION;
-	result->op = op;
 	result->variable = variable;
 	result->value = expr;
 	return result;
 }
 
-//Control flow
+// Control flow
 ASTIfStatement* CreateIfStatement(ASTExpression* expr) {
 	auto result = new ASTIfStatement;
 	result->nodeType = AST_IF;
@@ -161,12 +220,14 @@ ASTIfStatement* CreateIfStatement(ASTExpression* expr) {
 	return result;
 }
 
-ASTIter* CreateIter(ASTExpression* start, ASTExpression* end, ASTExpression* step) {
+ASTIter* CreateIter(ASTIdentifier* ident, ASTExpression* start, ASTExpression* end, ASTExpression* step, ASTBlock* body) {
 	auto result = new ASTIter;
 	result->nodeType = AST_ITER;
+	result->varIdent = ident;
 	result->start = start;
 	result->end = end;
 	result->step = step;
+	result->body = body;
 	return result;
 }
 

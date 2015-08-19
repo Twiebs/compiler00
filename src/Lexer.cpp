@@ -56,9 +56,10 @@ void Lexer::next() {
 
 	// The Current Token is an Identifier or a Language Keyword
 	if (isalpha(nextChar) || nextChar == '_') {
-		while (isalnum(nextChar) || nextChar == '_') appendNextChar();
-		if 			(token.string == "import") 		token.type = TOKEN_IMPORT;
+		while ((isalnum(nextChar) || nextChar == '_') && nextChar != '.') appendNextChar();
+		if 		(token.string == "import") 		token.type = TOKEN_IMPORT;
 		else if (token.string == "foreign")	 	token.type = TOKEN_FOREIGN;
+		else if (token.string == "struct")		token.type = TOKEN_STRUCT;
 		else if (token.string == "if")				token.type = TOKEN_IF;
 		else if (token.string == "else") 		  token.type = TOKEN_ELSE;
 		else if (token.string == "iter")			token.type = TOKEN_ITER;
@@ -119,7 +120,17 @@ void Lexer::next() {
 		}
 	}
 
-	//BIN OPS
+	else if (nextChar == '@') {
+		appendNextChar();
+		token.type = TOKEN_POINTER;
+	}
+
+	else if (nextChar == '$') {
+		appendNextChar();
+		token.type = TOKEN_DEREFER;
+	}
+
+	// BIN OPS
 	else if (this->nextChar == '=') {
 		appendNextChar();
 		token.type = TOKEN_EQUALS;
@@ -176,22 +187,27 @@ void Lexer::next() {
 		}
 	}
 
+	else if (nextChar == '.') {
+		appendNextChar();
+		token.type = TOKEN_ACCESS;
+	}
+
 	//BRACES, BRACKETS, SUBSCRIPTS
 	else if (this->nextChar == '(') {
 		appendNextChar();
-		token.type = TOKEN_ParenOpen;
+		token.type = TOKEN_PAREN_OPEN;
 	} else if (this->nextChar == ')') {
 		appendNextChar();
-		token.type = TOKEN_ParenClose;
+		token.type = TOKEN_PAREN_CLOSE;
 	} else if (this->nextChar == '{') {
 		appendNextChar();
-		token.type = TOKEN_ScopeOpen;
+		token.type = TOKEN_SCOPE_OPEN;
 	} else if (this->nextChar == '}') {
 		appendNextChar();
-		token.type = TOKEN_ScopeClose;
+		token.type = TOKEN_SCOPE_CLOSE;
 	} else if (this->nextChar == EOF) {
 		//Dont append or ead the EOF
-		token.type = TOKEN_END_OF_FILE;
+		token.type = TOKEN_EOF;
 	} else {
 		appendNextChar();
 		token.type = TOKEN_UNKOWN;
@@ -336,23 +352,23 @@ void Lexer::next() {
 //	//BRACES, BRACKETS, SUBSCRIPTS
 //	else if (state.nextChar == '(') {
 //		AppendToken(token, state);
-//		token.type = TOKEN_ParenOpen;
+//		token.type = TOKEN_PAREN_OPEN;
 //	}
 //	else if (state.nextChar == ')') {
 //		AppendToken(token, state);
-//		token.type = TOKEN_ParenClose;
+//		token.type = TOKEN_PAREN_CLOSE;
 //	}
 //	else if (state.nextChar == '{') {
 //		AppendToken(token, state);
-//		token.type = TOKEN_ScopeOpen;
+//		token.type = TOKEN_SCOPE_OPEN;
 //	}
 //	else if (state.nextChar == '}') {
 //		AppendToken(token, state);
-//		token.type = TOKEN_ScopeClose;
+//		token.type = TOKEN_SCOPE_CLOSE;
 //	}
 //	else if (state.nextChar == EOF) {
 //		//Dont append or ead the EOF
-//		token.type = TOKEN_END_OF_FILE;
+//		token.type = TOKEN_EOF;
 //	}
 //	else{
 //		AppendToken(token, state);

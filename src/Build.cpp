@@ -3,6 +3,7 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/FormattedStream.h"
+#include "llvm/Support/raw_os_ostream.h"
 
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
@@ -99,30 +100,40 @@ int Build(BuildContext& context, BuildSettings& settings) {
 	// It doesnt happen at all anymore
 	//WARN the program *should* crash when we get here!
 
-	if((parseState.flags & PACKAGE_INVALID)) {
-		LOG_ERROR("There were errors.  Could not codegen package");
+	if ((parseState.flags & PACKAGE_INVALID)) {
+		LOG_ERROR("There were errors parsing the file.  Bypassing Codegeneration");
 		return -1;
 	}
 
-	Codegen(package, context);
-	if(settings.logModuleDump) {
-		package->module->dump();
-	}
+	if (parseState.errorCount == 0) {
+		// TODO Return some error code if codegen fails
+		Codegen (package, context);
+		if (settings.logModuleDump) {
+			package->module->dump();
+		}
 
-	if(settings.outputFile == "") {
-		auto inputBase = settings.inputFile.substr(0, settings.inputFile.find(".") + 1);
-		settings.outputFile = settings.rootDir + inputBase + "o";
-	}
+		if (settings.outputFile == "") {
+			auto inputBase = settings.inputFile.substr(0, settings.inputFile.find(".") + 1);
+			settings.outputFile = settings.rootDir + inputBase + "o";
+		}
 
-	// Build the llvm::Module
-	if (settings.emitNativeOBJ) {
-		WriteNativeObject(package->module, settings);
-	}
+		llvm::raw_os_ostream stream(std::cout);
+		if (llvm::verifyModule(*package->module, &stream)) {
+			LOG_ERROR("llvm::Module verification failed!");
+			LOG_ERROR("Build incomplete!  Skipping executable creation");
+			return -1;
+		}
 
-	if (settings.emitExecutable) {
-		WriteExecutable(settings);
-	}
 
+		if (settings.emitNativeOBJ)
+			WriteNativeObject(package->module, settings);
+		if (settings.emitExecutable)
+			WriteExecutable(settings);
+	} else {
+		LOG_ERROR("There were errors building the package");
+		return -1;
+
+	}
 	return 0;
 }
 

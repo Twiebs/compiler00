@@ -7,7 +7,7 @@
 #include "Common.hpp"
 
 void Codegen(Package* package, const BuildContext& context) {
-	for(ASTNode* node : package->globalScope.members) {
+ 	for(ASTNode* node : package->globalScope.members) {
 		Codegen(node, context);
 	}
 }
@@ -20,6 +20,10 @@ llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
 		return Codegen((ASTVariable*)node, context);
 	case AST_MUTATION:
 		return Codegen((ASTMutation*)node, context);
+	case AST_MEMBER_ACCESS:
+		return Codegen((ASTMemberAccess*)node, context);
+	case AST_MEMBER_EXPR:
+		return Codegen((ASTMemberExpr*)node, context);
 	case AST_FUNCTION:
 		return Codegen((ASTFunction*) node, context);
 	case AST_CALL:
@@ -27,6 +31,10 @@ llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
 	case AST_IF:
 		LOG_ERROR("Attemping to genericly code gen an if! Note this is very very bad");
 		return nullptr;
+	case AST_ITER:
+		Codegen((ASTIter*)node, context);
+		return nullptr;
+		break;
 	case AST_INTEGER_LITERAL:
 		return Codegen((ASTIntegerLiteral*) node, context);
 	case AST_FLOAT_LITERAL:
@@ -39,6 +47,8 @@ llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
 		return nullptr;
 	}
 }
+
+
 
 llvm::Value* Codegen(ASTBinaryOperation* binop, const BuildContext& context)  {
 	auto builder = context.builder;
@@ -71,24 +81,31 @@ llvm::Value* Codegen(ASTVariable* var, const BuildContext& context) {
 
 	//This variable is being declared!
 	//TODO sanity check flag that ensures that this is indeed a declaration
-	if(var->allocaInst == nullptr) {
-		var->allocaInst = builder->CreateAlloca(var->type->llvmType, 0, var->identifier->name);
-		//This variable is being allocated on the stack but does not have an expr associated with it
-		//We need to generate a default initializer for it!
+	if (var->allocaInst == nullptr) {
+		auto type = var->type->llvmType;
+		if(var->isPointer)
+				type = llvm::PointerType::get(type, 0);
+		var->allocaInst = builder->CreateAlloca(type, 0, var->identifier->name);
+		// This variable is being allocated on the stack but does not have an expr associated with it
+		// We need to generate a default initializer for it!
 		if(var->initalExpression == nullptr) {
-			if(var->type->llvmType->isIntegerTy()) {
+			if (var->type->llvmType->isIntegerTy()) {
 				var->initalExpression = CreateIntegerLiteral(0);
 			} else if (var->type->llvmType->isFloatingPointTy()) {
 				var->initalExpression = CreateFloatLiteral(0);
 			}
+		}
+
+		if (var->initalExpression != nullptr) {
 			auto value = Codegen(var->initalExpression, context);
 			builder->CreateStore(value, var->allocaInst);
-			var->initalExpression = nullptr;//Make sure to set the expression that the variable is storing to null so it can be reused!
+			var->initalExpression = nullptr;
 		}
+		return var->allocaInst;
 	}
 
-	//This variable has been allocated on the stack allready or was newly allocated
-	if(var->initalExpression != nullptr) {
+	// This variable has been allocated on the stack allready or was newly allocated
+	if (var->initalExpression != nullptr) {
 		auto value = Codegen(var->initalExpression, context);
 		builder->CreateStore(value, var->allocaInst);
 		var->initalExpression = nullptr;
@@ -138,17 +155,22 @@ llvm::Value* Codegen(ASTReturn* retVal, const BuildContext& context) {
 
 llvm::Function* Codegen(ASTFunction* function, const BuildContext& context) {
 	auto builder = context.builder;
-
 	LOG_VERBOSE("Codgen Function");
-	//Push an array of llvm types derived from the argument list onto the stack
-	std::vector<llvm::Type*> args;
-	for(auto arg : function->args) {
-		args.push_back(arg->type->llvmType);
+
+	// Create argument list for function
+	std::vector<llvm::Type*> args(function->args.size());
+	for (auto i = 0; i < args.size(); i++) {
+		auto& arg = function->args[i];
+		auto type = arg->type->llvmType;
+		if (arg->isPointer) type = llvm::PointerType::get(type, 0);
+		args[i] = type;
 	}
 
+	// Create the llvm function
 	llvm::FunctionType* funcType = llvm::FunctionType::get(function->returnType->llvmType, args, false);
 	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
 	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, context.currentPackage->module);
+
 
 	if(function->members.size() > 0) {
 		llvm::BasicBlock* block = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", llvmFunc);
@@ -158,11 +180,8 @@ llvm::Function* Codegen(ASTFunction* function, const BuildContext& context) {
 	// Create the allocas for our arguments!
 	U32 i = 0;
 	for(auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++){
-		iter->setName(function->args[i]->identifier->name);
-
-		// Only emit code for function arguments if the function is not foregin!
-		// For now this works by checking to see if the function has a body since we do not allow
-		// For foward declarations
+		auto& name = function->args[i]->identifier->name;
+		iter->setName(name);
 		if(function->members.size() > 0) {
 			function->args[i]->allocaInst = builder->CreateAlloca(iter->getType(), 0, function->args[i]->identifier->name);
 			builder->CreateStore(iter, function->args[i]->allocaInst);
@@ -269,8 +288,8 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 			auto elseIfBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "elseif", function);
 			if(ifElse->elseBlock != nullptr) {
 
-			}
 		}
+			}
 
 
 		for(auto node : ifStatement->elseBlock->members) {
@@ -290,19 +309,103 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 	return mergeBlock;
 }
 
-llvm::Value* Codegen(ASTIter* iter, const BuildContext& context) {
+ void Codegen(ASTIter* iter, const BuildContext& context) {
 	auto builder = context.builder;
+	auto var = (ASTVariable*)iter->varIdent->node;
 
+	// Set the inital expr of the variable to the start node of the iter
+	// This should have allready been done inthe parsing phase but we will allow it for now
+	var->initalExpression = iter->start;
+	Codegen(var, context); // This creates the variable with an alloca inst.
+	// Also does a store from the inital expr to the alloca
 
-	auto startValue = Codegen(iter.start);
-	if(!startValue) return nullptr;
+	// We emit some code for the value of the end expression
+	// AKA the end integer
+	auto endValue = Codegen(iter->end, context);
 
 	auto parentBlock = builder->GetInsertBlock()->getParent();
+
+	// We create a new basic block where we will emit our loop body into
+	// We then create a branch from the currentBlock into the loopBlock
+	// and move the insertion point of the builder to the loopblock
+	// We create the two blocks that code will be emitted into
 	auto loopBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "loop", parentBlock);
+	auto exitBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "loopexit", parentBlock);
 
 	builder->CreateBr(loopBlock);
-	builder->SetInsertPoint(lookBlock);
+	builder->SetInsertPoint(loopBlock);
 
+	// Emit the iter body
+	for (auto node : iter->body->members) {
+		Codegen(node, context);
+	}
+
+	auto load = builder->CreateLoad(var->allocaInst);	// Load the value of the var
+	auto loopCond = builder->CreateICmpSLE(load, endValue, "loopcond");
+
+	builder->CreateCondBr(loopCond, loopBlock, exitBlock);
+	builder->SetInsertPoint(exitBlock);	//Any codegenerated after this loop must be emitted into the exit block
+}
+
+llvm::Value* Codegen (ASTMemberAccess* access, const BuildContext& context) {
+	auto builder = context.builder;
+	auto structAlloca = access->structVar->allocaInst;
+
+	std::vector<llvm::Value*> indices;
+	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
+	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
+	for (auto& memberIndex : access->memberIndices) {
+		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
+		indices.push_back(indexValue);
+	}
+
+
+	auto gep = llvm::GetElementPtrInst::Create(structAlloca, indices, "access", builder->GetInsertBlock());
+	switch(access->mode) {
+	case ACCESS_ASSIGN:
+		auto expr = Codegen(access->expr, context);
+		builder->CreateStore(expr, gep);
+		return nullptr;	// If this is a store operation we dont consider this an expression and the
+		//Nullptr value should be thrown out *hopefully*
+	}
+
+	return gep;
+}
+
+llvm::Value* Codegen(ASTMemberExpr* expr, const BuildContext& context) {
+	auto builder = context.builder;
+	auto structAlloca = expr->structVar->allocaInst;
+
+	std::vector<llvm::Value*> indices;
+	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
+	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
+
+	for(auto& memberIndex : expr->memberIndices) {
+		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
+		indices.push_back(indexValue);
+	}
+
+	auto gep = llvm::GetElementPtrInst::Create(structAlloca, indices, "access", builder->GetInsertBlock());
+	auto load = builder->CreateLoad(gep);
+	return load;
+}
+
+llvm::Value* Codegen(ASTVarExpr* expr, const BuildContext& context) {
+	auto builder = context.builder;
+	auto varAlloca = expr->var->allocaInst;
+
+	llvm::Value* value;
+	switch(expr->accessMode) {
+	case EXPR_LOAD:
+		value = builder->CreateLoad(varAlloca);
+		break;
+	case EXPR_POINTER:
+		value = varAlloca;
+		break;
+	case EXPR_DEREF:
+		value = builder->CreateLoad(varAlloca);
+		break;
+	}
 
 }
 

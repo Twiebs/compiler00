@@ -1,34 +1,6 @@
-# Now we need to defer importation untill after
-# too complicated for now
-
-__PrintlnInt :: (value : S32) foreign
-__PrintlnFloat :: (value : F32) foreign
-Println :: (msg : S32) { __PrintlnInt(msg) }
-Println :: (msg : F32) { __PrintlnFloat(msg) }
-
-CreateWindow :: () :> S32 foreign
 
 main :: () :> S32 {
-	foo : S32 = 5
-	foo = foo + 3
-	foo = foo * 3
-	foo = foo / 4
-
-	Println(foo)
-
-	if 1 {
-		Println(47)
-	} else {
-		Println(57)
-	}
-
-	Println(5)
-
-	if 0 {
-		Println(0)
-	} else {
-		Println(1)
-	}
+	foo : S32
+	foo = foo + 1
 	return 0
-
 }

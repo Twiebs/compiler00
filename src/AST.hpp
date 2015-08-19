@@ -15,6 +15,18 @@ enum ASTNodeType {
 	AST_BLOCK,
 	AST_DEFINITION,
 
+	// We should be able to create a unifed structure for member access and plain old variable access
+	// the same applies to variable mutations
+	// Mutations should be considered toplevel expressionless statements and loads are consider expressions
+
+	AST_STRUCT,
+	AST_MEMBER_ACCESS,
+	AST_MEMBER_EXPR,
+
+	AST_VARIABLE,
+	AST_VAR_EXPR,
+	AST_MUTATION,
+
 	AST_IF,
 	AST_ITER,
 
@@ -25,8 +37,8 @@ enum ASTNodeType {
 	AST_INTEGER_LITERAL,
 	AST_FLOAT_LITERAL,
 
-	AST_VARIABLE,
-	AST_MUTATION,
+
+
 	AST_BINOP,
 };
 
@@ -60,7 +72,7 @@ struct ASTExpression : public ASTNode {
 	ASTDefinition* type;
 };
 
-//It is now time to have somesort of notion of scope!
+// It is now time to have somesort of notion of scope!
 struct ASTBlock : public ASTNode {
 	U8 depth = 0;
 	ASTBlock* parent = nullptr;	//null if the global scope
@@ -87,6 +99,7 @@ struct ASTVariable : public ASTExpression {
 	ASTBlock* block;
 	ASTExpression* initalExpression = nullptr;
 	llvm::AllocaInst* allocaInst;
+	bool isPointer = false;
 };
 
 struct ASTFunction : public ASTBlock {
@@ -95,6 +108,62 @@ struct ASTFunction : public ASTBlock {
 	std::vector<ASTVariable*> args;
 	llvm::Function* code;
 };
+
+// I dont like the idea of storing identifiers
+// Inside of  ASTNodes
+// Why is it relevant at all?
+struct ASTStruct : public ASTDefinition {
+	std::vector<std::string> memberNames;
+	std::vector<ASTDefinition*> memberTypes;
+};
+
+
+enum AccessMode {
+	ACCESS_LOAD,
+	ACCESS_ASSIGN,
+	ACCESS_ADD,
+	ACCESS_SUB,
+	ACCESS_MUL,
+	ACCESS_DIV
+};
+
+// We need to treat all plain loads as a different form of expression
+// and things like memberMutations as statements.
+// This way there is no shanagains
+
+struct ASTMemberExpr : public ASTExpression {
+	ASTVariable* structVar;
+	std::vector<U32> memberIndices;
+};
+
+enum ExprAccess {
+	EXPR_LOAD,
+	EXPR_DEREF,
+	EXPR_POINTER,
+};
+
+struct ASTVarExpr : public ASTExpression {
+	ASTVariable* var;
+	std::vector<U32> accessIndices;
+	ExprAccess accessMode;
+};
+
+struct ASTMemberAccess : public ASTNode {
+	ASTVariable* structVar;
+	std::vector<U32> memberIndices;
+	AccessMode mode;
+	ASTExpression* expr;
+};
+
+// Structs
+ASTStruct* CreateStruct();
+S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
+ASTMemberAccess* CreateMemberAccess(ASTVariable* structVar);
+ASTMemberAccess* CreateMemberAccess(ASTVariable* structVar, U32 index, AccessMode mode);
+ASTMemberExpr* CreateMemberExpr(ASTVariable* structVar, U32 memberIndex);
+ASTMemberExpr* CreateMemberExpr(ASTVariable* structVar);
+
+ASTVarExpr* CreateVarExpr(ASTVariable* var);
 
 // REFACTOR this could use a better name
 //An identifier will point to a function set which will have various functions that corespond to that identifier stored
@@ -118,11 +187,9 @@ struct ASTReturn : public ASTExpression {
 	ASTExpression* value;
 };
 
-// We dont consider mutations of variables as opperations right?
-// Or should we consider mutations the same as BinaryOperations
-// And just be strict about where we allow them?
+// This is the fullstatement that the parse ident should return
+// If a variable mutation is being parsed
 struct ASTMutation : public ASTNode {
-	TokenType op;
 	ASTVariable* variable;
 	ASTExpression* value;
 };
@@ -175,16 +242,20 @@ void ResolveIdentifier(ASTBlock* block, const std::string& name);	//WTF
 
 ASTDefinition* CreateType(ASTBlock* block, const std::string& name, llvm::Type* type);
 
+ASTStruct* CreateStruct (ASTBlock* block);
+S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
+
+
 ASTBlock* CreateBlock(ASTBlock* block);
 ASTFunction* CreateFunction(ASTBlock* block);
-ASTIfStatement* CreateIfStatement(ASTExpression* expr);
-ASTIter* CreateIter(ASTExpression* start, ASTExpression* end, ASTExpression* step);
+ASTIfStatement* CreateIfStatement(ASTExpression* expr);	//TODO Why are ifstatements created without a body?
+ASTIter* CreateIter(ASTIdentifier* ident, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
 ASTReturn* CreateReturnValue(ASTExpression* value);
 
 ASTCall* CreateCall();
 ASTVariable* CreateVariable(ASTBlock* block);
 ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
-ASTMutation* CreateMutation(TokenType op, ASTVariable* variable, ASTExpression* expr);
+ASTMutation* CreateMutation(ASTVariable* variable, ASTExpression* expr);
 
 ASTIntegerLiteral* CreateIntegerLiteral(S64 value);
 ASTFloatLiteral* CreateFloatLiteral(F64 value);
