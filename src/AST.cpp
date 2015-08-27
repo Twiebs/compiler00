@@ -175,12 +175,43 @@ ASTVarExpr* CreateVarExpr(ASTVariable* var) {
 	return result;
 }
 
-ASTFunction* CreateFunction(ASTBlock* block) {
+ASTFunctionSet* CreateFunctionSet(ASTIdentifier* ident, ASTBlock* block) {
+	ASTFunctionSet* funcSet = new ASTFunctionSet;
+	funcSet->nodeType = AST_FUNCTION;
+	funcSet->parent = block;
+	ident->node = funcSet;
+	return funcSet;
+}
+
+ASTFunction* CreateFunction(ASTFunctionSet* funcSet) {
 	ASTFunction* function = new ASTFunction;
 	function->nodeType = AST_FUNCTION;
-	function->parent = block;
-	block->members.push_back(function);
+	function->parent = funcSet->parent;
+	funcSet->functions.push_back(function);
 	return function;
+}
+
+ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function) {
+	auto funcSet = (ASTFunctionSet*)ident->node;
+	assert(funcSet->nodeType == AST_FUNCTION);
+	for(auto func : funcSet->functions) {
+		bool functionsMatch = true;
+		if(func->args.size() == function->args.size()) {
+			for(U32 i = 0; i < func->args.size(); i++) {
+				if(func->args[i]->type != function->args[i]->type) {
+					functionsMatch = false;
+				}
+			}
+		} else functionsMatch = false;
+		if(functionsMatch) {
+			if(func->returnType != function->returnType) {
+				LOG_ERROR("Cannot overload function return types!  Arguments must differ!");
+				return nullptr;
+			}
+			return func;
+		}
+	}
+	return nullptr;
 }
 
 ASTCall* CreateCall() {

@@ -298,56 +298,33 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 		lex.next(); //Eat the typedef
 		if (lex.token.type == TOKEN_PAREN_OPEN) {
 			LOG_VERBOSE("Parsing FunctionDefinition");
-			if(ident == nullptr) {
-				// This is the global scope so lets create a new identifier in it
-				// That might actualy be a good requirement that functions nested inside of eachother must be doinng stuf...
-				// Considering that we dont even support that at the moment i guess it doesnt even matter
-				if (parseState.currentScope->parent == nullptr) {
-					ident = CreateIdentifier(parseState.currentScope, identToken);
-				}
-				//@Memory - Unhandled heap allocation!
-				//LEAK
-				//HACK
-				auto funcSet = new ASTFunctionSet;
-				ident->node = funcSet;
-				funcSet->nodeType = AST_FUNCTION;    //NOTE function sets treated as functions!
-				funcSet->ident = ident;
-			} else if(ident->node == nullptr){
-				LOG_ERROR("There is something screwy happeng in function defines!");
-				LOG_INFO("Its probably because a variable was declared but not resolved of the same name as the function that the user is now defining!");
+
+			ASTFunctionSet* funcSet;
+			if (ident == nullptr) {	// The identifier is null so the function set for this ident has not been created
+				ident = CreateIdentifier (parseState.currentScope, identToken);
+				funcSet = CreateFunctionSet (ident, parseState.currentScope);
+			} else {
+				assert(ident->node->nodeType == AST_FUNCTION);
+				funcSet = (ASTFunctionSet*)ident->node;
 			}
 
-			//We need to make sure that the current function with the given arguments does not yet exist within the function table!
-			//For now assume the user is right!
-			// NOTE ^bad philosiphy! the user is never right!
-			// Note since we have already checked against the identifierTable we know this function has not yet been defined
-			ASTFunction* function = CreateFunction(parseState.currentScope);
-			//Create a function with that identifier and put it in the curretnScope;
+			auto function = CreateFunction (funcSet);
 			function->ident = ident;
 			parseState.currentScope = function;
+			lex.next(); // Eat the open paren
 
-			//PARSE FUNCTION DEFN ARGUMENTS!
-			lex.next(); //Eat the open paren
 			while (lex.token.type != TOKEN_PAREN_CLOSE) {
-				// If this is a function defn then it should only have decleartions in its argument lsit!
-				// Its assumed parsePrimary will handle any EOF / unknowns
 				ASTNode* node = ParseStatement(parseState, lex);
-				//Function arguments are always declerations which are statements not expressions!
-				if (node != nullptr) {
-
-					if (node->nodeType != AST_VARIABLE) {
-						LOG_ERROR("Function definition arguments must be variable declerations!");
-						return nullptr;
-					}
+				if (node == nullptr) {
+					ReportError(parseState, lex.token.site, "Could not parse arguments for function definition " + identToken.string);
+				} else if (node->nodeType != AST_VARIABLE) {
+					ReportError(parseState, lex.token.site, "Function argument is not a varaibe!");
+				} else {
 					auto var = (ASTVariable*) node;
 					function->args.push_back(var);
-				} else {
-					LOG_ERROR(lex.token.site << " Could not parse function arguments for funcion " << identToken.string);
-					return nullptr;
 				}
 			}
-			//Eat the close ')'
-			lex.next();
+			lex.next(); // Eat the close ')'
 
 			if (lex.token.type == TOKEN_TYPE_RETURN) {
 				lex.next();
@@ -372,50 +349,19 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 
 			// There was no type return ':>' operator after the argument list but an expected token followed.
 			// We assume it was intentional and that the return type is implicitly void
-			else if
-			(lex.token.type == TOKEN_SCOPE_OPEN || lex.token.type == TOKEN_FOREIGN){
+			else if (lex.token.type == TOKEN_SCOPE_OPEN || lex.token.type == TOKEN_FOREIGN) {
 				function->returnType = global_voidType;
-			}
-
-			// The return type was omitted but the user did not open a new scope or declare a foreign function!
-			else {
+			} else {
 				LOG_ERROR(lex.token.site << "A new scope or foreign keyword must follow a function definition");
 			}
 
-			auto FindFunction = [function](ASTIdentifier* ident) -> ASTFunction* {
-				auto funcSet = (ASTFunctionSet*)ident->node;
-				for(auto func : funcSet->functions) {
-					bool functionsMatch = true;
-					if(func->args.size() == function->args.size()) {
-						for(U32 i = 0; i < func->args.size(); i++) {
-							if(func->args[i]->type != function->args[i]->type) {
-								functionsMatch = false;
-							}
-						}
-					} else functionsMatch = false;
-					if(functionsMatch) {
-						if(func->returnType != function->returnType) {
-							LOG_ERROR("Cannot overload function return types!  Arguments must differ!");
-							return nullptr;
-						}
-						return func;
-					}
-				}
-				return nullptr;
-		};
-
-		auto func = FindFunction(ident);
-		if(func != nullptr) {
-			LOG_ERROR(identToken.site << "Function re-definition!  Overloaded function " << identToken.string << "was already defined!");
-		} else {
-			auto funcSet = (ASTFunctionSet*)ident->node;
-
-			funcSet->functions.push_back(function);
-		}
-
-		if (lex.token.type == TOKEN_SCOPE_OPEN) {
-			//A new scope has been opened...
-			lex.next(); //Eat the scope
+		auto func = FindMatchingFunction(ident, function);
+		if (func != nullptr) {
+			ReportError(parseState, identToken.site, "Function re-definition!  Overloaded function " + identToken.string + "was already defined!");
+		} else if (lex.token.type == TOKEN_SCOPE_OPEN) {
+			// TODO change this to parseStatement to get the nextblock
+			// A new scope has been opened...
+			lex.next(); // Eat the scope
 
 			while (lex.token.type != TOKEN_SCOPE_CLOSE && lex.token.type != TOKEN_EOF) {
 				ASTNode* node = ParseStatement(parseState, lex);

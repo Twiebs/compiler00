@@ -174,6 +174,7 @@ ASTVarExpr* CreateVarExpr(ASTVariable* var);
 //It is simply just a container that points to overloaded functions!
 struct ASTFunctionSet : public ASTNode {
 	ASTIdentifier* ident;
+	ASTBlock* parent;
 	std::vector<ASTFunction*> functions;
 };
 
@@ -229,8 +230,11 @@ ASTDefinition* CreateType(ASTBlock* block, const std::string& name, llvm::Type* 
 ASTStruct* CreateStruct (ASTBlock* block);
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 
+ASTFunctionSet* CreateFunctionSet(ASTIdentifier* ident, ASTBlock* block);		// This is where identifiers are resolved into
+ASTFunction* CreateFunction(ASTFunctionSet* funcSet);	// Functions now must be created within a function set
+ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function);
+
 ASTBlock* CreateBlock(ASTBlock* block);
-ASTFunction* CreateFunction(ASTBlock* block);
 ASTIfStatement* CreateIfStatement(ASTExpression* expr);	//TODO Why are ifstatements created without a body?
 ASTIter* CreateIter(ASTIdentifier* ident, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
 ASTReturn* CreateReturnValue(ASTExpression* value);

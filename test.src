@@ -1,3 +1,5 @@
+__PrintlnInt :: (value : S32) foreign
+Println :: (msg : S32) { __PrintlnInt(msg) }
 
 Vector3 :: struct {
 	x : S32
@@ -5,12 +7,13 @@ Vector3 :: struct {
 	z : S32
 }
 
-SetVector3 :: (vec3 : Vector3) {
-	vec3.x = 5
-}
-
 main :: () :> S32 {
-	foo : S32
 	position : Vector3
+	position.x = 5
+	position.y = 4
+	position.z = 3
+	Println(position.x)
+	Println(position.y)
+	Println(position.z)
 	return 0
 }
