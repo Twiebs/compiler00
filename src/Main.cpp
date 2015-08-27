@@ -1,5 +1,3 @@
-// NOTE all of this stuff was created on June18 if you end of caring about that sort of thing!
-
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -9,7 +7,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "Build.hpp"
 
-int main(int argc, char** argv) {
+int main (int argc, char** argv) {
 	BuildSettings settings;
 	settings.libDirs.push_back("build/libcpp");
 	settings.libNames.push_back("std");

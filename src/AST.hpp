@@ -210,22 +210,6 @@ struct ASTFloatLiteral : public ASTExpression {
 
 void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module);
 
-//Make it simple for now
-//We should never actualy have to index into these manualy durring the thingy!
-template<typename T>
-class NodeAllocator {
-	NodeAllocator();
-	~NodeAllocator();
-
-	T* Alloc();
-	void Free();
-
-private:
-	U32 count;
-	U32 max;
-	T* memory;
-};
-
 extern ASTBlock global_defaultGlobalScope;
 extern ASTDefinition* global_voidType;
 extern ASTDefinition* global_S32Type;
@@ -244,7 +228,6 @@ ASTDefinition* CreateType(ASTBlock* block, const std::string& name, llvm::Type* 
 
 ASTStruct* CreateStruct (ASTBlock* block);
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
-
 
 ASTBlock* CreateBlock(ASTBlock* block);
 ASTFunction* CreateFunction(ASTBlock* block);

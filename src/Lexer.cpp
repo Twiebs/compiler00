@@ -1,58 +1,31 @@
 #include "Lexer.hpp"
 
-//TODO EastNextChar: this doesnt look like it will set the lineNumber and the colum number correctly
-//void EatNextChar(LexState& state) {
-//	lastChar = nextChar;
-//	nextChar = stream.get();
-//	colNumber++;
-//	if(lastChar == '\n') {
-//		lineNumber++;
-//		colNumber = 1;
-//	}
-//}
-//
-//void AppendToken(Token& token, LexState& state) {
-//	lastChar = nextChar;
-//	nextChar = stream.get();
-//	colNumber++;
-//	if (lastChar == '\n') {
-//		lineNumber++;
-//		colNumber = 1;
-//	} else if (lastChar != ' ') {
-//		token.string += lastChar;
-//	}
-//}
+// TODO EastNextChar: this doesnt look like it will set the lineNumber and the colum number correctly
 
-
-void Lexer::eatNextChar() {
-	lastChar = nextChar;
-	nextChar = stream.get();
-	colNumber++;
-	if( lastChar == '\n') {
-		 lineNumber++;
-		 colNumber = 1;
+#ifdef USE_SCOPE_INDENT
+int Lexer::GetIndentLevel() {
+	int level = 0;
+	bool isIndent = true;
+	while (isspace(nextChar) && isIndent)  {
+		isIndent = EatIndent();
+		if(isIndent) level++;
 	}
 }
-
-void Lexer::appendNextChar() {
-	lastChar =  nextChar;
-	nextChar = stream.get();
-	colNumber++;
-	if (lastChar == '\n') {
-		lineNumber++;
-		colNumber = 1;
-	} else if (lastChar != ' ') {
-		token.string += lastChar;
+bool Lexer::EatIndent() {
+	if (nextChar == '\t' || nextChar == '\r') {
+		eatNextChar();
+		return true;
 	}
 }
+#endif
 
 void Lexer::next() {
-	while (isspace(nextChar)) eatNextChar();	//Eat the whitespaces
-
 	token.string = "";
 	token.type = TOKEN_UNKOWN;
 	token.site.lineNumber = lineNumber;
 	token.site.columNumber = colNumber;
+
+	while (isspace(nextChar)) eatNextChar();	// Eat the whitespaces
 
 	// The Current Token is an Identifier or a Language Keyword
 	if (isalpha(nextChar) || nextChar == '_') {
@@ -127,7 +100,7 @@ void Lexer::next() {
 
 	else if (nextChar == '$') {
 		appendNextChar();
-		token.type = TOKEN_DEREFER;
+		token.type = TOKEN_DEREF;
 	}
 
 	// BIN OPS
@@ -214,6 +187,27 @@ void Lexer::next() {
 	}
 }
 
+void Lexer::eatNextChar() {
+	lastChar = nextChar;
+	nextChar = stream.get();
+	colNumber++;
+	if( lastChar == '\n') {
+		 lineNumber++;
+		 colNumber = 1;
+	}
+}
+
+void Lexer::appendNextChar() {
+	lastChar =  nextChar;
+	nextChar = stream.get();
+	colNumber++;
+	if (lastChar == '\n') {
+		lineNumber++;
+		colNumber = 1;
+	} else if (lastChar != ' ') {
+		token.string += lastChar;
+	}
+}
 
 //Token GetNextToken(LexState& state) {
 //	while(isspace(state.nextChar)) EatNextChar(state);	//Eat the whitespaces

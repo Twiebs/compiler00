@@ -1,6 +1,16 @@
 
+Vector3 :: struct {
+	x : S32
+	y : S32
+	z : S32
+}
+
+SetVector3 :: (vec3 : Vector3) {
+	vec3.x = 5
+}
+
 main :: () :> S32 {
 	foo : S32
-	foo = foo + 1
+	position : Vector3
 	return 0
 }

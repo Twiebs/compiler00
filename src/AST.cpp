@@ -1,5 +1,27 @@
 #include "AST.hpp"
 
+
+
+template<typename T, U32 initalElementCount, U32 subElementCount>
+class NodeAllocator {
+public:
+	T* Allocate() {
+		if (count < initalElementCount) {
+			return elements[count++];
+		} else {
+			if (next == nullptr) {
+				next = new NodeAllocator<T, subElementCount, subElementCount>();
+			}
+			return next->Allocate();
+		}
+	}
+private:
+	T elements[initalElementCount];
+	U32 count;
+	NodeAllocator<T, subElementCount, subElementCount>* next;
+};
+
+
 ASTBlock global_defaultGlobalScope;
 ASTDefinition* global_voidType;
 ASTDefinition* global_S32Type;
@@ -32,7 +54,13 @@ global_variable std::unordered_map<std::string, ASTIdentifier*> global_identifie
 global_variable ASTIdentifier global_identifiers[1024];
 global_variable U32 global_identifierCount = 0;
 
-ASTIdentifier* CreateIdentifier(const std::string& name) {
+global_variable NodeAllocator<ASTIdentifier, 1024, 64>* global_identifierAllocator;
+
+void InitAllocators() {
+	global_identifierAllocator = new NodeAllocator<ASTIdentifier, 1024, 64>();
+}
+
+ASTIdentifier* CreateIdentifier (const std::string& name) {
 	auto result = &global_identifiers[global_identifierCount++];
 	global_identifierLookupMap[name] = result;
 	result->name = name;
