@@ -24,6 +24,8 @@ llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
 		return Codegen((ASTMemberAccess*)node, context);
 	case AST_MEMBER_EXPR:
 		return Codegen((ASTMemberExpr*)node, context);
+	case AST_VAR_EXPR:
+		return Codegen((ASTVarExpr*)node, context);
 	case AST_FUNCTION:
 		return Codegen((ASTFunction*) node, context);
 	case AST_CALL:
@@ -171,7 +173,7 @@ llvm::Function* Codegen(ASTFunction* function, const BuildContext& context) {
 	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
 	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, context.currentPackage->module);
 
-
+	//TODO arguments are created even if the function has no members!
 	if(function->members.size() > 0) {
 		llvm::BasicBlock* block = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", llvmFunc);
 		builder->SetInsertPoint(block);
@@ -359,8 +361,10 @@ llvm::Value* Codegen (ASTMemberAccess* access, const BuildContext& context) {
 		indices.push_back(indexValue);
 	}
 
+	llvm::Value* value_ptr = structAlloca;
+	if (access->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
+	auto gep = llvm::GetElementPtrInst::Create(value_ptr, indices, "access", builder->GetInsertBlock());
 
-	auto gep = llvm::GetElementPtrInst::Create(structAlloca, indices, "access", builder->GetInsertBlock());
 	switch(access->mode) {
 	case ACCESS_ASSIGN:
 		auto expr = Codegen(access->expr, context);
@@ -385,7 +389,9 @@ llvm::Value* Codegen(ASTMemberExpr* expr, const BuildContext& context) {
 		indices.push_back(indexValue);
 	}
 
-	auto gep = llvm::GetElementPtrInst::Create(structAlloca, indices, "access", builder->GetInsertBlock());
+	llvm::Value* value_ptr = structAlloca;
+	if(expr->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
+	auto gep = llvm::GetElementPtrInst::Create(value_ptr, indices, "access", builder->GetInsertBlock());
 	auto load = builder->CreateLoad(gep);
 	return load;
 }
@@ -393,8 +399,8 @@ llvm::Value* Codegen(ASTMemberExpr* expr, const BuildContext& context) {
 llvm::Value* Codegen(ASTVarExpr* expr, const BuildContext& context) {
 	auto builder = context.builder;
 	auto varAlloca = expr->var->allocaInst;
+	llvm::Value* value = nullptr;
 
-	llvm::Value* value;
 	switch(expr->accessMode) {
 	case EXPR_LOAD:
 		value = builder->CreateLoad(varAlloca);
@@ -406,7 +412,7 @@ llvm::Value* Codegen(ASTVarExpr* expr, const BuildContext& context) {
 		value = builder->CreateLoad(varAlloca);
 		break;
 	}
-
+	return value;
 }
 
 llvm::Value* Codegen(ASTIntegerLiteral* intNode, const BuildContext& context) {

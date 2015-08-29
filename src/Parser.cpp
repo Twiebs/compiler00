@@ -229,6 +229,7 @@ ASTExpression* ParseExpr(ParseState& parseState, Lexer& lex) {
 }
 
 ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
+	auto state = parseState;
 	auto identToken = lex.token;	//save the token for now
 	auto ident = FindIdentifier(parseState.currentScope, lex.token.string);
 	lex.next();	// Eat the identifier
@@ -274,7 +275,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
   		var->type = (ASTDefinition*) typeIdent->node;
 
   		// Now we determine if this variable will be initalzied
-  		lex.next(); //eat type
+  		lex.next(); // eat type
   		if (lex.token.type == TOKEN_EQUALS) {
   			lex.next();    //Eat the assignment operator
   			var->initalExpression = ParseExpr(parseState, lex);	// We parse the inital expression for the variable!
@@ -299,8 +300,15 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 		if (lex.token.type == TOKEN_PAREN_OPEN) {
 			LOG_VERBOSE("Parsing FunctionDefinition");
 
+			if(identToken.string == "PrintlnVector") {
+
+				int x;
+
+			}
+
 			ASTFunctionSet* funcSet;
 			if (ident == nullptr) {	// The identifier is null so the function set for this ident has not been created
+				if(identToken.string == "Main") identToken.string = "main";
 				ident = CreateIdentifier (parseState.currentScope, identToken);
 				funcSet = CreateFunctionSet (ident, parseState.currentScope);
 			} else {
@@ -308,7 +316,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 				funcSet = (ASTFunctionSet*)ident->node;
 			}
 
-			auto function = CreateFunction (funcSet);
+			auto function = CreateFunction(funcSet);
 			function->ident = ident;
 			parseState.currentScope = function;
 			lex.next(); // Eat the open paren
@@ -324,6 +332,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 					function->args.push_back(var);
 				}
 			}
+
 			lex.next(); // Eat the close ')'
 
 			if (lex.token.type == TOKEN_TYPE_RETURN) {
@@ -356,7 +365,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 			}
 
 		auto func = FindMatchingFunction(ident, function);
-		if (func != nullptr) {
+		if (func != nullptr && func != function) {
 			ReportError(parseState, identToken.site, "Function re-definition!  Overloaded function " + identToken.string + "was already defined!");
 		} else if (lex.token.type == TOKEN_SCOPE_OPEN) {
 			// TODO change this to parseStatement to get the nextblock
@@ -473,16 +482,16 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 				//it might be better to keep the nullptr so that we can determine the actually amount of arrugments that were specified by the user for better error reporting!
 			}
 			call->args.push_back(expr);
-		}    //We push back all the arguments and don't care about what function we are actually going to end up calling...
-			//We may or may not actually find the function that we are looking for!
-		lex.next();    //Eat the close ')'
+		}    // We push back all the arguments and don't care about what function we are actually going to end up calling...
+			 // We may or may not actually find the function that we are looking for!
+		lex.next();    // Eat the close ')'
 
 		auto funcSet = (ASTFunctionSet*)ident->node;
 		if(funcSet->functions.size() == 0) {
-			LOG_ERROR("There are no functions named " << identToken.string);
-			delete call;
+			ReportError(state, identToken.site, "Could not resolve call to function " + identToken.string + ": unknown identifier");
 			return nullptr;
 		} else {
+
 			for(auto func : funcSet->functions) {
 				bool functionMatches = true;
 				if(func->args.size() == call->args.size()) {
@@ -502,8 +511,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 			}
 
 			if(call->function == nullptr) {
-				LOG_ERROR("A function named " << ident->name << " exits but it does not take the provided arguments!");
-				delete call;
+				ReportError(state, identToken.site, "Could not resolve overloaded arguments for function " + identToken.string + ": arguments do not match any known function with that name");
 				return nullptr;
 			}
 		}

@@ -68,7 +68,7 @@ struct ASTDefinition : public ASTNode {
 };
 
 struct ASTExpression : public ASTNode {
-	//We need to care about what an expression is going to evaluate to...
+	// We need to care about what an expression is going to evaluate to...
 	ASTDefinition* type;
 };
 
@@ -85,6 +85,7 @@ struct ASTIfStatement : public ASTNode {
 	ASTBlock* ifBlock;
 	ASTBlock* elseBlock;
 };
+
 
 struct ASTIter : public ASTNode {
 	ASTIdentifier* varIdent;

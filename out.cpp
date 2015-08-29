@@ -35,40 +35,111 @@ int main(int argc, char**argv) {
 Module* makeLLVMModule() {
  // Module Construction
  Module* mod = new Module("back.ll", getGlobalContext());
- mod->setDataLayout("0x1c58780");
+ mod->setDataLayout("0x157ad80");
  mod->setTargetTriple("x86_64-unknown-linux-gnu");
  
  // Type Definitions
- ArrayType* ArrayTy_0 = ArrayType::get(IntegerType::get(mod->getContext(), 8), 12);
+ std::vector<Type*>FuncTy_0_args;
+ FuncTy_0_args.push_back(Type::getFloatTy(mod->getContext()));
+ FunctionType* FuncTy_0 = FunctionType::get(
+  /*Result=*/Type::getVoidTy(mod->getContext()),
+  /*Params=*/FuncTy_0_args,
+  /*isVarArg=*/false);
  
- PointerType* PointerTy_1 = PointerType::get(ArrayTy_0, 0);
+ PointerType* PointerTy_1 = PointerType::get(Type::getFloatTy(mod->getContext()), 0);
  
  std::vector<Type*>FuncTy_2_args;
+ StructType *StructTy_struct_Vector3 = mod->getTypeByName("struct.Vector3");
+ if (!StructTy_struct_Vector3) {
+ StructTy_struct_Vector3 = StructType::create(mod->getContext(), "struct.Vector3");
+ }
+ std::vector<Type*>StructTy_struct_Vector3_fields;
+ StructTy_struct_Vector3_fields.push_back(Type::getFloatTy(mod->getContext()));
+ StructTy_struct_Vector3_fields.push_back(Type::getFloatTy(mod->getContext()));
+ StructTy_struct_Vector3_fields.push_back(Type::getFloatTy(mod->getContext()));
+ if (StructTy_struct_Vector3->isOpaque()) {
+ StructTy_struct_Vector3->setBody(StructTy_struct_Vector3_fields, /*isPacked=*/false);
+ }
+ 
+ PointerType* PointerTy_3 = PointerType::get(StructTy_struct_Vector3, 0);
+ 
+ FuncTy_2_args.push_back(PointerTy_3);
  FunctionType* FuncTy_2 = FunctionType::get(
-  /*Result=*/IntegerType::get(mod->getContext(), 32),
+  /*Result=*/Type::getVoidTy(mod->getContext()),
   /*Params=*/FuncTy_2_args,
   /*isVarArg=*/false);
  
- PointerType* PointerTy_3 = PointerType::get(IntegerType::get(mod->getContext(), 32), 0);
+ PointerType* PointerTy_4 = PointerType::get(PointerTy_3, 0);
  
- PointerType* PointerTy_4 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
+ PointerType* PointerTy_5 = PointerType::get(FuncTy_0, 0);
  
  std::vector<Type*>FuncTy_6_args;
- FuncTy_6_args.push_back(PointerTy_4);
  FunctionType* FuncTy_6 = FunctionType::get(
   /*Result=*/IntegerType::get(mod->getContext(), 32),
   /*Params=*/FuncTy_6_args,
-  /*isVarArg=*/true);
+  /*isVarArg=*/false);
  
- PointerType* PointerTy_5 = PointerType::get(FuncTy_6, 0);
+ PointerType* PointerTy_7 = PointerType::get(IntegerType::get(mod->getContext(), 32), 0);
+ 
+ PointerType* PointerTy_8 = PointerType::get(FuncTy_2, 0);
  
  
  // Function Declarations
  
+ Function* func__Z7Printlnf = mod->getFunction("_Z7Printlnf");
+ if (!func__Z7Printlnf) {
+ func__Z7Printlnf = Function::Create(
+  /*Type=*/FuncTy_0,
+  /*Linkage=*/GlobalValue::ExternalLinkage,
+  /*Name=*/"_Z7Printlnf", mod); 
+ func__Z7Printlnf->setCallingConv(CallingConv::C);
+ }
+ AttributeSet func__Z7Printlnf_PAL;
+ {
+  SmallVector<AttributeSet, 4> Attrs;
+  AttributeSet PAS;
+   {
+    AttrBuilder B;
+    B.addAttribute(Attribute::NoUnwind);
+    B.addAttribute(Attribute::UWTable);
+    PAS = AttributeSet::get(mod->getContext(), ~0U, B);
+   }
+  
+  Attrs.push_back(PAS);
+  func__Z7Printlnf_PAL = AttributeSet::get(mod->getContext(), Attrs);
+  
+ }
+ func__Z7Printlnf->setAttributes(func__Z7Printlnf_PAL);
+ 
+ Function* func__Z7PrintlnP7Vector3 = mod->getFunction("_Z7PrintlnP7Vector3");
+ if (!func__Z7PrintlnP7Vector3) {
+ func__Z7PrintlnP7Vector3 = Function::Create(
+  /*Type=*/FuncTy_2,
+  /*Linkage=*/GlobalValue::ExternalLinkage,
+  /*Name=*/"_Z7PrintlnP7Vector3", mod); 
+ func__Z7PrintlnP7Vector3->setCallingConv(CallingConv::C);
+ }
+ AttributeSet func__Z7PrintlnP7Vector3_PAL;
+ {
+  SmallVector<AttributeSet, 4> Attrs;
+  AttributeSet PAS;
+   {
+    AttrBuilder B;
+    B.addAttribute(Attribute::NoUnwind);
+    B.addAttribute(Attribute::UWTable);
+    PAS = AttributeSet::get(mod->getContext(), ~0U, B);
+   }
+  
+  Attrs.push_back(PAS);
+  func__Z7PrintlnP7Vector3_PAL = AttributeSet::get(mod->getContext(), Attrs);
+  
+ }
+ func__Z7PrintlnP7Vector3->setAttributes(func__Z7PrintlnP7Vector3_PAL);
+ 
  Function* func_main = mod->getFunction("main");
  if (!func_main) {
  func_main = Function::Create(
-  /*Type=*/FuncTy_2,
+  /*Type=*/FuncTy_6,
   /*Linkage=*/GlobalValue::ExternalLinkage,
   /*Name=*/"main", mod); 
  func_main->setCallingConv(CallingConv::C);
@@ -79,6 +150,7 @@ Module* makeLLVMModule() {
   AttributeSet PAS;
    {
     AttrBuilder B;
+    B.addAttribute(Attribute::NoUnwind);
     B.addAttribute(Attribute::UWTable);
     PAS = AttributeSet::get(mod->getContext(), ~0U, B);
    }
@@ -89,70 +161,139 @@ Module* makeLLVMModule() {
  }
  func_main->setAttributes(func_main_PAL);
  
- Function* func_printf = mod->getFunction("printf");
- if (!func_printf) {
- func_printf = Function::Create(
-  /*Type=*/FuncTy_6,
-  /*Linkage=*/GlobalValue::ExternalLinkage,
-  /*Name=*/"printf", mod); // (external, no body)
- func_printf->setCallingConv(CallingConv::C);
- }
- AttributeSet func_printf_PAL;
- {
-  SmallVector<AttributeSet, 4> Attrs;
-  AttributeSet PAS;
-   {
-    AttrBuilder B;
-    PAS = AttributeSet::get(mod->getContext(), ~0U, B);
-   }
-  
-  Attrs.push_back(PAS);
-  func_printf_PAL = AttributeSet::get(mod->getContext(), Attrs);
-  
- }
- func_printf->setAttributes(func_printf_PAL);
- 
  // Global Variable Declarations
 
  
- GlobalVariable* gvar_array__str = new GlobalVariable(/*Module=*/*mod, 
- /*Type=*/ArrayTy_0,
- /*isConstant=*/true,
- /*Linkage=*/GlobalValue::PrivateLinkage,
- /*Initializer=*/0, // has initializer, specified below
- /*Name=*/".str");
- gvar_array__str->setAlignment(1);
- 
  // Constant Definitions
- Constant *const_array_7 = ConstantDataArray::getString(mod->getContext(), "Hello World", true);
- ConstantInt* const_int32_8 = ConstantInt::get(mod->getContext(), APInt(32, StringRef("1"), 10));
- ConstantInt* const_int32_9 = ConstantInt::get(mod->getContext(), APInt(32, StringRef("0"), 10));
- std::vector<Constant*> const_ptr_10_indices;
- const_ptr_10_indices.push_back(const_int32_9);
- const_ptr_10_indices.push_back(const_int32_9);
- Constant* const_ptr_10 = ConstantExpr::getGetElementPtr(gvar_array__str, const_ptr_10_indices);
+ ConstantInt* const_int32_9 = ConstantInt::get(mod->getContext(), APInt(32, StringRef("1"), 10));
+ ConstantFP* const_float_10 = ConstantFP::get(mod->getContext(), APFloat(1.000000e+00f));
+ ConstantInt* const_int32_11 = ConstantInt::get(mod->getContext(), APInt(32, StringRef("0"), 10));
+ ConstantInt* const_int32_12 = ConstantInt::get(mod->getContext(), APInt(32, StringRef("2"), 10));
+ ConstantFP* const_float_13 = ConstantFP::get(mod->getContext(), APFloat(5.000000e+00f));
+ ConstantFP* const_float_14 = ConstantFP::get(mod->getContext(), APFloat(6.000000e+00f));
+ ConstantFP* const_float_15 = ConstantFP::get(mod->getContext(), APFloat(7.000000e+00f));
  
  // Global Variable Definitions
- gvar_array__str->setInitializer(const_array_7);
  
  // Function Definitions
+ 
+ // Function: _Z7Printlnf (func__Z7Printlnf)
+ {
+  Function::arg_iterator args = func__Z7Printlnf->arg_begin();
+  Value* float_msg = args++;
+  float_msg->setName("msg");
+  
+  BasicBlock* label_16 = BasicBlock::Create(mod->getContext(), "",func__Z7Printlnf,0);
+  
+  // Block  (label_16)
+  AllocaInst* ptr_17 = new AllocaInst(Type::getFloatTy(mod->getContext()), "", label_16);
+  ptr_17->setAlignment(4);
+  StoreInst* void_18 = new StoreInst(float_msg, ptr_17, false, label_16);
+  void_18->setAlignment(4);
+  LoadInst* float_19 = new LoadInst(ptr_17, "", false, label_16);
+  float_19->setAlignment(4);
+  BinaryOperator* float_20 = BinaryOperator::Create(Instruction::FAdd, float_19, const_float_10, "", label_16);
+  StoreInst* void_21 = new StoreInst(float_20, ptr_17, false, label_16);
+  void_21->setAlignment(4);
+  ReturnInst::Create(mod->getContext(), label_16);
+  
+ }
+ 
+ // Function: _Z7PrintlnP7Vector3 (func__Z7PrintlnP7Vector3)
+ {
+  Function::arg_iterator args = func__Z7PrintlnP7Vector3->arg_begin();
+  Value* ptr_vector = args++;
+  ptr_vector->setName("vector");
+  
+  BasicBlock* label_23 = BasicBlock::Create(mod->getContext(), "",func__Z7PrintlnP7Vector3,0);
+  
+  // Block  (label_23)
+  AllocaInst* ptr_24 = new AllocaInst(PointerTy_3, "", label_23);
+  ptr_24->setAlignment(8);
+  StoreInst* void_25 = new StoreInst(ptr_vector, ptr_24, false, label_23);
+  void_25->setAlignment(8);
+  LoadInst* ptr_26 = new LoadInst(ptr_24, "", false, label_23);
+  ptr_26->setAlignment(8);
+  std::vector<Value*> ptr_27_indices;
+  ptr_27_indices.push_back(const_int32_11);
+  ptr_27_indices.push_back(const_int32_11);
+  Instruction* ptr_27 = GetElementPtrInst::Create(ptr_26, ptr_27_indices, "", label_23);
+  LoadInst* float_28 = new LoadInst(ptr_27, "", false, label_23);
+  float_28->setAlignment(4);
+  CallInst* void_29 = CallInst::Create(func__Z7Printlnf, float_28, "", label_23);
+  void_29->setCallingConv(CallingConv::C);
+  void_29->setTailCall(false);
+  AttributeSet void_29_PAL;
+  void_29->setAttributes(void_29_PAL);
+  
+  LoadInst* ptr_30 = new LoadInst(ptr_24, "", false, label_23);
+  ptr_30->setAlignment(8);
+  std::vector<Value*> ptr_31_indices;
+  ptr_31_indices.push_back(const_int32_11);
+  ptr_31_indices.push_back(const_int32_9);
+  Instruction* ptr_31 = GetElementPtrInst::Create(ptr_30, ptr_31_indices, "", label_23);
+  LoadInst* float_32 = new LoadInst(ptr_31, "", false, label_23);
+  float_32->setAlignment(4);
+  CallInst* void_33 = CallInst::Create(func__Z7Printlnf, float_32, "", label_23);
+  void_33->setCallingConv(CallingConv::C);
+  void_33->setTailCall(false);
+  AttributeSet void_33_PAL;
+  void_33->setAttributes(void_33_PAL);
+  
+  LoadInst* ptr_34 = new LoadInst(ptr_24, "", false, label_23);
+  ptr_34->setAlignment(8);
+  std::vector<Value*> ptr_35_indices;
+  ptr_35_indices.push_back(const_int32_11);
+  ptr_35_indices.push_back(const_int32_12);
+  Instruction* ptr_35 = GetElementPtrInst::Create(ptr_34, ptr_35_indices, "", label_23);
+  LoadInst* float_36 = new LoadInst(ptr_35, "", false, label_23);
+  float_36->setAlignment(4);
+  CallInst* void_37 = CallInst::Create(func__Z7Printlnf, float_36, "", label_23);
+  void_37->setCallingConv(CallingConv::C);
+  void_37->setTailCall(false);
+  AttributeSet void_37_PAL;
+  void_37->setAttributes(void_37_PAL);
+  
+  ReturnInst::Create(mod->getContext(), label_23);
+  
+ }
  
  // Function: main (func_main)
  {
   
-  BasicBlock* label_11 = BasicBlock::Create(mod->getContext(), "",func_main,0);
+  BasicBlock* label_39 = BasicBlock::Create(mod->getContext(), "",func_main,0);
   
-  // Block  (label_11)
-  AllocaInst* ptr_12 = new AllocaInst(IntegerType::get(mod->getContext(), 32), "", label_11);
-  ptr_12->setAlignment(4);
-  StoreInst* void_13 = new StoreInst(const_int32_9, ptr_12, false, label_11);
-  CallInst* int32_14 = CallInst::Create(func_printf, const_ptr_10, "", label_11);
-  int32_14->setCallingConv(CallingConv::C);
-  int32_14->setTailCall(false);
-  AttributeSet int32_14_PAL;
-  int32_14->setAttributes(int32_14_PAL);
+  // Block  (label_39)
+  AllocaInst* ptr_40 = new AllocaInst(IntegerType::get(mod->getContext(), 32), "", label_39);
+  ptr_40->setAlignment(4);
+  AllocaInst* ptr_position = new AllocaInst(StructTy_struct_Vector3, "position", label_39);
+  ptr_position->setAlignment(4);
+  StoreInst* void_41 = new StoreInst(const_int32_11, ptr_40, false, label_39);
+  std::vector<Value*> ptr_42_indices;
+  ptr_42_indices.push_back(const_int32_11);
+  ptr_42_indices.push_back(const_int32_11);
+  Instruction* ptr_42 = GetElementPtrInst::Create(ptr_position, ptr_42_indices, "", label_39);
+  StoreInst* void_43 = new StoreInst(const_float_13, ptr_42, false, label_39);
+  void_43->setAlignment(4);
+  std::vector<Value*> ptr_44_indices;
+  ptr_44_indices.push_back(const_int32_11);
+  ptr_44_indices.push_back(const_int32_9);
+  Instruction* ptr_44 = GetElementPtrInst::Create(ptr_position, ptr_44_indices, "", label_39);
+  StoreInst* void_45 = new StoreInst(const_float_14, ptr_44, false, label_39);
+  void_45->setAlignment(4);
+  std::vector<Value*> ptr_46_indices;
+  ptr_46_indices.push_back(const_int32_11);
+  ptr_46_indices.push_back(const_int32_12);
+  Instruction* ptr_46 = GetElementPtrInst::Create(ptr_position, ptr_46_indices, "", label_39);
+  StoreInst* void_47 = new StoreInst(const_float_15, ptr_46, false, label_39);
+  void_47->setAlignment(4);
+  CallInst* void_48 = CallInst::Create(func__Z7PrintlnP7Vector3, ptr_position, "", label_39);
+  void_48->setCallingConv(CallingConv::C);
+  void_48->setTailCall(false);
+  AttributeSet void_48_PAL;
+  void_48->setAttributes(void_48_PAL);
   
-  ReturnInst::Create(mod->getContext(), const_int32_9, label_11);
+  ReturnInst::Create(mod->getContext(), const_int32_11, label_39);
   
  }
  

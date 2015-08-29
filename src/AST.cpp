@@ -42,11 +42,12 @@ void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module) {
 }
 
 ASTDefinition* CreateType(ASTBlock* scope, const std::string& name, llvm::Type* type) {
+	auto ident = CreateIdentifier(scope, name);
 	auto typeDefn = new ASTDefinition;
 	typeDefn->nodeType = AST_DEFINITION;
+	typeDefn->identifier = ident;
 	typeDefn->llvmType = type;
-	auto identifier = CreateIdentifier(scope, name);
-	identifier->node = typeDefn;
+	ident->node = typeDefn;
 	return typeDefn;
 }
 
@@ -172,6 +173,7 @@ ASTVarExpr* CreateVarExpr(ASTVariable* var) {
 	auto result = new ASTVarExpr;
 	result->nodeType = AST_VAR_EXPR;
 	result->var = var;
+	result->type = var->type;
 	return result;
 }
 
@@ -183,11 +185,13 @@ ASTFunctionSet* CreateFunctionSet(ASTIdentifier* ident, ASTBlock* block) {
 	return funcSet;
 }
 
+// Perhaps in the future a CreateFunction / could take a package instead of a block
 ASTFunction* CreateFunction(ASTFunctionSet* funcSet) {
 	ASTFunction* function = new ASTFunction;
 	function->nodeType = AST_FUNCTION;
 	function->parent = funcSet->parent;
 	funcSet->functions.push_back(function);
+	funcSet->parent->members.push_back(function);	// HACK the hacks are real!
 	return function;
 }
 
@@ -213,6 +217,7 @@ ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function) {
 	}
 	return nullptr;
 }
+
 
 ASTCall* CreateCall() {
 	ASTCall* call = new ASTCall;
