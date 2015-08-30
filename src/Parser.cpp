@@ -38,20 +38,21 @@ void ParseFile (ParseState& parseState, Lexer& lex) {
     }
 }
 
-ASTNode* ParseStatement (ParseState& parseState, Lexer& lex) {
-	LOG_INFO(lex.token.site << ": Parsing statement begining with: " << lex.token.string);
-	switch(lex.token.type) {
-	case TOKEN_IDENTIFIER: return ParseIdentifier(parseState, lex);
-	case TOKEN_IF: 		return ParseIF(parseState, lex);
-  case TOKEN_ITER:  return ParseIter(parseState, lex);
-	case TOKEN_RETURN: 	return ParseReturn(parseState, lex);
-  case TOKEN_SCOPE_OPEN: return ParseBlock(parseState, lex);
+//TODO seperate ASTNode into two differently treated branches of the AST
+
+// A statement either begins with an identifier, a keyword, or a new block
+ASTNode* ParseStatement (ParseState& state, Lexer& lex) {
+	switch (lex.token.type) {
+	case TOKEN_IDENTIFIER:  return ParseIdentifier(state, lex);
+	case TOKEN_IF: 		      return ParseIF(state, lex);
+  case TOKEN_ITER:        return ParseIter(state, lex);
+	case TOKEN_RETURN: 	    return ParseReturn(state, lex);
+  case TOKEN_SCOPE_OPEN:  return ParseBlock(state, lex);
 	default:
-		LOG_ERROR("Could not parse statement for token: " << lex.token.string);
-		lex.next();
+    ReportError(state, lex.token.site, "Could not parse statement: unkown Token")
+		lex.next(true);
 		return nullptr;
 	}
-	return nullptr;
 }
 
 ASTNode* ParseReturn(ParseState& parseState, Lexer& lex) {

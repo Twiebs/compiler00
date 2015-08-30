@@ -1,36 +1,50 @@
 #include "Lexer.hpp"
 
-// TODO EastNextChar: this doesnt look like it will set the lineNumber and the colum number correctly
-
-#ifdef USE_SCOPE_INDENT
+#define INDENT_SPACE_COUNT 2
 int Lexer::GetIndentLevel() {
-	int level = 0;
-	bool isIndent = true;
-	while (isspace(nextChar) && isIndent)  {
-		isIndent = EatIndent();
-		if(isIndent) level++;
-	}
-}
-bool Lexer::EatIndent() {
+	int indentLevel = 0;
 	if (nextChar == '\t' || nextChar == '\r') {
 		eatNextChar();
-		return true;
+		indentLevel++;
+	} else if (nextChar == ' ') {
+		int spaceCount = 1;
+		eatNextChar();
+		while(nextChar == ' ') {
+			spaceCount++;
+			eatNextChar();
+			if(spaceCount > INDENT_SPACE_COUNT) {
+				indentLevel++;
+				spaceCount = 0;
+			}
+		}
 	}
+	return indentLevel;
 }
-#endif
 
-void Lexer::next() {
+void Lexer::next(bool statement) {
 	token.string = "";
 	token.type = TOKEN_UNKOWN;
 	token.site.lineNumber = lineNumber;
 	token.site.columNumber = colNumber;
+
+#ifdef USE_SCOPE_INDENT
+	if(statement) {
+		int indentLevel = GetIndentLevel();
+		if (indentLevel > currentIndentLevel) {
+			token.type = TOKEN_SCOPE_OPEN;
+		} else if (indentLevel < currentIndentLevel) {
+			token.type = TOKEN_SCOPE_CLOSE;
+		}
+		return;
+	}
+#endif
 
 	while (isspace(nextChar)) eatNextChar();	// Eat the whitespaces
 
 	// The Current Token is an Identifier or a Language Keyword
 	if (isalpha(nextChar) || nextChar == '_') {
 		while ((isalnum(nextChar) || nextChar == '_') && nextChar != '.') appendNextChar();
-		if 		(token.string == "import") 		token.type = TOKEN_IMPORT;
+		if 		(token.string == "import") 			token.type = TOKEN_IMPORT;
 		else if (token.string == "foreign")	 	token.type = TOKEN_FOREIGN;
 		else if (token.string == "struct")		token.type = TOKEN_STRUCT;
 		else if (token.string == "if")				token.type = TOKEN_IF;

@@ -1,6 +1,6 @@
 #pragma once
 
-//#define USE_SCOPES_INDENT
+#define USE_SCOPE_INDENT
 #define SCOPE_SPACE_COUNT 2
 
 #include <iostream>
@@ -75,17 +75,20 @@ struct Token {
 
 class Lexer {
 public:
+	Token token;
 	std::ifstream stream;
 	char lastChar = 0, nextChar = 0;
 	U32 lineNumber = 0, colNumber = 0;
-	Token token;
+
 #ifdef USE_SCOPE_INDENT
-	int scopeLevel;
+	int currentIndentLevel;
 #endif
 
-	void next();
+	void next(bool statement = false);
 
 private:
+
 	void eatNextChar();
 	void appendNextChar();
+	int GetIndentLevel();
 };
