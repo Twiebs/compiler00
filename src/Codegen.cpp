@@ -6,6 +6,8 @@
 #include "Codegen.hpp"
 #include "Common.hpp"
 
+llvm::Value* Codegen(ASTStringLiteral* str, const BuildContext& context);
+
 void Codegen(Package* package, const BuildContext& context) {
  	for(ASTNode* node : package->globalScope.members) {
 		Codegen(node, context);
@@ -41,6 +43,8 @@ llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
 		return Codegen((ASTIntegerLiteral*) node, context);
 	case AST_FLOAT_LITERAL:
 		return Codegen((ASTFloatLiteral*)node, context);
+  case AST_STRING_LITERAL:
+    return Codegen((ASTStringLiteral*)node, context);
 	case AST_RETURN:
 		return Codegen((ASTReturn*)node, context);
 	default:
@@ -49,8 +53,6 @@ llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
 		return nullptr;
 	}
 }
-
-
 
 llvm::Value* Codegen(ASTBinaryOperation* binop, const BuildContext& context)  {
 	auto builder = context.builder;
@@ -420,4 +422,7 @@ llvm::Value* Codegen(ASTIntegerLiteral* intNode, const BuildContext& context) {
 }
 llvm::Value* Codegen(ASTFloatLiteral* floatNode, const BuildContext& context) {
 	return llvm::ConstantFP::get(floatNode->type->llvmType, floatNode->value);
+}
+llvm::Value* Codegen(ASTStringLiteral* str, const BuildContext& context) {
+  return llvm::ConstantDataArray::getString(llvm::getGlobalContext(), str->value);
 }

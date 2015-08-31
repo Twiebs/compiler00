@@ -49,7 +49,7 @@ ASTNode* ParseStatement (ParseState& state, Lexer& lex) {
 	case TOKEN_RETURN: 	    return ParseReturn(state, lex);
   case TOKEN_SCOPE_OPEN:  return ParseBlock(state, lex);
 	default:
-    ReportError(state, lex.token.site, "Could not parse statement: unkown Token")
+    ReportError(state, lex.token.site, "Could not parse statement: unkown Token");
 		lex.next(true);
 		return nullptr;
 	}
@@ -139,42 +139,39 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
 		LOG_ERROR("SOMTHING TERRIBLE HAS HAPPENED!");
 	} break;
 
-	    case TOKEN_NUMBER: {
-	        LOG_VERBOSE("Parsing a numberExpression!");
-	        auto dotPos = lex.token.string.find(".");
-	        bool isFloat = dotPos == std::string::npos ? false : true;
-	        if (isFloat) {
-	            if(lex.token.string.substr(dotPos + 1).find(".") != std::string::npos) {
-	                ReportError(parseState, lex.token.site, "Floating Point value contains two decimal points!");
-	            }
-	            auto value = std::stof(lex.token.string);
-	            auto result = CreateFloatLiteral(value);
-	            lex.next(); // Eat the float literal
-	            return result;
-	        } else {
-	            auto value = std::stoi(lex.token.string);
-	            auto result = CreateIntegerLiteral(value);
-	            result->type = (ASTDefinition*) (FindIdentifier(parseState.currentScope, "S32")->node);
-	            lex.next(); // Eat the int literal
-	            return result;
-	        }
-	    }
-	        break;
+    case TOKEN_NUMBER: {
+        LOG_VERBOSE("Parsing a numberExpression!");
+        auto dotPos = lex.token.string.find(".");
+        bool isFloat = dotPos == std::string::npos ? false : true;
+        if (isFloat) {
+            if(lex.token.string.substr(dotPos + 1).find(".") != std::string::npos) {
+                ReportError(parseState, lex.token.site, "Floating Point value contains two decimal points!");
+            }
+            auto value = std::stof(lex.token.string);
+            auto result = CreateFloatLiteral(value);
+            lex.next(); // Eat the float literal
+            return result;
+        } else {
+            auto value = std::stoi(lex.token.string);
+            auto result = CreateIntegerLiteral(value);
+            result->type = (ASTDefinition*) (FindIdentifier(parseState.currentScope, "S32")->node);
+            lex.next(); // Eat the int literal
+            return result;
+        }
+    } break;
 
-	    case TOKEN_SCOPE_OPEN:
-	        LOG_VERBOSE(lex.tokenSite << "Parsing a new scope :: BADDDDDD!!!!!!");
-	        return nullptr;
+    case TOKEN_STRING: {
+      LOG_VERBOSE("Parsing a string expression");
+      auto str = CreateStringLiteral(lex.token.string);
+      return str;
+    } break;
 
-	    case TOKEN_EOF:
-	        LOG_ERROR("HIT END OF FILE! THIS IS TERRIBLE YOU ARE MENTALY DISABLED, USER!");
-	        return nullptr;
-	    default:
-	        LOG_ERROR(lex.token.site << "Unknown token when expecting expression");
-	        //silllyyyyy // Increment the lexer to handle error recovery!
-	        return nullptr;
-	    }
-	    // This is dead code it will never happen.
-	    return nullptr;
+    default:
+        LOG_ERROR(lex.token.site << "Unknown token when expecting expression");
+        //silllyyyyy // Increment the lexer to handle error recovery!
+        return nullptr;
+    }
+    // This is dead code it will never happen.
 }
 
 ASTExpression* ParseExprRHS(int exprPrec, ASTExpression* lhs, ParseState& parseState, Lexer& lex) {

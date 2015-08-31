@@ -1,4 +1,6 @@
 __PrintlnInt :: (value : S32) foreign
+__PrintlnStr :: (value : @U8) foreign
+
 Println :: (msg : S32) { __PrintlnInt(msg) }
 
 Vector3 :: struct {

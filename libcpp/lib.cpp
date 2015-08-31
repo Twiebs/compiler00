@@ -1,9 +1,12 @@
 //C Lirary for the language
 #include <iostream>
 #include <cmath>
+
+#include <stdio.h>
 //Print functions!
 extern "C" void __PrintlnInt(int value) { std::cout << value << "\n"; }
 extern "C" void __PrintlnFloat(float value) { std::cout << value << "\n"; }
+extern "C" void __PrintlnStr(const char* str) { std::cout << str << "\n"; }
 extern "C" void __Print () { std::cout << "This is the print function from C!"; }
 //SDL Runtime lib
 

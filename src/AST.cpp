@@ -256,6 +256,14 @@ ASTFloatLiteral* CreateFloatLiteral(F64 value) {
 	return result;
 }
 
+ASTStringLiteral* CreateStringLiteral(const std::string& str) {
+	auto result = new ASTStringLiteral();
+	result->nodeType = AST_STRING_LITERAL;
+	//result->type = //What type is this thing? its probably a struct with a @U8 and U32 count
+	result->value = str;
+	return result;
+}
+
 ASTVariable* CreateVariable(ASTBlock* block) {
 	auto result = new ASTVariable;
 	result->nodeType = AST_VARIABLE;

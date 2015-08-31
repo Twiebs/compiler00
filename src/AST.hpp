@@ -36,8 +36,7 @@ enum ASTNodeType {
 
 	AST_INTEGER_LITERAL,
 	AST_FLOAT_LITERAL,
-
-
+	AST_STRING_LITERAL,
 
 	AST_BINOP,
 };
@@ -210,6 +209,10 @@ struct ASTFloatLiteral : public ASTExpression {
 	F64 value;
 };
 
+struct ASTStringLiteral : public ASTExpression {
+	std::string value;
+};
+
 void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module);
 
 extern ASTBlock global_defaultGlobalScope;
@@ -247,5 +250,6 @@ ASTMutation* CreateMutation(ASTVariable* variable, ASTExpression* expr);
 
 ASTIntegerLiteral* CreateIntegerLiteral(S64 value);
 ASTFloatLiteral* CreateFloatLiteral(F64 value);
+ASTStringLiteral* CreateStringLiteral(const std::string& string);
 
 std::string ToString(ASTNodeType nodeType);
