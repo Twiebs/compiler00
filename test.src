@@ -1,48 +1,5 @@
-__PrintlnInt :: (value : S32) foreign
-__PrintlnStr :: (value : @U8) foreign
+__PrintlnStr :: (msg : @U8) foreign
 
-Println :: (msg : S32) { __PrintlnInt(msg) }
-
-Vector3 :: struct {
-	x : S32
-	y : S32
-	z : S32
-}
-
-PrintlnVector :: (vector : @Vector3) {
-	Println(vector.x)
-	Println(vector.y)
-	Println(vector.z)
-	vector.x = 1
-
-	alais : @Vector3 = vector
-	alais.y = 47
-}
-
-PrintlnVectorWithCopy :: (vector : Vector3) {
-	vector.x = 0
-	vector.y = 0
-	vector.z = 0
-	Println(vector.x)
-	Println(vector.y)
-	Println(vector.z)
-}
-
-Main :: () :> S32 {
-	position : Vector3
-	position.x = 5
-	position.y = 4
-	position.z = 3
-
-	PrintlnVector(@position)
-	Println(position.x)
-	Println(position.y)
-	Println(position.z)
-
-	PrintlnVectorWithCopy(position)
-	Println(position.x)
-	Println(position.y)
-	Println(position.z)
-
-	return 0
+Main :: () {
+  __PrintlnStr("Test String")
 }

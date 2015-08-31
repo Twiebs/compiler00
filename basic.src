@@ -1,0 +1,56 @@
+__PrintlnInt :: (value : S32) foreign
+__PrintlnStr :: (msg : @U8) foreign
+Println :: (msg : S32) { __PrintlnInt(msg) }
+
+Vector3 :: struct {
+	x : S32
+	y : S32
+	z : S32
+}
+
+PrintlnVector :: (vector : @Vector3) {
+	Println(vector.x)
+	Println(vector.y)
+	Println(vector.z)
+}
+
+UnsignedPrint8   :: (value : U8)   { Println(5) }
+UnsignedPrint16 :: (value : U16) { Println(5) }
+UnsignedPrint32 :: (value : U32) { Println(5) }
+UnsignedPrint64 :: (value : U64) { Println(5) }
+SignedPrint8   :: (value : S8)   { Println(5) }
+SignedPrint16 :: (value : S16) { Println(5) }
+SignedPrint32 :: (value : S32) { Println(5) }
+SignedPrint64 :: (value : S64) { Println(5) }
+
+PrintlnVectorWithCopy :: (vector : Vector3) {
+	vector.x = 0
+	vector.y = 0
+	vector.z = 0
+	Println(vector.x)
+	Println(vector.y)
+	Println(vector.z)
+}
+
+Main :: () :> S32 {
+	str : Woof
+
+	position : Vector3
+	position.x = 5
+	position.y = 4
+	position.z = 3
+
+	PrintlnVector(@position)
+	Println(position.x)
+	Println(position.y)
+	Println(position.z)
+
+	PrintlnVectorWithCopy(position)
+	Println(position.x)
+	Println(position.y)
+	Println(position.z)
+
+	__PrintlnStr("Test String")
+
+	return 0
+}

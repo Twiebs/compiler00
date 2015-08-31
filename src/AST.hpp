@@ -217,8 +217,18 @@ void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module);
 
 extern ASTBlock global_defaultGlobalScope;
 extern ASTDefinition* global_voidType;
+extern ASTDefinition* global_U8Type;
+extern ASTDefinition* global_U16Type;
+extern ASTDefinition* global_U32Type;
+extern ASTDefinition* global_U64Type;
+extern ASTDefinition* global_S8Type;
+extern ASTDefinition* global_S16Type;
 extern ASTDefinition* global_S32Type;
+extern ASTDefinition* global_S64Type;
+extern ASTDefinition* global_F16Type;
 extern ASTDefinition* global_F32Type;
+extern ASTDefinition* global_F64Type;
+extern ASTDefinition* global_F128Type;
 
 //Identifiers
 ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name);
@@ -250,6 +260,6 @@ ASTMutation* CreateMutation(ASTVariable* variable, ASTExpression* expr);
 
 ASTIntegerLiteral* CreateIntegerLiteral(S64 value);
 ASTFloatLiteral* CreateFloatLiteral(F64 value);
-ASTStringLiteral* CreateStringLiteral(const std::string& string);
+ASTStringLiteral* CreateStringLiteral (const std::string& string);
 
 std::string ToString(ASTNodeType nodeType);

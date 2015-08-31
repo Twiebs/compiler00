@@ -56,7 +56,7 @@ ASTNode* ParseStatement (ParseState& state, Lexer& lex) {
 }
 
 ASTNode* ParseReturn(ParseState& parseState, Lexer& lex) {
-    LOG_VERBOSE(token.site << ": Parsing a return statement");
+    LOG_VERBOSE(lex.token.site << ": Parsing a return statement");
     lex.next();
     auto expr = ParseExpr(parseState, lex);
     auto returnVal = CreateReturnValue(expr);
@@ -77,7 +77,7 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
 			lex.next();	//Eat the deref token
 		}
 
-		LOG_VERBOSE("Parsing an identifier expression! for identifier: " << token.string);
+		LOG_VERBOSE("Parsing an identifier expression! for identifier: " << lex.token.string);
 		auto ident = FindIdentifier(parseState.currentScope, lex.token.string);
 		if (!ident) {	// TODO defer identifier resolution
 			ReportError(parseState, lex.token.site, "Identifier " + lex.token.string + " does not exist!");
@@ -162,7 +162,8 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
 
     case TOKEN_STRING: {
       LOG_VERBOSE("Parsing a string expression");
-      auto str = CreateStringLiteral(lex.token.string);
+      auto str = CreateStringLiteral (lex.token.string);
+      lex.next(); // Eat the string token
       return str;
     } break;
 

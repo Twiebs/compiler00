@@ -3,10 +3,14 @@
 #include <cmath>
 
 #include <stdio.h>
+#include <stdint.h>
+
+typedef uint8_t U8;
+
 //Print functions!
 extern "C" void __PrintlnInt(int value) { std::cout << value << "\n"; }
 extern "C" void __PrintlnFloat(float value) { std::cout << value << "\n"; }
-extern "C" void __PrintlnStr(const char* str) { std::cout << str << "\n"; }
+extern "C" void __PrintlnStr(U8* msg) { std::cout << msg << "\n"; }
 extern "C" void __Print () { std::cout << "This is the print function from C!"; }
 //SDL Runtime lib
 

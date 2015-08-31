@@ -76,7 +76,7 @@ void Lexer::next(bool statement) {
 		while (this->nextChar != '"') {
 			appendNextChar();
 		}
-		eatNextChar();	//Eat the "
+		eatNextChar();	// Eat the "
 		token.type = TOKEN_STRING;
 	}
 
@@ -186,6 +186,12 @@ void Lexer::next(bool statement) {
 	} else if (this->nextChar == ')') {
 		appendNextChar();
 		token.type = TOKEN_PAREN_CLOSE;
+	}	else if (this->nextChar == '[') {
+			appendNextChar();
+			token.type = TOKEN_ARRAY_OPEN;
+		} else if (this->nextChar == ']') {
+			appendNextChar();
+			token.type = TOKEN_ARRAY_CLOSE;
 	} else if (this->nextChar == '{') {
 		appendNextChar();
 		token.type = TOKEN_SCOPE_OPEN;

@@ -24,21 +24,36 @@ private:
 
 ASTBlock global_defaultGlobalScope;
 ASTDefinition* global_voidType;
+ASTDefinition* global_U8Type;
+ASTDefinition* global_U16Type;
+ASTDefinition* global_U32Type;
+ASTDefinition* global_U64Type;
+ASTDefinition* global_S8Type;
+ASTDefinition* global_S16Type;
 ASTDefinition* global_S32Type;
+ASTDefinition* global_S64Type;
+ASTDefinition* global_F16Type;
 ASTDefinition* global_F32Type;
+ASTDefinition* global_F64Type;
+ASTDefinition* global_F128Type;
 
 void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module) {
 	global_voidType = CreateType(scope, "Void", llvm::Type::getVoidTy(module->getContext()));
 
-	CreateType(scope, "S8", llvm::Type::getInt8Ty(module->getContext()));
-	CreateType(scope, "S16", llvm::Type::getInt16Ty(module->getContext()));
-	global_S32Type = CreateType(scope, "S32", llvm::Type::getInt32Ty(module->getContext()));
-	CreateType(scope, "S64", llvm::Type::getInt64Ty(module->getContext()));
+	global_U8Type = CreateType(scope, "U8",   llvm::IntegerType::get(module->getContext(), 8));
+	global_U8Type = CreateType(scope, "U16", llvm::IntegerType::get(module->getContext(), 16));
+	global_U8Type = CreateType(scope, "U32", llvm::IntegerType::get(module->getContext(), 32));
+	global_U8Type = CreateType(scope, "U64", llvm::IntegerType::get(module->getContext(), 64));
 
-	CreateType(scope, "F16", llvm::Type::getHalfTy(module->getContext()));
-	global_F32Type = CreateType(scope, "F32", llvm::Type::getFloatTy(module->getContext()));
-	CreateType(scope, "F64", llvm::Type::getDoubleTy(module->getContext()));
-	CreateType(scope, "F128", llvm::Type::getFP128Ty(module->getContext()));
+	global_S8Type   = CreateType(scope, "S8", llvm::Type::getInt8Ty(module->getContext()));
+	global_S16Type = CreateType(scope, "S16", llvm::Type::getInt16Ty(module->getContext()));
+	global_S32Type = CreateType(scope, "S32", llvm::Type::getInt32Ty(module->getContext()));
+	global_S64Type = CreateType(scope, "S64", llvm::Type::getInt64Ty(module->getContext()));
+
+	global_F16Type   = CreateType(scope, "F16", llvm::Type::getHalfTy(module->getContext()));
+	global_F32Type   = CreateType(scope, "F32", llvm::Type::getFloatTy(module->getContext()));
+	global_F64Type   = CreateType(scope, "F64", llvm::Type::getDoubleTy(module->getContext()));
+	global_F128Type = CreateType(scope, "F128", llvm::Type::getFP128Ty(module->getContext()));
 }
 
 ASTDefinition* CreateType(ASTBlock* scope, const std::string& name, llvm::Type* type) {
@@ -233,6 +248,9 @@ ASTBlock* CreateBlock(ASTBlock* block) {
 	return result;
 }
 
+// This is a statement the value in its name might be confusing.
+// We should begin to seperate out the difference between the statements and the expressions
+// And stuff like that
 ASTReturn* CreateReturnValue(ASTExpression* value) {
 	auto result = new ASTReturn();
 	result->nodeType = AST_RETURN;
@@ -240,7 +258,7 @@ ASTReturn* CreateReturnValue(ASTExpression* value) {
 	return result;
 }
 
-ASTIntegerLiteral* CreateIntegerLiteral(S64 value) {
+ASTIntegerLiteral* CreateIntegerLiteral (S64 value) {
 	auto result = new ASTIntegerLiteral();
 	result->nodeType = AST_INTEGER_LITERAL;
 	result->type = (ASTDefinition*)global_S32Type;
@@ -256,15 +274,15 @@ ASTFloatLiteral* CreateFloatLiteral(F64 value) {
 	return result;
 }
 
-ASTStringLiteral* CreateStringLiteral(const std::string& str) {
-	auto result = new ASTStringLiteral();
+ASTStringLiteral* CreateStringLiteral (const std::string& str) {
+	auto result = new ASTStringLiteral ();
 	result->nodeType = AST_STRING_LITERAL;
-	//result->type = //What type is this thing? its probably a struct with a @U8 and U32 count
+	result->type = global_U8Type;
 	result->value = str;
 	return result;
 }
 
-ASTVariable* CreateVariable(ASTBlock* block) {
+ASTVariable* CreateVariable (ASTBlock* block) {
 	auto result = new ASTVariable;
 	result->nodeType = AST_VARIABLE;
 	result->block = block;
