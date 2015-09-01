@@ -38,7 +38,7 @@ typedef double   f64;
 
 #define LOG_LEVEL LOG_LEVEL_VERBOSE
 
-//#undef ENABLE_COLOR_OUTPUT
+#undef ENABLE_COLOR_OUTPUT
 
 #define INTERNAL_ERROR(msg) std::cout << "INTERNAL_ERROR: " << msg << "\n";
 

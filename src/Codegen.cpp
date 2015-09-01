@@ -238,11 +238,13 @@ llvm::Value* Codegen(ASTCall* call, const BuildContext& context) {
 	std::vector<llvm::Value*> argsV;
 	for (U32 i = 0, e = func->arg_size(); i != e; i++) {
 		auto argV = Codegen(call->args[i], context);
+    // HACK were going to check if its a string literal here so that we can get the elem ptr
 		if(argV == nullptr) {
 			LOG_DEBUG("Failed to emit code for call argument!");
 			return nullptr;
+		} else {
+			argsV.push_back(argV);
 		}
-		argsV.push_back(argV);
 	}
 
 	if(call->function->returnType != global_voidType) {
@@ -398,7 +400,7 @@ llvm::Value* Codegen(ASTMemberExpr* expr, const BuildContext& context) {
 	return load;
 }
 
-llvm::Value* Codegen(ASTVarExpr* expr, const BuildContext& context) {
+llvm::Value* Codegen (ASTVarExpr* expr, const BuildContext& context) {
 	auto builder = context.builder;
 	auto varAlloca = expr->var->allocaInst;
 	llvm::Value* value = nullptr;
@@ -417,12 +419,18 @@ llvm::Value* Codegen(ASTVarExpr* expr, const BuildContext& context) {
 	return value;
 }
 
-llvm::Value* Codegen(ASTIntegerLiteral* intNode, const BuildContext& context) {
+llvm::Value* Codegen (ASTIntegerLiteral* intNode, const BuildContext& context) {
 	return llvm::ConstantInt::get(intNode->type->llvmType, intNode->value);
 }
-llvm::Value* Codegen(ASTFloatLiteral* floatNode, const BuildContext& context) {
+llvm::Value* Codegen (ASTFloatLiteral* floatNode, const BuildContext& context) {
 	return llvm::ConstantFP::get(floatNode->type->llvmType, floatNode->value);
 }
-llvm::Value* Codegen(ASTStringLiteral* str, const BuildContext& context) {
-  return llvm::ConstantDataArray::getString(llvm::getGlobalContext(), str->value);
+
+// For now we are not going to give a shit weather or not string literals
+// are duplicated, also it may be benifical to push them on the stack rather than
+// creating them as global constants but for now i will do what llvm does.
+llvm::Value* Codegen (ASTStringLiteral* str, const BuildContext& context) {
+	auto builder = context.builder;
+	auto str_value = builder->CreateGlobalStringPtr(str->value);
+	return str_value;
 }

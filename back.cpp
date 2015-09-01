@@ -1,7 +1,9 @@
 #include <stdio.h>
+
+void DoStuffWithCStr(const char* msg) {
+
+}
+
 int main() {
-		const char* c_str = "This is a cstring";
-		const char* other_str = "This is another string";
-		printf(c_str);
-		printf(other_str);
+	DoStuffWithCStr("This is a string");
 }

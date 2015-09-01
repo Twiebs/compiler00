@@ -41,9 +41,9 @@ void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module) {
 	global_voidType = CreateType(scope, "Void", llvm::Type::getVoidTy(module->getContext()));
 
 	global_U8Type = CreateType(scope, "U8",   llvm::IntegerType::get(module->getContext(), 8));
-	global_U8Type = CreateType(scope, "U16", llvm::IntegerType::get(module->getContext(), 16));
-	global_U8Type = CreateType(scope, "U32", llvm::IntegerType::get(module->getContext(), 32));
-	global_U8Type = CreateType(scope, "U64", llvm::IntegerType::get(module->getContext(), 64));
+	global_U16Type = CreateType(scope, "U16", llvm::IntegerType::get(module->getContext(), 16));
+	global_U32Type = CreateType(scope, "U32", llvm::IntegerType::get(module->getContext(), 32));
+	global_U64Type = CreateType(scope, "U64", llvm::IntegerType::get(module->getContext(), 64));
 
 	global_S8Type   = CreateType(scope, "S8", llvm::Type::getInt8Ty(module->getContext()));
 	global_S16Type = CreateType(scope, "S16", llvm::Type::getInt16Ty(module->getContext()));

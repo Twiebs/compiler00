@@ -35,46 +35,67 @@ int main(int argc, char**argv) {
 Module* makeLLVMModule() {
  // Module Construction
  Module* mod = new Module("back.ll", getGlobalContext());
- mod->setDataLayout("0xc2aac0");
+ mod->setDataLayout("0x1076710");
  mod->setTargetTriple("x86_64-unknown-linux-gnu");
-
+ 
  // Type Definitions
- ArrayType* ArrayTy_0 = ArrayType::get(IntegerType::get(mod->getContext(), 8), 18);
-
+ ArrayType* ArrayTy_0 = ArrayType::get(IntegerType::get(mod->getContext(), 8), 17);
+ 
  PointerType* PointerTy_1 = PointerType::get(ArrayTy_0, 0);
-
- ArrayType* ArrayTy_2 = ArrayType::get(IntegerType::get(mod->getContext(), 8), 23);
-
- PointerType* PointerTy_3 = PointerType::get(ArrayTy_2, 0);
-
- std::vector<Type*>FuncTy_4_args;
- FunctionType* FuncTy_4 = FunctionType::get(
-  /*Result=*/IntegerType::get(mod->getContext(), 32),
-  /*Params=*/FuncTy_4_args,
+ 
+ std::vector<Type*>FuncTy_2_args;
+ PointerType* PointerTy_3 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
+ 
+ FuncTy_2_args.push_back(PointerTy_3);
+ FunctionType* FuncTy_2 = FunctionType::get(
+  /*Result=*/Type::getVoidTy(mod->getContext()),
+  /*Params=*/FuncTy_2_args,
   /*isVarArg=*/false);
-
- PointerType* PointerTy_6 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
-
- PointerType* PointerTy_5 = PointerType::get(PointerTy_6, 0);
-
- std::vector<Type*>FuncTy_8_args;
- FuncTy_8_args.push_back(PointerTy_6);
- FunctionType* FuncTy_8 = FunctionType::get(
+ 
+ PointerType* PointerTy_4 = PointerType::get(PointerTy_3, 0);
+ 
+ std::vector<Type*>FuncTy_5_args;
+ FunctionType* FuncTy_5 = FunctionType::get(
   /*Result=*/IntegerType::get(mod->getContext(), 32),
-  /*Params=*/FuncTy_8_args,
-  /*isVarArg=*/true);
-
- PointerType* PointerTy_7 = PointerType::get(FuncTy_8, 0);
-
-
+  /*Params=*/FuncTy_5_args,
+  /*isVarArg=*/false);
+ 
+ PointerType* PointerTy_6 = PointerType::get(FuncTy_2, 0);
+ 
+ 
  // Function Declarations
-
+ 
+ Function* func__Z15DoStuffWithCStrPKc = mod->getFunction("_Z15DoStuffWithCStrPKc");
+ if (!func__Z15DoStuffWithCStrPKc) {
+ func__Z15DoStuffWithCStrPKc = Function::Create(
+  /*Type=*/FuncTy_2,
+  /*Linkage=*/GlobalValue::ExternalLinkage,
+  /*Name=*/"_Z15DoStuffWithCStrPKc", mod); 
+ func__Z15DoStuffWithCStrPKc->setCallingConv(CallingConv::C);
+ }
+ AttributeSet func__Z15DoStuffWithCStrPKc_PAL;
+ {
+  SmallVector<AttributeSet, 4> Attrs;
+  AttributeSet PAS;
+   {
+    AttrBuilder B;
+    B.addAttribute(Attribute::NoUnwind);
+    B.addAttribute(Attribute::UWTable);
+    PAS = AttributeSet::get(mod->getContext(), ~0U, B);
+   }
+  
+  Attrs.push_back(PAS);
+  func__Z15DoStuffWithCStrPKc_PAL = AttributeSet::get(mod->getContext(), Attrs);
+  
+ }
+ func__Z15DoStuffWithCStrPKc->setAttributes(func__Z15DoStuffWithCStrPKc_PAL);
+ 
  Function* func_main = mod->getFunction("main");
  if (!func_main) {
  func_main = Function::Create(
-  /*Type=*/FuncTy_4,
+  /*Type=*/FuncTy_5,
   /*Linkage=*/GlobalValue::ExternalLinkage,
-  /*Name=*/"main", mod);
+  /*Name=*/"main", mod); 
  func_main->setCallingConv(CallingConv::C);
  }
  AttributeSet func_main_PAL;
@@ -83,111 +104,74 @@ Module* makeLLVMModule() {
   AttributeSet PAS;
    {
     AttrBuilder B;
+    B.addAttribute(Attribute::NoUnwind);
     B.addAttribute(Attribute::UWTable);
     PAS = AttributeSet::get(mod->getContext(), ~0U, B);
    }
-
+  
   Attrs.push_back(PAS);
   func_main_PAL = AttributeSet::get(mod->getContext(), Attrs);
-
+  
  }
  func_main->setAttributes(func_main_PAL);
-
- Function* func_printf = mod->getFunction("printf");
- if (!func_printf) {
- func_printf = Function::Create(
-  /*Type=*/FuncTy_8,
-  /*Linkage=*/GlobalValue::ExternalLinkage,
-  /*Name=*/"printf", mod); // (external, no body)
- func_printf->setCallingConv(CallingConv::C);
- }
- AttributeSet func_printf_PAL;
- {
-  SmallVector<AttributeSet, 4> Attrs;
-  AttributeSet PAS;
-   {
-    AttrBuilder B;
-    PAS = AttributeSet::get(mod->getContext(), ~0U, B);
-   }
-
-  Attrs.push_back(PAS);
-  func_printf_PAL = AttributeSet::get(mod->getContext(), Attrs);
-
- }
- func_printf->setAttributes(func_printf_PAL);
-
+ 
  // Global Variable Declarations
 
-
- GlobalVariable* gvar_array__str = new GlobalVariable(/*Module=*/*mod,
+ 
+ GlobalVariable* gvar_array__str = new GlobalVariable(/*Module=*/*mod, 
  /*Type=*/ArrayTy_0,
  /*isConstant=*/true,
  /*Linkage=*/GlobalValue::PrivateLinkage,
  /*Initializer=*/0, // has initializer, specified below
  /*Name=*/".str");
  gvar_array__str->setAlignment(1);
-
- GlobalVariable* gvar_array__str1 = new GlobalVariable(/*Module=*/*mod,
- /*Type=*/ArrayTy_2,
- /*isConstant=*/true,
- /*Linkage=*/GlobalValue::PrivateLinkage,
- /*Initializer=*/0, // has initializer, specified below
- /*Name=*/".str1");
- gvar_array__str1->setAlignment(1);
-
+ 
  // Constant Definitions
- Constant *const_array_9 = ConstantDataArray::getString(mod->getContext(), "This is a cstring", true);
- Constant *const_array_10 = ConstantDataArray::getString(mod->getContext(), "This is another string", true);
- ConstantInt* const_int32_11 = ConstantInt::get(mod->getContext(), APInt(32, StringRef("1"), 10));
- std::vector<Constant*> const_ptr_12_indices;
- ConstantInt* const_int32_13 = ConstantInt::get(mod->getContext(), APInt(32, StringRef("0"), 10));
- const_ptr_12_indices.push_back(const_int32_13);
- const_ptr_12_indices.push_back(const_int32_13);
- Constant* const_ptr_12 = ConstantExpr::getGetElementPtr(gvar_array__str, const_ptr_12_indices);
- std::vector<Constant*> const_ptr_14_indices;
- const_ptr_14_indices.push_back(const_int32_13);
- const_ptr_14_indices.push_back(const_int32_13);
- Constant* const_ptr_14 = ConstantExpr::getGetElementPtr(gvar_array__str1, const_ptr_14_indices);
-
+ Constant *const_array_7 = ConstantDataArray::getString(mod->getContext(), "This is a string", true);
+ ConstantInt* const_int32_8 = ConstantInt::get(mod->getContext(), APInt(32, StringRef("1"), 10));
+ std::vector<Constant*> const_ptr_9_indices;
+ ConstantInt* const_int32_10 = ConstantInt::get(mod->getContext(), APInt(32, StringRef("0"), 10));
+ const_ptr_9_indices.push_back(const_int32_10);
+ const_ptr_9_indices.push_back(const_int32_10);
+ Constant* const_ptr_9 = ConstantExpr::getGetElementPtr(gvar_array__str, const_ptr_9_indices);
+ 
  // Global Variable Definitions
- gvar_array__str->setInitializer(const_array_9);
- gvar_array__str1->setInitializer(const_array_10);
-
+ gvar_array__str->setInitializer(const_array_7);
+ 
  // Function Definitions
-
+ 
+ // Function: _Z15DoStuffWithCStrPKc (func__Z15DoStuffWithCStrPKc)
+ {
+  Function::arg_iterator args = func__Z15DoStuffWithCStrPKc->arg_begin();
+  Value* ptr_msg = args++;
+  ptr_msg->setName("msg");
+  
+  BasicBlock* label_11 = BasicBlock::Create(mod->getContext(), "",func__Z15DoStuffWithCStrPKc,0);
+  
+  // Block  (label_11)
+  AllocaInst* ptr_12 = new AllocaInst(PointerTy_3, "", label_11);
+  ptr_12->setAlignment(8);
+  StoreInst* void_13 = new StoreInst(ptr_msg, ptr_12, false, label_11);
+  void_13->setAlignment(8);
+  ReturnInst::Create(mod->getContext(), label_11);
+  
+ }
+ 
  // Function: main (func_main)
  {
-
+  
   BasicBlock* label_15 = BasicBlock::Create(mod->getContext(), "",func_main,0);
-
+  
   // Block  (label_15)
-  AllocaInst* ptr_c_str = new AllocaInst(PointerTy_6, "c_str", label_15);
-  ptr_c_str->setAlignment(8);
-  AllocaInst* ptr_other_str = new AllocaInst(PointerTy_6, "other_str", label_15);
-  ptr_other_str->setAlignment(8);
-  StoreInst* void_16 = new StoreInst(const_ptr_12, ptr_c_str, false, label_15);
-  void_16->setAlignment(8);
-  StoreInst* void_17 = new StoreInst(const_ptr_14, ptr_other_str, false, label_15);
-  void_17->setAlignment(8);
-  LoadInst* ptr_18 = new LoadInst(ptr_c_str, "", false, label_15);
-  ptr_18->setAlignment(8);
-  CallInst* int32_19 = CallInst::Create(func_printf, ptr_18, "", label_15);
-  int32_19->setCallingConv(CallingConv::C);
-  int32_19->setTailCall(false);
-  AttributeSet int32_19_PAL;
-  int32_19->setAttributes(int32_19_PAL);
-
-  LoadInst* ptr_20 = new LoadInst(ptr_other_str, "", false, label_15);
-  ptr_20->setAlignment(8);
-  CallInst* int32_21 = CallInst::Create(func_printf, ptr_20, "", label_15);
-  int32_21->setCallingConv(CallingConv::C);
-  int32_21->setTailCall(false);
-  AttributeSet int32_21_PAL;
-  int32_21->setAttributes(int32_21_PAL);
-
-  ReturnInst::Create(mod->getContext(), const_int32_13, label_15);
-
+  CallInst* void_16 = CallInst::Create(func__Z15DoStuffWithCStrPKc, const_ptr_9, "", label_15);
+  void_16->setCallingConv(CallingConv::C);
+  void_16->setTailCall(false);
+  AttributeSet void_16_PAL;
+  void_16->setAttributes(void_16_PAL);
+  
+  ReturnInst::Create(mod->getContext(), const_int32_10, label_15);
+  
  }
-
+ 
  return mod;
 }

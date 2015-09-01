@@ -11,7 +11,9 @@ typedef uint8_t U8;
 extern "C" void __PrintlnInt(int value) { std::cout << value << "\n"; }
 extern "C" void __PrintlnFloat(float value) { std::cout << value << "\n"; }
 extern "C" void __PrintlnStr(U8* msg) { std::cout << msg << "\n"; }
-extern "C" void __Print () { std::cout << "This is the print function from C!"; }
+extern "C" void __PrintInt(int value) { std::cout << value; }
+extern "C" void __PrintFloat(float value) { std::cout << value; }
+extern "C" void __PrintStr(U8* msg) { std::cout << msg; }
 //SDL Runtime lib
 
 #include <SDL/SDL.h>

@@ -161,7 +161,8 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
     } break;
 
     case TOKEN_STRING: {
-      LOG_VERBOSE("Parsing a string expression");
+      LOG_VERBOSE("Parsing a string expression...");
+      LOG_VERBOSE("WOOF WOOF WOOF! WORK SILLY DEBUGER WORKK!!! STOP HAVING BUGGSS ITS YOUR JOB TO BE THE OPPOSITEOF THAT!!!!!!");
       auto str = CreateStringLiteral (lex.token.string);
       lex.next(); // Eat the string token
       return str;

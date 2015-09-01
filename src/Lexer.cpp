@@ -224,7 +224,7 @@ void Lexer::appendNextChar() {
 	if (lastChar == '\n') {
 		lineNumber++;
 		colNumber = 1;
-	} else if (lastChar != ' ') {
+	} else if (lastChar != ' ' || true /*Will this mess up lexing somehow?*/) {
 		token.string += lastChar;
 	}
 }
