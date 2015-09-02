@@ -233,10 +233,16 @@ ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function) {
 	return nullptr;
 }
 
-
-ASTCall* CreateCall() {
-	ASTCall* call = new ASTCall;
+// We are going to try and do this thing with calls where we pack the arguments at the end
+// Im not sure if we need to bother with the pointer since we know they will procede the argument count
+// but for now it keeps it simple so i will leave it it will be intresting to see if it actualy works.  Eventualy this will
+// use an allocator to create nodes for each package.
+ASTCall* CreateCall (ASTNode* argumentList, U32 argumentCount) {
+	ASTCall* call = (ASTCall*)malloc(sizeof(ASTCall) + (sizeof(ASTNode*) * argumentCount));
 	call->nodeType = AST_CALL;
+	call->argCount = argumentCount;
+	// Pack the args in the back of the struct
+	memcpy(call + (sizeof(ASTNode*) * argumentCount), argumentList, argumentCount);
 	return call;
 }
 

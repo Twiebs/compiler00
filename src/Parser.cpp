@@ -296,19 +296,13 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 
 	case TOKEN_TYPE_DEFINE: {
 		LOG_VERBOSE("Parsing TypeDefine");
-		lex.next(); //Eat the typedef
+		lex.next(); // Eat the typedef
 		if (lex.token.type == TOKEN_PAREN_OPEN) {
 			LOG_VERBOSE("Parsing FunctionDefinition");
 
-			if(identToken.string == "PrintlnVector") {
-
-				int x;
-
-			}
-
 			ASTFunctionSet* funcSet;
 			if (ident == nullptr) {	// The identifier is null so the function set for this ident has not been created
-				if(identToken.string == "Main") identToken.string = "main";
+				if (identToken.string == "Main") identToken.string = "main";
 				ident = CreateIdentifier (parseState.currentScope, identToken);
 				funcSet = CreateFunctionSet (ident, parseState.currentScope);
 			} else {
@@ -460,62 +454,66 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
   }
 } break;
 
-	case TOKEN_PAREN_OPEN:  {
+
+    // How will we handle functions that are resolved in a different package?
+    // Short term unknown identifiers can be pushed into a DArray and then checked later
+    // To see if they have been resolved into nodes.  We could do somthing very stupid initaly
+    // Have a map of strings, vector pairs that store the nodes that require that identifer to be resolved.
+    // After all the packages have been parsed we do the final resolution of identifiers
+
+    struct CallDependency {
+      std::string identName;
+      ASTCall* call;
+    };
+
+    std::vector<CallDependency>;
+
+  case TOKEN_PAREN_OPEN:  {
 		LOG_VERBOSE("Attempting to parse call to : " << identToken.string);
-		if (ident == nullptr) {
-			LOG_ERROR("function named " << identToken.string << " does not exist");
-			return nullptr;
-		}
 
-		//Create the call and now determine its arguments
-		ASTCall* call = CreateCall();
-		call->function = nullptr;
-		call->ident = ident;
-
-		lex.next(); //Eat the open Paren
-		while (lex.token.type != TOKEN_PAREN_CLOSE && lex.token.type != TOKEN_UNKOWN && lex.token.type != TOKEN_EOF) {
+    lex.next(); // Eat the open paren
+    // TODO create a custom stack for each Worker to use as a transient state to push nodes into
+    std::vector<ASTNode*> args;
+    while (lex.token.type != TOKEN_PAREN_CLOSE) {
 			ASTExpression* expr = ParseExpr(parseState, lex);
-			if(expr == nullptr) {
-				LOG_ERROR(lex.token.site << " Could not resolve expression for argument at index " << call->args.size() << " in call to function " << ident->name);
-				//DONT return here... just keep going so we can find more errors'
-				continue;    //But we do skip pushing the expression on to the function arguments
-				//it might be better to keep the nullptr so that we can determine the actually amount of arrugments that were specified by the user for better error reporting!
-			}
+			if (expr == nullptr) {
+				ReportError(parseState, lex.token.site, " Could not resolve expression for argument at index "  + args.size() + " in call to function named" + identToken.string);
+			  // If a nullptr is recieve it is still pushed into the argument list so that we can still obtain relevant information about the following errors
+      }
 			call->args.push_back(expr);
-		}    // We push back all the arguments and don't care about what function we are actually going to end up calling...
-			 // We may or may not actually find the function that we are looking for!
-		lex.next();    // Eat the close ')'
-
-		auto funcSet = (ASTFunctionSet*)ident->node;
-		if(funcSet->functions.size() == 0) {
-			ReportError(state, identToken.site, "Could not resolve call to function " + identToken.string + ": unknown identifier");
-			return nullptr;
-		} else {
-
-			for(auto func : funcSet->functions) {
-				bool functionMatches = true;
-				if(func->args.size() == call->args.size()) {
-					for(U32 i = 0; i < func->args.size(); i++) {
-						if(func->args[i]->type != call->args[i]->type) {
-							functionMatches = false;
-						}
-					}
-				} else {
-					functionMatches = false;
-				}
-
-				if(functionMatches) {
-					call->function = func;
-					break;
-				}
-			}
-
-			if(call->function == nullptr) {
-				ReportError(state, identToken.site, "Could not resolve overloaded arguments for function " + identToken.string + ": arguments do not match any known function with that name");
-				return nullptr;
-			}
 		}
+		lex.next();    // Eat the close paren
 
+    ASTCall* call = CreateCall(&args[0], args.count);
+    call->function = nullptr;
+    call->ident = ident;
+
+    if (ident == nullptr) {
+      AddDependency(identToken.string, call)
+  } else {
+  	auto funcSet = (ASTFunctionSet*)ident->node;
+    assert(funcSet->nodeType == AST_FUNCTION);
+  	for (auto i = 0; i < funcSet->functions.size(); i++) {
+			auto func = funcSet->functions[i];
+      bool functionMatches = true;
+			if(func->args.size() == call->args.size()) {
+				for(U32 i = 0; i < func->args.size(); i++) {
+					if(func->args[i]->type != call->args[i]->type) {
+						functionMatches = false;
+					}
+				}
+			} else {
+				functionMatches = false;
+			}
+
+			if (functionMatches) {
+				call->function = func;
+				break;
+			} else if (i == funcSet->functions.size() - 1) {
+        AddDependency(idenToken.string, call);
+      }
+		}
+}
 		return call;
 	} break;
 

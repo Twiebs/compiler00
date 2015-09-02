@@ -13,6 +13,14 @@ Vector3 :: struct {
   z : S32
 }
 
+DoStuff :: () {
+  DoThings()
+}
+
+DoThings :: () {
+  Println("Currently Doing Things")
+}
+
 Print :: (vector : @Vector3) {
   Print("[")
   Print(vector.x)
@@ -33,4 +41,6 @@ Main :: () {
   position.z = 1
   Print("position ")
   Print(@position)
+
+  DoThings()
 }

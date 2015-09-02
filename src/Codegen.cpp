@@ -237,14 +237,21 @@ llvm::Value* Codegen(ASTCall* call, const BuildContext& context) {
 
 	std::vector<llvm::Value*> argsV;
 	for (U32 i = 0, e = func->arg_size(); i != e; i++) {
-		auto argV = Codegen(call->args[i], context);
-    // HACK were going to check if its a string literal here so that we can get the elem ptr
-		if(argV == nullptr) {
+    auto arg = (ASTExpression*)((call + sizeof(ASTCall)) + (i * sizeof(ASTExpression*)));
+		auto argV = Codegen(arg, context);
+		if (argV == nullptr) {
 			LOG_DEBUG("Failed to emit code for call argument!");
 			return nullptr;
 		} else {
-			argsV.push_back(argV);
-		}
+      if (arg->nodeType == AST_STRING_LITERAL) {
+    	auto zeroVal = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
+    	std::vector<llvm::Value*> indices;
+    	indices.push_back(zeroVal);
+    	indices.push_back(zeroVal); // This is insane there has to be a better way
+        argV = llvm::GetElementPtrInst::Create(argV, indices, "str", builder->GetInsertBlock());
+      }
+      argsV.push_back(argV);
+    }
 	}
 
 	if(call->function->returnType != global_voidType) {
@@ -430,7 +437,4 @@ llvm::Value* Codegen (ASTFloatLiteral* floatNode, const BuildContext& context) {
 // are duplicated, also it may be benifical to push them on the stack rather than
 // creating them as global constants but for now i will do what llvm does.
 llvm::Value* Codegen (ASTStringLiteral* str, const BuildContext& context) {
-	auto builder = context.builder;
-	auto str_value = builder->CreateGlobalStringPtr(str->value);
-	return str_value;
 }

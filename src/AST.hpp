@@ -85,7 +85,6 @@ struct ASTIfStatement : public ASTNode {
 	ASTBlock* elseBlock;
 };
 
-
 struct ASTIter : public ASTNode {
 	ASTIdentifier* varIdent;
 	ASTExpression* start;
@@ -195,10 +194,14 @@ struct ASTMutation : public ASTNode {
 	ASTExpression* value;
 };
 
+// ASTCall stores its arguments after the struct itself
+// The procede directly after the arg count and are just pointers to
+// other nodes in the AST... for now... perhaps these should be concrete structs
+// stored here and we do some crazyness to pack them at the end
 struct ASTCall : public ASTNode {
 	ASTIdentifier* ident;
 	ASTFunction* function;
-	std::vector<ASTExpression*> args;
+	U32 argCount;
 };
 
 struct ASTIntegerLiteral : public ASTExpression {
@@ -253,7 +256,7 @@ ASTIfStatement* CreateIfStatement(ASTExpression* expr);	//TODO Why are ifstateme
 ASTIter* CreateIter(ASTIdentifier* ident, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
 ASTReturn* CreateReturnValue(ASTExpression* value);
 
-ASTCall* CreateCall();
+ASTCall* CreateCall(ASTNode* argumentList, U32 argumentCount);
 ASTVariable* CreateVariable(ASTBlock* block);
 ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
 ASTMutation* CreateMutation(ASTVariable* variable, ASTExpression* expr);
