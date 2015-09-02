@@ -38,6 +38,38 @@ void ParseFile (ParseState& parseState, Lexer& lex) {
     }
 }
 
+ASTFunction* ResolveFunction (ASTFunctionSet* funcSet, ASTExpression* args, U32 argc) {
+  for (auto i = 0; i < funcSet->functions.size(); i++) {
+    auto func = funcSet->functions[i];
+
+    if (func->args.size() == argc) {
+      ASTExpression* arg_ptr = args;
+      bool functionMatches = true;
+      for(U32 i = 0; i < argc; i++) {
+        if (func->args[i]->type != arg_ptr->type) functionMatches = false;
+        arg_ptr++;  // Increment to the next argument
+      }
+      if (functionMatches) return func;
+    }
+  }
+  return nullptr;
+}
+
+// How will we handle functions that are resolved in a different package?
+// Short term unknown identifiers can be pushed into a DArray and then checked later
+// To see if they have been resolved into nodes.  We could do somthing very stupid initaly
+// Have a map of strings, vector pairs that store the nodes that require that identifer to be resolved.
+// After all the packages have been parsed we do the final resolution of identifiers
+struct CallDependency {
+  std::string identName;
+  ASTCall* call;
+};
+
+global_variable std::vector<CallDependency> global_calldeps;
+
+void AddDependency(const std::string& identName, ASTCall* call) {
+  global_calldeps.emplace_back(identName, call);
+}
 //TODO seperate ASTNode into two differently treated branches of the AST
 
 // A statement either begins with an identifier, a keyword, or a new block
@@ -453,67 +485,27 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
     // functional stype language where everything is considered an expression
   }
 } break;
-
-
-    // How will we handle functions that are resolved in a different package?
-    // Short term unknown identifiers can be pushed into a DArray and then checked later
-    // To see if they have been resolved into nodes.  We could do somthing very stupid initaly
-    // Have a map of strings, vector pairs that store the nodes that require that identifer to be resolved.
-    // After all the packages have been parsed we do the final resolution of identifiers
-
-    struct CallDependency {
-      std::string identName;
-      ASTCall* call;
-    };
-
-    std::vector<CallDependency>;
-
   case TOKEN_PAREN_OPEN:  {
 		LOG_VERBOSE("Attempting to parse call to : " << identToken.string);
-
-    lex.next(); // Eat the open paren
     // TODO create a custom stack for each Worker to use as a transient state to push nodes into
+
     std::vector<ASTNode*> args;
+    lex.next(); // Eat the open paren
     while (lex.token.type != TOKEN_PAREN_CLOSE) {
 			ASTExpression* expr = ParseExpr(parseState, lex);
-			if (expr == nullptr) {
-				ReportError(parseState, lex.token.site, " Could not resolve expression for argument at index "  + args.size() + " in call to function named" + identToken.string);
-			  // If a nullptr is recieve it is still pushed into the argument list so that we can still obtain relevant information about the following errors
-      }
-			call->args.push_back(expr);
-		}
-		lex.next();    // Eat the close paren
+			if (expr == nullptr) { ReportError(parseState, lex.token.site, " Could not resolve expression for argument at index "  + args.size() + " in call to function named" + identToken.string); }
+		} lex.next();    // Eat the close paren
 
-    ASTCall* call = CreateCall(&args[0], args.count);
-    call->function = nullptr;
-    call->ident = ident;
-
+    ASTCall* call = CreateCall(&args[0], args.size());
     if (ident == nullptr) {
       AddDependency(identToken.string, call)
   } else {
-  	auto funcSet = (ASTFunctionSet*)ident->node;
+    call->ident = ident;
+    auto funcSet = (ASTFunctionSet*)ident->node;
     assert(funcSet->nodeType == AST_FUNCTION);
-  	for (auto i = 0; i < funcSet->functions.size(); i++) {
-			auto func = funcSet->functions[i];
-      bool functionMatches = true;
-			if(func->args.size() == call->args.size()) {
-				for(U32 i = 0; i < func->args.size(); i++) {
-					if(func->args[i]->type != call->args[i]->type) {
-						functionMatches = false;
-					}
-				}
-			} else {
-				functionMatches = false;
-			}
-
-			if (functionMatches) {
-				call->function = func;
-				break;
-			} else if (i == funcSet->functions.size() - 1) {
-        AddDependency(idenToken.string, call);
-      }
-		}
-}
+    call->function = ResolveFunction(funcSet, &args[0], args.size());
+    if (!call->function) AddDependency(identToken.string, call);
+  }
 		return call;
 	} break;
 

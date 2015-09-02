@@ -437,4 +437,7 @@ llvm::Value* Codegen (ASTFloatLiteral* floatNode, const BuildContext& context) {
 // are duplicated, also it may be benifical to push them on the stack rather than
 // creating them as global constants but for now i will do what llvm does.
 llvm::Value* Codegen (ASTStringLiteral* str, const BuildContext& context) {
+	auto builder = context.builder;
+	auto str_value = builder->CreateGlobalStringPtr(str->value);
+	return str_value;
 }
