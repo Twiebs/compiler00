@@ -38,18 +38,22 @@ void ParseFile (ParseState& parseState, Lexer& lex) {
     }
 }
 
-ASTFunction* ResolveFunction (ASTFunctionSet* funcSet, ASTExpression* args, U32 argc) {
+ASTFunction* ResolveFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc) {
   for (auto i = 0; i < funcSet->functions.size(); i++) {
     auto func = funcSet->functions[i];
 
     if (func->args.size() == argc) {
-      ASTExpression* arg_ptr = args;
-      bool functionMatches = true;
-      for(U32 i = 0; i < argc; i++) {
-        if (func->args[i]->type != arg_ptr->type) functionMatches = false;
-        arg_ptr++;  // Increment to the next argument
-      }
-      if (functionMatches) return func;
+    	if (argc > 0) {
+		  ASTExpression* arg_ptr = args[0];
+		  bool functionMatches = true;
+		  for(U32 i = 0; i < argc; i++) {
+			if (func->args[i]->type != arg_ptr->type) functionMatches = false;
+			arg_ptr++;  // Increment to the next argument
+		  }
+		  if (functionMatches) return func;
+    	} else {
+    		return func;
+    	}
     }
   }
   return nullptr;
@@ -68,8 +72,23 @@ struct CallDependency {
 global_variable std::vector<CallDependency> global_calldeps;
 
 void AddDependency(const std::string& identName, ASTCall* call) {
-  global_calldeps.emplace_back(identName, call);
+  global_calldeps.push_back({identName, call});
 }
+
+// HACK at the end of the parsing phase inorder to resolve the dependencies of our stuff
+// This is unsustainible and will not be done later
+void ResolveDependencies(ParseState& state) {
+  for(auto i = 0; i < global_calldeps.size(); i++) {
+    auto& dep = global_calldeps[i];
+    auto ident = FindIdentifier(state.currentScope, dep.identName);
+    if (ident == nullptr) LOG_ERROR("COULD NOT RESOLVE CALL!!!");
+    auto funcSet = (ASTFunctionSet*)ident->node;
+    assert(funcSet->nodeType == AST_FUNCTION);
+    ASTExpression** args = (ASTExpression**)((&dep.call->argCount) + sizeof(U32));
+    auto function = FindFunction(funcSet, args, dep.call->argCount);
+  }
+}
+
 //TODO seperate ASTNode into two differently treated branches of the AST
 
 // A statement either begins with an identifier, a keyword, or a new block
@@ -95,6 +114,28 @@ ASTNode* ParseReturn(ParseState& parseState, Lexer& lex) {
     return returnVal;
 }
 
+ASTCall* ParseCall(ParseState& state, Lexer& lex, const Token& identToken) {
+  std::vector<ASTNode*> args;
+  lex.next(); // Eat the open paren
+  while (lex.token.type != TOKEN_PAREN_CLOSE) {
+    ASTExpression* expr = ParseExpr(state, lex);
+    if (expr == nullptr) { ReportError(state, lex.token.site, " Could not resolve expression for argument at index:XXX in call to function named" + identToken.string); }
+  } lex.next();    // Eat the close paren
+
+  ASTCall* call = CreateCall(&args[0], args.size());
+  auto ident = FindIdentifier(state.currentScope, identToken.string);
+  if (ident == nullptr) {
+    AddDependency(identToken.string, call);
+} else {
+  call->ident = ident;
+  auto funcSet = (ASTFunctionSet*)ident->node;
+  assert(funcSet->nodeType == AST_FUNCTION);
+  call->function = ResolveFunction(funcSet, (ASTExpression**)&args[0], args.size());
+  if (!call->function) AddDependency(identToken.string, call);
+}
+  return call;
+}
+
 ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
 	switch (lex.token.type) {
 	case TOKEN_POINTER:
@@ -116,33 +157,15 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
 			return nullptr;
 		}
 
+    Token identToken = lex.token;
 		lex.next(); // Eat the identifier
 		if (lex.token.type == TOKEN_PAREN_OPEN) {
-			LOG_VERBOSE("Parsing Call to: " << ident->name);
-			ASTCall* call = CreateCall();
-			call->ident = ident;
-
-			lex.next();
-			while (lex.token.type != TOKEN_PAREN_CLOSE && lex.token.type != TOKEN_UNKOWN && lex.token.type!= TOKEN_EOF) {
-				ASTExpression* expression = ParseExpr(parseState, lex);
-				if (expression == nullptr) {
-					LOG_ERROR(lex.token.site << " Could not resolve expression at argument index" << call->args.size() << "in call to function " << ident->name);
-					return nullptr;
-				}
-				call->args.push_back(expression);
-			}
-			lex.next();    //Eat the close ')'	//This all appears to be very bad
-			// I probably should not have actualy done the lexer like this  But the parse and codegen
-			// and stuff like this is deffinalty infinitly better.
-			//We can just store the token inside the lexer and only copy out state if it a actualy required
-			//This is much better there is no reason not to do thins because we are just copying around a token everywehere
-			//Its much more convient and doesnt cost anything to just keep this state internal to the lexer like it orginialy was
+      auto call = ParseCall(parseState, lex, identToken);
 			return (ASTExpression*)call;
 		} else if (lex.token.type == TOKEN_ACCESS) {
 			auto structVar = (ASTVariable*)ident->node;
 			auto structDefn = (ASTStruct*)structVar->type;
 			if(structDefn->nodeType != AST_STRUCT) ReportError(parseState, lex.token.site, "Identifier: " + ident->name + " does not name a struct type");
-
 
 			auto expr = CreateMemberExpr(structVar);
 			auto currentStruct = structDefn;
@@ -487,25 +510,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 } break;
   case TOKEN_PAREN_OPEN:  {
 		LOG_VERBOSE("Attempting to parse call to : " << identToken.string);
-    // TODO create a custom stack for each Worker to use as a transient state to push nodes into
-
-    std::vector<ASTNode*> args;
-    lex.next(); // Eat the open paren
-    while (lex.token.type != TOKEN_PAREN_CLOSE) {
-			ASTExpression* expr = ParseExpr(parseState, lex);
-			if (expr == nullptr) { ReportError(parseState, lex.token.site, " Could not resolve expression for argument at index "  + args.size() + " in call to function named" + identToken.string); }
-		} lex.next();    // Eat the close paren
-
-    ASTCall* call = CreateCall(&args[0], args.size());
-    if (ident == nullptr) {
-      AddDependency(identToken.string, call)
-  } else {
-    call->ident = ident;
-    auto funcSet = (ASTFunctionSet*)ident->node;
-    assert(funcSet->nodeType == AST_FUNCTION);
-    call->function = ResolveFunction(funcSet, &args[0], args.size());
-    if (!call->function) AddDependency(identToken.string, call);
-  }
+    auto call = ParseCall(parseState, lex, identToken);
 		return call;
 	} break;
 

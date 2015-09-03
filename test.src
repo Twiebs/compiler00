@@ -1,46 +1,18 @@
-__PrintlnStr :: (msg : @U8) foreign
-__PrintInt :: (value : S32) foreign
-__PrintFloat :: (value : F32) foreign
-__PrintStr :: (msg : @U8) foreign
-Println :: (msg : @U8) { __PrintlnStr(msg) }
-Print :: (value : S32) { __PrintInt(value) }
-Print :: (value : F32) { __PrintFloat(value) }
-Print :: (msg : @U8) { __PrintStr(msg) }
-
-Vector3 :: struct {
-  x : S32
-  y : S32
-  z : S32
-}
 
 DoStuff :: () {
+  y : S32
+  y = 1
   DoThings()
 }
 
 DoThings :: () {
-  Println("Currently Doing Things")
+  z : S32
+  z = 8
 }
 
-Print :: (vector : @Vector3) {
-  Print("[")
-  Print(vector.x)
-  Print(", ")
-  Print(vector.y)
-  Print(", ")
-  Print(vector.z)
-  Println("]")
-}
-
-Main :: () {
-  Print("This is a message from Torin's awesome laguage!!!")
-  Println(" He is so groovy i cant even stand it")
-
-  position : Vector3
-  position.x = 5
-  position.y = 7
-  position.z = 1
-  Print("position ")
-  Print(@position)
-
-  DoThings()
+Main :: () :> S32 {
+  x : S32
+  x = 0
+  DoStuff()
+  return x
 }

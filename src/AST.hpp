@@ -256,7 +256,7 @@ ASTIfStatement* CreateIfStatement(ASTExpression* expr);	//TODO Why are ifstateme
 ASTIter* CreateIter(ASTIdentifier* ident, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
 ASTReturn* CreateReturnValue(ASTExpression* value);
 
-ASTCall* CreateCall(ASTNode* argumentList, U32 argumentCount);
+ASTCall* CreateCall(ASTNode** argumentList, U32 argumentCount);
 ASTVariable* CreateVariable(ASTBlock* block);
 ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
 ASTMutation* CreateMutation(ASTVariable* variable, ASTExpression* expr);

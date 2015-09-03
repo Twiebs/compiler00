@@ -1,6 +1,11 @@
-__PrintlnInt :: (value : S32) foreign
 __PrintlnStr :: (msg : @U8) foreign
-Println :: (msg : S32) { __PrintlnInt(msg) }
+__PrintInt :: (value : S32) foreign
+__PrintFloat :: (value : F32) foreign
+__PrintStr :: (msg : @U8) foreign
+Println :: (msg : @U8) { __PrintlnStr(msg) }
+Print :: (value : S32) { __PrintInt(value) }
+Print :: (value : F32) { __PrintFloat(value) }
+Print :: (msg : @U8) { __PrintStr(msg) }
 
 Vector3 :: struct {
 	x : S32

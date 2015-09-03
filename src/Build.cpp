@@ -106,7 +106,7 @@ int Build(BuildContext& context, BuildSettings& settings) {
 	}
 
 	if (parseState.errorCount == 0) {
-		// TODO Return some error code if codegen fails
+		LOG_ERROR("Codegenerating package");
 		Codegen (package, context);
 		if (settings.logModuleDump) {
 			package->module->dump();
