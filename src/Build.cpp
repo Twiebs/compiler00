@@ -112,8 +112,8 @@ int Build(BuildContext& context, BuildSettings& settings) {
 	ResolveDependencies(parseState);
 
 	if (parseState.errorCount == 0) {
-		LOG_ERROR ("Codegenerating package");
-		Codegen (package, context);
+    LOG_INFO("Emitting code for package...")
+		CodegenPackage(package, context);
 		if (settings.logModuleDump) {
 			package->module->dump();
 		}

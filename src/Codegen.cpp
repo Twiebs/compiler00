@@ -6,26 +6,124 @@
 #include "Codegen.hpp"
 #include "Common.hpp"
 
+
+// Statements
+//void Codegen(ASTFunction* function, const BuildContext& context);
+void Codegen(ASTStruct* structDefn, const BuildContext& context);
+void Codegen(ASTIter* iter, const BuildContext& context);
+
 llvm::Value* Codegen(ASTStringLiteral* str, const BuildContext& context);
 
-void Codegen(Package* package, const BuildContext& context) {
- 	for(ASTNode* node : package->globalScope.members) {
-		Codegen(node, context);
-	}
+llvm::BasicBlock* Codegen(ASTBlock* block, const BuildContext& context);
+llvm::Value* Codegen(ASTNode* node, const BuildContext& context);
+llvm::Value* Codegen(ASTReturn* retVal, const BuildContext& context);
+llvm::Value* Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function, const BuildContext& context);
+llvm::Function* Codegen(ASTFunction* function, const BuildContext& context);
+
+llvm::Value* Codegen(ASTMemberAccess* access, const BuildContext& context);
+
+llvm::Value* Codegen(ASTMemberExpr* expr, const BuildContext& context);
+llvm::Value* Codegen(ASTVarExpr* expr, const BuildContext& context);
+
+llvm::Value* Codegen(ASTBinaryOperation* binop, const BuildContext& context);
+llvm::Value* Codegen(ASTVariable* var, const BuildContext& context);
+llvm::Value* Codegen(ASTMutation* mut, const BuildContext& context);
+llvm::Value* Codegen(ASTCall* call, const BuildContext& context);
+llvm::Value* Codegen(ASTIntegerLiteral* intLiteral, const BuildContext& context);
+llvm::Value* Codegen(ASTFloatLiteral* floatLiteral, const BuildContext& context);
+
+void CodegenPackage(Package* package, const BuildContext& context) {
+ 	for (ASTNode* node : package->globalScope.members) {
+    switch (node->nodeType) {
+      case AST_FUNCTION:
+        Codegen((ASTFunction*)node, context);
+        break;
+      case AST_STRUCT:
+        Codegen((ASTStruct*)node, context);
+        break;
+      default:
+        assert("A node was in the global scope that is not a function or a struct defn");
+        break;
+    }
+  }
 }
 
-void CodegenStatement(ASTNode* node, const BuildContext& context) {
-  switch(node->nodeType) {
-    case AST_FUNCTION:
-      Codegen((ASTFunction*) node, context);
-      break;
-    case AST_ITER:
-      Codegen((ASTIter*)node, context);
-      break;
-    case AST_RETURN:
-      Codegen((ASTReturn*)node, context);
-      break;
-  }
+
+llvm::Function* Codegen(ASTFunction* function, const BuildContext& context) {
+	//HACK to skip function codegen if the function has allready been resolved
+	if (function->code != nullptr) return nullptr; // We never should have to return anything with these statements
+	auto builder = context.builder;
+	LOG_VERBOSE("Codgen Function");
+	std::vector<llvm::Type*> args(function->args.size());
+	for (auto i = 0; i < args.size(); i++) {
+		auto& arg = function->args[i];
+		auto type = arg->type->llvmType;
+		if (arg->isPointer) type = llvm::PointerType::get(type, 0);
+		args[i] = type;
+	}
+
+	// Create the llvm function
+	llvm::FunctionType* funcType = llvm::FunctionType::get(function->returnType->llvmType, args, false);
+	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
+	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, context.currentPackage->module);
+
+	//TODO arguments are created even if the function has no members!
+	if(function->members.size() > 0) {
+		llvm::BasicBlock* block = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", llvmFunc);
+		builder->SetInsertPoint(block);
+	}
+
+	// Create the allocas for our arguments!
+	U32 i = 0;
+	for(auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++){
+		auto& name = function->args[i]->identifier->name;
+		iter->setName(name);
+		if(function->members.size() > 0) {
+			function->args[i]->allocaInst = builder->CreateAlloca(iter->getType(), 0, function->args[i]->identifier->name);
+			builder->CreateStore(iter, function->args[i]->allocaInst);
+		}
+	}
+
+	//The function must always do something...
+	bool returnInstructionSeen = false;
+	if (function->members.size() > 0) {
+		for(U32 i = 0; i < function->members.size(); i++) {
+			auto node = function->members[i];
+			if(node->nodeType == AST_IF) {
+				auto mergeBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", llvmFunc);
+				Codegen((ASTIfStatement*)node, mergeBlock, llvmFunc, context);
+				builder->SetInsertPoint(mergeBlock);
+				continue;
+			}
+
+			if(node->nodeType == AST_RETURN) {
+				returnInstructionSeen = true;
+			}
+			Codegen(node, context);
+		}
+	}
+
+	if(!returnInstructionSeen && function->members.size() > 0) {
+		if(function->returnType == global_voidType) {
+			builder->CreateRetVoid();
+		} else if (function->members.size() > 0){
+			LOG_ERROR("Non-void functions must have a return statement!");
+		}
+	}
+
+	//TODO sanity check to make sure this function was foreign if it did not have a body
+	//Also do a sainy check to make sure that it has created return values for all flow paths
+
+	function->code = llvmFunc;
+	return llvmFunc;
+}
+
+void Codegen(ASTStruct* structDefn, const BuildContext& context) {
+  std::vector<llvm::Type*> memberTypes;
+  for(auto type : structDefn->memberTypes)
+    memberTypes.push_back(type->llvmType);
+  auto& structName = structDefn->identifier->name;
+  structDefn->llvmType = llvm::StructType::create(memberTypes, structName);
 }
 
 llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
@@ -169,75 +267,6 @@ llvm::Value* Codegen(ASTReturn* retVal, const BuildContext& context) {
 	return nullptr;
 }
 
-
-llvm::Function* Codegen(ASTFunction* function, const BuildContext& context) {
-	//HACK to skip function codegen if the function has allready been resolved
-	if (function->code != nullptr) return nullptr; // We never should have to return anything with these statements
-	auto builder = context.builder;
-	LOG_VERBOSE("Codgen Function");
-	std::vector<llvm::Type*> args(function->args.size());
-	for (auto i = 0; i < args.size(); i++) {
-		auto& arg = function->args[i];
-		auto type = arg->type->llvmType;
-		if (arg->isPointer) type = llvm::PointerType::get(type, 0);
-		args[i] = type;
-	}
-
-	// Create the llvm function
-	llvm::FunctionType* funcType = llvm::FunctionType::get(function->returnType->llvmType, args, false);
-	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
-	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, context.currentPackage->module);
-
-	//TODO arguments are created even if the function has no members!
-	if(function->members.size() > 0) {
-		llvm::BasicBlock* block = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", llvmFunc);
-		builder->SetInsertPoint(block);
-	}
-
-	// Create the allocas for our arguments!
-	U32 i = 0;
-	for(auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++){
-		auto& name = function->args[i]->identifier->name;
-		iter->setName(name);
-		if(function->members.size() > 0) {
-			function->args[i]->allocaInst = builder->CreateAlloca(iter->getType(), 0, function->args[i]->identifier->name);
-			builder->CreateStore(iter, function->args[i]->allocaInst);
-		}
-	}
-
-	//The function must always do something...
-	bool returnInstructionSeen = false;
-	if (function->members.size() > 0) {
-		for(U32 i = 0; i < function->members.size(); i++) {
-			auto node = function->members[i];
-			if(node->nodeType == AST_IF) {
-				auto mergeBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", llvmFunc);
-				Codegen((ASTIfStatement*)node, mergeBlock, llvmFunc, context);
-				builder->SetInsertPoint(mergeBlock);
-				continue;
-			}
-
-			if(node->nodeType == AST_RETURN) {
-				returnInstructionSeen = true;
-			}
-			Codegen(node, context);
-		}
-	}
-
-	if(!returnInstructionSeen && function->members.size() > 0) {
-		if(function->returnType == global_voidType) {
-			builder->CreateRetVoid();
-		} else if (function->members.size() > 0){
-			LOG_ERROR("Non-void functions must have a return statement!");
-		}
-	}
-
-	//TODO sanity check to make sure this function was foreign if it did not have a body
-	//Also do a sainy check to make sure that it has created return values for all flow paths
-
-	function->code = llvmFunc;
-	return llvmFunc;
-}
 
 llvm::Value* Codegen(ASTCall* call, const BuildContext& context) {
 	auto builder = context.builder;

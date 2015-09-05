@@ -417,11 +417,12 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
       lex.next(); // Eat the open scope
 
       auto structDefn = CreateStruct();
+      structDefn->identifier = ident;
       ident->node = structDefn;
 
       while(lex.token.type != TOKEN_SCOPE_CLOSE) {
         if (lex.token.type != TOKEN_IDENTIFIER) {
-          ReportError(parseState, lex.token.site, "All top-level statements inside struct defns must be identifiers");
+          ReportError(parseState, lex.token.site, "All statements inside structDefns must be identifier decls");
         }
 
         auto memberToken = lex.token; // Copy the ident token
@@ -442,17 +443,15 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
         lex.next(); //eat the type ident
       }
 
-      assert(structDefn->memberNames.size() == structDefn->memberTypes.size());
-		lex.next(); //Eat the close scope
 
-		if (structDefn->memberTypes.size() > 0) {
-			std::vector<llvm::Type*> memberTypes;
-			for(auto type : structDefn->memberTypes)
-				memberTypes.push_back(type->llvmType);
-			structDefn->llvmType = llvm::StructType::create(memberTypes, "Vector3");
-		} else {
-			ReportError(parseState, identToken.site, "Structs must contain at least one member");
-		}
+      assert(structDefn->memberNames.size() == structDefn->memberTypes.size());
+		    lex.next(); //Eat the close scope
+
+  		if (structDefn->memberTypes.size() > 0) {
+        parseState.currentScope->members.push_back(structDefn);
+  		} else {
+  			ReportError(parseState, identToken.site, "Structs must contain at least one member");
+  		}
     } else {
     	ReportError(parseState, lex.token.site, "Structs must be defined with a block");
     }

@@ -1,7 +1,6 @@
 import "IO.bang"
 
-Main :: () {
-  i : iter 0 to 1000000 {
-    Println(i)
-  }
+Main :: () :> S32 {
+  Print("Woof!")
+  return 0
 }

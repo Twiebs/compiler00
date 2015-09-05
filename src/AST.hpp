@@ -56,9 +56,9 @@ struct ASTNode {
 //Then we could get some very intersing behaviours on these identifiers!
 struct ASTIdentifier {
 	FileSite site;	// Where was the identifier declared
-	std::string name;				//What is the name of the identifier
+	std::string name;				// What is the name of the identifier
 	//It might be a good idea to store information about what this identifier is actualy refering to!
-	ASTNode* node = nullptr;		//What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
+	ASTNode* node = nullptr;		// What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
 };
 
 struct ASTDefinition : public ASTNode {
