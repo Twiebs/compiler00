@@ -105,7 +105,7 @@ struct ASTFunction : public ASTBlock {
 	ASTIdentifier* ident;
 	ASTDefinition* returnType;
 	std::vector<ASTVariable*> args;
-	llvm::Function* code;
+	llvm::Function* code = nullptr;
 };
 
 // I dont like the idea of storing identifiers
@@ -199,7 +199,6 @@ struct ASTMutation : public ASTNode {
 // other nodes in the AST... for now... perhaps these should be concrete structs
 // stored here and we do some crazyness to pack them at the end
 struct ASTCall : public ASTNode {
-	ASTIdentifier* ident;
 	ASTFunction* function;
 	U32 argCount;
 };
@@ -250,13 +249,14 @@ S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 ASTFunctionSet* CreateFunctionSet(ASTIdentifier* ident, ASTBlock* block);		// This is where identifiers are resolved into
 ASTFunction* CreateFunction(ASTFunctionSet* funcSet);	// Functions now must be created within a function set
 ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function);
+ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc);
 
 ASTBlock* CreateBlock(ASTBlock* block);
 ASTIfStatement* CreateIfStatement(ASTExpression* expr);	//TODO Why are ifstatements created without a body?
 ASTIter* CreateIter(ASTIdentifier* ident, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
 ASTReturn* CreateReturnValue(ASTExpression* value);
 
-ASTCall* CreateCall(ASTNode** argumentList, U32 argumentCount);
+ASTCall* CreateCall(ASTExpression** argumentList, U32 argumentCount);
 ASTVariable* CreateVariable(ASTBlock* block);
 ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
 ASTMutation* CreateMutation(ASTVariable* variable, ASTExpression* expr);

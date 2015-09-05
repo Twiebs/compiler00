@@ -61,6 +61,31 @@ void WriteBitcode(llvm::Module* module, const std::string& outputFile);
 int WriteNativeObject(llvm::Module* module, const BuildSettings& settings);
 int WriteExecutable(BuildSettings& settings);
 
+global_variable std::vector<CallDependency> global_calldeps;
+void AddDependency(const std::string& identName, ASTCall* call) {
+  global_calldeps.push_back({identName, call});
+}
+
+void ResolveDependencies(ParseState& state) {
+  for(auto i = 0; i < global_calldeps.size(); i++) {
+    auto& dep = global_calldeps[i];
+    auto ident = FindIdentifier(state.currentScope, dep.identName);
+    if (ident == nullptr) {
+    	FileSite site;
+      ReportError(state, site, "Could not find any function matching the identifier: " + dep.identName);
+      break;
+    }
+    auto funcSet = (ASTFunctionSet*)ident->node;
+    assert(funcSet->nodeType == AST_FUNCTION);
+    auto args = (ASTExpression**)(dep.call + 1);
+    dep.call->function = FindFunction(funcSet, args, dep.call->argCount);
+    if (!dep.call->function) {
+      FileSite site;
+      ReportError(state, site, "Could not match arguments against overloads for function " + dep.identName);
+    }
+  }
+}
+
 int PreBuild(const BuildContext& context, const BuildSettings& settings) {
 	return 0;
 }
@@ -73,40 +98,21 @@ int Build(BuildContext& context, BuildSettings& settings) {
 	context.packages.push_back(package);
 	context.currentPackage = package;
 
-	//The parseState is set to emit AST identifiers into the global scope of our new package
+	// Initialize the parseState and parse each file that it includes
+
 	ParseState parseState;
 	parseState.currentScope = &package->globalScope;
-
-	// The Lex state is set to lex tokens from the inputfile of the package...
-	// Perhaps BuildTakes a package pointer instead of context / build settings
-	// And we consider the build step on packages instead of the entier project
-	// We could seperate into two functions
-	// BuildProject() and BuildPackage();
-	// That sounds like a good idea
-	// The only thing that is needed is the llvmModule
-	// But wait!!!!! That would be package independent anyway!
-
-	Lexer lex;
-	lex.stream.open(settings.rootDir + settings.inputFile);
-	if(!lex.stream.is_open()) {
-		LOG_ERROR("Could not open file" + settings.rootDir + settings.inputFile);
+	parseState.settings = &settings;
+	ParseFile(parseState, settings.rootDir, settings.inputFile);
+	while (parseState.importedFiles.size() > 0) {
+		auto filename = parseState.importedFiles[parseState.importedFiles.size() - 1];
+		parseState.importedFiles.pop_back();
+		ParseFile(parseState, settings.rootDir, filename);
 	}
-	lex.nextChar = lex.stream.get();
-
-	ParseFile(parseState, lex);
-
-	//TODO Codegen no-longer is a step in the build process
-	// We need to walk the tree first and then codegen after the AST has been fully resolved!
-	// It doesnt happen at all anymore
-	//WARN the program *should* crash when we get here!
-
-	if ((parseState.flags & PACKAGE_INVALID)) {
-		LOG_ERROR("There were errors parsing the file.  Bypassing Codegeneration");
-		return -1;
-	}
+	ResolveDependencies(parseState);
 
 	if (parseState.errorCount == 0) {
-		LOG_ERROR("Codegenerating package");
+		LOG_ERROR ("Codegenerating package");
 		Codegen (package, context);
 		if (settings.logModuleDump) {
 			package->module->dump();

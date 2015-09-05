@@ -1,18 +1,7 @@
+import "IO.bang"
 
-DoStuff :: () {
-  y : S32
-  y = 1
-  DoThings()
-}
-
-DoThings :: () {
-  z : S32
-  z = 8
-}
-
-Main :: () :> S32 {
-  x : S32
-  x = 0
-  DoStuff()
-  return x
+Main :: () {
+  i : iter 0 to 1000000 {
+    Println(i)
+  }
 }

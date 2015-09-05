@@ -14,6 +14,20 @@ void Codegen(Package* package, const BuildContext& context) {
 	}
 }
 
+void CodegenStatement(ASTNode* node, const BuildContext& context) {
+  switch(node->nodeType) {
+    case AST_FUNCTION:
+      Codegen((ASTFunction*) node, context);
+      break;
+    case AST_ITER:
+      Codegen((ASTIter*)node, context);
+      break;
+    case AST_RETURN:
+      Codegen((ASTReturn*)node, context);
+      break;
+  }
+}
+
 llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
 	switch(node->nodeType) {
 	case AST_BINOP:
@@ -49,7 +63,6 @@ llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
 		return Codegen((ASTReturn*)node, context);
 	default:
 		assert(!"UNHANDELED CODEGEN OF UNKOWN NODE");
-		LOG_ERROR("UNHANDLED CODEGEN OF NODE");
 		return nullptr;
 	}
 }
@@ -158,10 +171,10 @@ llvm::Value* Codegen(ASTReturn* retVal, const BuildContext& context) {
 
 
 llvm::Function* Codegen(ASTFunction* function, const BuildContext& context) {
+	//HACK to skip function codegen if the function has allready been resolved
+	if (function->code != nullptr) return nullptr; // We never should have to return anything with these statements
 	auto builder = context.builder;
 	LOG_VERBOSE("Codgen Function");
-
-	// Create argument list for function
 	std::vector<llvm::Type*> args(function->args.size());
 	for (auto i = 0; i < args.size(); i++) {
 		auto& arg = function->args[i];
@@ -211,7 +224,7 @@ llvm::Function* Codegen(ASTFunction* function, const BuildContext& context) {
 		}
 	}
 
-	if(!returnInstructionSeen) {
+	if(!returnInstructionSeen && function->members.size() > 0) {
 		if(function->returnType == global_voidType) {
 			builder->CreateRetVoid();
 		} else if (function->members.size() > 0){
@@ -229,35 +242,38 @@ llvm::Function* Codegen(ASTFunction* function, const BuildContext& context) {
 llvm::Value* Codegen(ASTCall* call, const BuildContext& context) {
 	auto builder = context.builder;
 
-	auto func = call->function->code;
-	if (func == 0) {
-		LOG_ERROR("Call to undefined function(" << call->ident->name<< ")");
-		return nullptr;
+	if (!call->function->code) {
+		auto lastInsertBlock = builder->GetInsertBlock();
+		Codegen((ASTFunction*)call->function, context);
+		builder->SetInsertPoint(lastInsertBlock);
 	}
+	auto llvmfunc = call->function->code;
 
 	std::vector<llvm::Value*> argsV;
-	for (U32 i = 0, e = func->arg_size(); i != e; i++) {
-    auto arg = (ASTExpression*)((call + sizeof(ASTCall)) + (i * sizeof(ASTExpression*)));
+	auto argList = (ASTExpression**)(call + 1);
+	for (U32 i = 0, e = llvmfunc->arg_size(); i != e; i++) {
+		auto arg = argList[i];
 		auto argV = Codegen(arg, context);
+
 		if (argV == nullptr) {
 			LOG_DEBUG("Failed to emit code for call argument!");
 			return nullptr;
 		} else {
-      if (arg->nodeType == AST_STRING_LITERAL) {
-    	auto zeroVal = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
-    	std::vector<llvm::Value*> indices;
-    	indices.push_back(zeroVal);
-    	indices.push_back(zeroVal); // This is insane there has to be a better way
-        argV = llvm::GetElementPtrInst::Create(argV, indices, "str", builder->GetInsertBlock());
-      }
-      argsV.push_back(argV);
-    }
+		  if (arg->nodeType == AST_STRING_LITERAL) {
+			auto zeroVal = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
+			std::vector<llvm::Value*> indices;
+			indices.push_back(zeroVal);
+			indices.push_back(zeroVal); // This is insane there has to be a better way
+			argV = llvm::GetElementPtrInst::Create(argV, indices, "str", builder->GetInsertBlock());
+		  }
+		  argsV.push_back(argV);
+		}
 	}
 
 	if(call->function->returnType != global_voidType) {
-		return builder->CreateCall(func, argsV, "calltmp");
+		return builder->CreateCall(llvmfunc, argsV, "calltmp");
 	} else {
-		return builder->CreateCall(func, argsV);
+		return builder->CreateCall(llvmfunc, argsV);
 	}
 }
 
@@ -353,8 +369,14 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 		Codegen(node, context);
 	}
 
-	auto load = builder->CreateLoad(var->allocaInst);	// Load the value of the var
-	auto loopCond = builder->CreateICmpSLE(load, endValue, "loopcond");
+	//We now create a instruction to increment the iterator
+	auto stepValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 1);
+	auto currentValue = builder->CreateLoad(var->allocaInst);
+	auto nextValue = builder->CreateAdd(currentValue, stepValue, "increment");
+	builder->CreateStore(nextValue, var->allocaInst);
+
+	auto condLoad = builder->CreateLoad(var->allocaInst);
+	auto loopCond = builder->CreateICmpSLE(condLoad, endValue, "loopcond");	// I dont think this will work properly we need to do another load
 
 	builder->CreateCondBr(loopCond, loopBlock, exitBlock);
 	builder->SetInsertPoint(exitBlock);	//Any codegenerated after this loop must be emitted into the exit block

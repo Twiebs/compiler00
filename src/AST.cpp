@@ -1,27 +1,5 @@
 #include "AST.hpp"
 
-
-
-template<typename T, U32 initalElementCount, U32 subElementCount>
-class NodeAllocator {
-public:
-	T* Allocate() {
-		if (count < initalElementCount) {
-			return elements[count++];
-		} else {
-			if (next == nullptr) {
-				next = new NodeAllocator<T, subElementCount, subElementCount>();
-			}
-			return next->Allocate();
-		}
-	}
-private:
-	T elements[initalElementCount];
-	U32 count;
-	NodeAllocator<T, subElementCount, subElementCount>* next;
-};
-
-
 ASTBlock global_defaultGlobalScope;
 ASTDefinition* global_voidType;
 ASTDefinition* global_U8Type;
@@ -69,12 +47,6 @@ ASTDefinition* CreateType(ASTBlock* scope, const std::string& name, llvm::Type* 
 global_variable std::unordered_map<std::string, ASTIdentifier*> global_identifierLookupMap;
 global_variable ASTIdentifier global_identifiers[1024];
 global_variable U32 global_identifierCount = 0;
-
-global_variable NodeAllocator<ASTIdentifier, 1024, 64>* global_identifierAllocator;
-
-void InitAllocators() {
-	global_identifierAllocator = new NodeAllocator<ASTIdentifier, 1024, 64>();
-}
 
 ASTIdentifier* CreateIdentifier (const std::string& name) {
 	auto result = &global_identifiers[global_identifierCount++];
@@ -210,6 +182,28 @@ ASTFunction* CreateFunction(ASTFunctionSet* funcSet) {
 	return function;
 }
 
+ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc) {
+  for (auto i = 0; i < funcSet->functions.size(); i++) {
+    auto func = funcSet->functions[i];
+    if (func->args.size() == argc) {
+    	if (argc > 0) {
+		  bool functionMatches = true;
+		  for (auto i = 0; i < argc; i++) {
+			  auto arg = args[i];
+			  if (func->args[i]->type != arg->type) {
+				  functionMatches = false;
+			  }
+		  }
+		  if (functionMatches)
+			  return func;
+    	} else {
+    		return func;
+    	}
+    }
+  }
+  return nullptr;
+}
+
 ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function) {
 	auto funcSet = (ASTFunctionSet*)ident->node;
 	assert(funcSet->nodeType == AST_FUNCTION);
@@ -237,12 +231,16 @@ ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function) {
 // Im not sure if we need to bother with the pointer since we know they will procede the argument count
 // but for now it keeps it simple so i will leave it it will be intresting to see if it actualy works.  Eventualy this will
 // use an allocator to create nodes for each package.
-ASTCall* CreateCall (ASTNode** argumentList, U32 argumentCount) {
-	ASTCall* call = (ASTCall*)malloc(sizeof(ASTCall) + (sizeof(ASTNode*) * argumentCount));
+ASTCall* CreateCall (ASTExpression** argList, U32 argCount) {
+	ASTCall* call = (ASTCall*)malloc(sizeof(ASTCall) + ((sizeof(ASTExpression*) * argCount)));
 	call->nodeType = AST_CALL;
-	call->argCount = argumentCount;
-	// Pack the args in the back of the struct
-	memcpy(call + (sizeof(ASTNode*) * argumentCount), argumentList, argumentCount);
+	call->argCount = argCount;
+	if (argCount > 0) {
+		auto callArgs = (ASTExpression**)(call + 1);
+		for (auto i = 0; i < argCount; i++) {
+			callArgs[i] = argList[i];
+		}
+	}
 	return call;
 }
 

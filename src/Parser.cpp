@@ -27,80 +27,32 @@ int GetTokenPrecedence(const Token& token) {
 
 void ReportError(ParseState& parseState, FileSite& site, const std::string& msg) {
 	parseState.errorCount++;
-	std::cout << "[ERROR | " << site << "]" << msg;
+	std::cout << "ERROR" << site << " " << msg  << "\n";
 }
 
-void ParseFile (ParseState& parseState, Lexer& lex) {
-	auto& token = lex.token;
-	lex.next();
-    while (token.type != TOKEN_EOF) {
-        ParseStatement(parseState, lex);
-    }
-}
-
-ASTFunction* ResolveFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc) {
-  for (auto i = 0; i < funcSet->functions.size(); i++) {
-    auto func = funcSet->functions[i];
-
-    if (func->args.size() == argc) {
-    	if (argc > 0) {
-		  ASTExpression* arg_ptr = args[0];
-		  bool functionMatches = true;
-		  for(U32 i = 0; i < argc; i++) {
-			if (func->args[i]->type != arg_ptr->type) functionMatches = false;
-			arg_ptr++;  // Increment to the next argument
-		  }
-		  if (functionMatches) return func;
-    	} else {
-    		return func;
-    	}
-    }
-  }
-  return nullptr;
-}
-
-// How will we handle functions that are resolved in a different package?
-// Short term unknown identifiers can be pushed into a DArray and then checked later
-// To see if they have been resolved into nodes.  We could do somthing very stupid initaly
-// Have a map of strings, vector pairs that store the nodes that require that identifer to be resolved.
-// After all the packages have been parsed we do the final resolution of identifiers
-struct CallDependency {
-  std::string identName;
-  ASTCall* call;
-};
-
-global_variable std::vector<CallDependency> global_calldeps;
-
-void AddDependency(const std::string& identName, ASTCall* call) {
-  global_calldeps.push_back({identName, call});
-}
-
-// HACK at the end of the parsing phase inorder to resolve the dependencies of our stuff
-// This is unsustainible and will not be done later
-void ResolveDependencies(ParseState& state) {
-  for(auto i = 0; i < global_calldeps.size(); i++) {
-    auto& dep = global_calldeps[i];
-    auto ident = FindIdentifier(state.currentScope, dep.identName);
-    if (ident == nullptr) LOG_ERROR("COULD NOT RESOLVE CALL!!!");
-    auto funcSet = (ASTFunctionSet*)ident->node;
-    assert(funcSet->nodeType == AST_FUNCTION);
-    ASTExpression** args = (ASTExpression**)((&dep.call->argCount) + sizeof(U32));
-    auto function = FindFunction(funcSet, args, dep.call->argCount);
-  }
+ASTNode* ParseImport(ParseState& state, Lexer& lex) {
+	lex.next(); //Eat the import statement
+	if (lex.token.type != TOKEN_STRING)
+		ReportError(state, lex.token.site, "Import keyword requires a string to follow it");
+	else
+		state.importedFiles.push_back(lex.token.string);
+	lex.next();	 //Eat the import string
+	return ParseStatement(state, lex);
 }
 
 //TODO seperate ASTNode into two differently treated branches of the AST
-
 // A statement either begins with an identifier, a keyword, or a new block
+
 ASTNode* ParseStatement (ParseState& state, Lexer& lex) {
 	switch (lex.token.type) {
 	case TOKEN_IDENTIFIER:  return ParseIdentifier(state, lex);
-	case TOKEN_IF: 		      return ParseIF(state, lex);
-  case TOKEN_ITER:        return ParseIter(state, lex);
+	case TOKEN_IF: 		    return ParseIF(state, lex);
+  	case TOKEN_ITER:        return ParseIter(state, lex);
 	case TOKEN_RETURN: 	    return ParseReturn(state, lex);
-  case TOKEN_SCOPE_OPEN:  return ParseBlock(state, lex);
+	case TOKEN_SCOPE_OPEN:  return ParseBlock(state, lex);
+	case TOKEN_IMPORT:		return ParseImport(state, lex);
 	default:
-    ReportError(state, lex.token.site, "Could not parse statement: unkown Token");
+		ReportError(state, lex.token.site, "Could not parse statement: unkown Token");
 		lex.next(true);
 		return nullptr;
 	}
@@ -115,11 +67,15 @@ ASTNode* ParseReturn(ParseState& parseState, Lexer& lex) {
 }
 
 ASTCall* ParseCall(ParseState& state, Lexer& lex, const Token& identToken) {
-  std::vector<ASTNode*> args;
+  std::vector<ASTExpression*> args;
   lex.next(); // Eat the open paren
   while (lex.token.type != TOKEN_PAREN_CLOSE) {
     ASTExpression* expr = ParseExpr(state, lex);
-    if (expr == nullptr) { ReportError(state, lex.token.site, " Could not resolve expression for argument at index:XXX in call to function named" + identToken.string); }
+    if (expr == nullptr) {
+      ReportError(state, lex.token.site, " Could not resolve expression for argument at index:XXX in call to function named" + identToken.string);
+    } else {
+      args.push_back(expr);
+    }
   } lex.next();    // Eat the close paren
 
   ASTCall* call = CreateCall(&args[0], args.size());
@@ -127,10 +83,9 @@ ASTCall* ParseCall(ParseState& state, Lexer& lex, const Token& identToken) {
   if (ident == nullptr) {
     AddDependency(identToken.string, call);
 } else {
-  call->ident = ident;
   auto funcSet = (ASTFunctionSet*)ident->node;
   assert(funcSet->nodeType == AST_FUNCTION);
-  call->function = ResolveFunction(funcSet, (ASTExpression**)&args[0], args.size());
+  call->function = FindFunction(funcSet, (ASTExpression**)&args[0], args.size());
   if (!call->function) AddDependency(identToken.string, call);
 }
   return call;
@@ -152,8 +107,9 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
 
 		LOG_VERBOSE("Parsing an identifier expression! for identifier: " << lex.token.string);
 		auto ident = FindIdentifier(parseState.currentScope, lex.token.string);
-		if (!ident) {	// TODO defer identifier resolution
+		if (!ident) {
 			ReportError(parseState, lex.token.site, "Identifier " + lex.token.string + " does not exist!");
+      lex.next();
 			return nullptr;
 		}
 
@@ -422,11 +378,9 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 			lex.next(); // Eat the scope
 
 			while (lex.token.type != TOKEN_SCOPE_CLOSE && lex.token.type != TOKEN_EOF) {
+        // Here we are going to push back nullptrs into the function because they will never
+        // Get to the codegenration phase anyway..  Instead of branching we can juse do this and not care
 				ASTNode* node = ParseStatement(parseState, lex);
-				if (node == nullptr) {
-					LOG_ERROR(lex.token.site << " Could not parse statement inside function body: " << ident->name);
-					return nullptr;
-				}
 				function->members.push_back(node);
 			}
 
@@ -695,11 +649,12 @@ ASTNode* ParseIter(ParseState& state, Lexer& lex, const std::string& identName) 
   lex.next(); // Eat the iter
 
   auto expr = ParseExpr(state, lex);
-  if (!expr) LOG_ERROR(lex.token.site << "Could not parse expression to the right of iter");
+  if (!expr)
+    LOG_ERROR(lex.token.site << "Could not parse expression to the right of iter");
 
   if (lex.token.type == TOKEN_TO) {
-	lex.next(); 	//Eat the to
-    if (identName != "") {
+	   lex.next(); 	//Eat the to
+     if (identName != "") {
       auto block = CreateBlock(state.currentScope);
       auto ident = CreateIdentifier(block, identName);
       auto var = CreateVariable(block);
@@ -710,14 +665,15 @@ ASTNode* ParseIter(ParseState& state, Lexer& lex, const std::string& identName) 
 
       auto endExpr = ParseExpr(state, lex);
       if (!endExpr) LOG_ERROR(lex.token.site << "Could not parse Expression after TO keyword");
-
       ParseBlock(state, lex, block);
       auto iter = CreateIter(ident, expr, endExpr, nullptr, block);
-
       return iter;
 
     } else {
-      LOG_ERROR(lex.token.site << "iter statement must be declared with an identifier!");
+      ReportError(state, lex.token.site, "iter statements that iterrate through a range must be declared with an identifier to hold the index!");
+      ParseExpr(state, lex);  //eat the other expr
+      //TODO skip block or somthing?
+      return nullptr;
     }
   }
 
@@ -751,4 +707,21 @@ ASTNode* ParseBlock(ParseState& state, Lexer& lex, ASTBlock* block) {
   lex.next();  //Eat the close scope
   state.currentScope = previousScope;
   return block;
+}
+
+void ParseFile(ParseState& state, const std::string& rootDir, const std::string& filename) {
+	Lexer lex;
+	lex.stream.open(rootDir + filename);
+	if (!lex.stream.is_open()) {
+		LOG_ERROR("Could not open file " + filename);
+		return;
+	}
+	lex.nextChar = lex.stream.get();
+  lex.token.site.filename = filename;
+
+	auto& token = lex.token;
+	lex.next();
+	while (token.type != TOKEN_EOF) {
+		ParseStatement(state, lex);
+	}
 }

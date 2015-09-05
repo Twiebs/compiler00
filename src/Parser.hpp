@@ -23,6 +23,9 @@ struct ParseState {
 	ASTBlock* currentScope = nullptr;
 	U32 errorCount = 0;
 	U32 flags = 0;
+	std::vector<std::string> importedFiles;
+	BuildSettings* settings;
 };
 
-void ParseFile(ParseState& parseState, Lexer& lexState);
+void ParseFile(ParseState& parseState, const std::string& rootDir, const std::string& filename);
+void ReportError(ParseState& parseState, FileSite& site, const std::string& msg);
