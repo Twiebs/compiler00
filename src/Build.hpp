@@ -1,5 +1,4 @@
 #pragma once
-
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
 

@@ -572,13 +572,13 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 			LOG_ERROR(identToken.site << "Type mismatch between variable " << identToken.string << "(" << var->type->identifier->name << ") and RHS expression(" << expr->type->identifier->name << ")!");
 			return nullptr;
 		}
-		//Why do variables need anyt ype of mutation whatsofever?
-		//That doesnt even make any sense whatso ever
+		// Why do variables need anyt ype of mutation whatsofever?
+		// That doesnt even make any sense whatso ever
 		return CreateMutation(var, expr);
 	}
 
-	//We have gotten past all our routines
-	//THIS SHOULD NEVER HAPPEN!
+	// We have gotten past all our routines
+	// THIS SHOULD NEVER HAPPEN!
 	INTERNAL_ERROR(lex.token.site << "Something REALLY Terrible has happened!  ITS IMPOSSIBLE TO GET HERE! The lex.token that caused this was [" << lex.token.string << "]");
 	return nullptr;
 }

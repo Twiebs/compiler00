@@ -3,22 +3,26 @@
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Module.h"
 
-#include "Codegen.hpp"
+#include "AST.hpp"
+#include "Build.hpp"
 #include "Common.hpp"
 
-
 // Statements
-//void Codegen(ASTFunction* function, const BuildContext& context);
+void CodegenStatement(ASTNode* node, const BuildContext& context);
 void Codegen(ASTStruct* structDefn, const BuildContext& context);
 void Codegen(ASTIter* iter, const BuildContext& context);
+void Codegen(ASTFunction* function, const BuildContext& context);
 
+// Expressions
+llvm::Value* CodegenExpression(ASTExpression* expr, const BuildContext& context);
+llvm::Value* Codegen(ASTIntegerLiteral* intLiteral, const BuildContext& context);
+llvm::Value* Codegen(ASTFloatLiteral* floatLiteral, const BuildContext& context);
 llvm::Value* Codegen(ASTStringLiteral* str, const BuildContext& context);
 
 llvm::BasicBlock* Codegen(ASTBlock* block, const BuildContext& context);
 llvm::Value* Codegen(ASTNode* node, const BuildContext& context);
 llvm::Value* Codegen(ASTReturn* retVal, const BuildContext& context);
 llvm::Value* Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function, const BuildContext& context);
-llvm::Function* Codegen(ASTFunction* function, const BuildContext& context);
 
 llvm::Value* Codegen(ASTMemberAccess* access, const BuildContext& context);
 
@@ -29,8 +33,6 @@ llvm::Value* Codegen(ASTBinaryOperation* binop, const BuildContext& context);
 llvm::Value* Codegen(ASTVariable* var, const BuildContext& context);
 llvm::Value* Codegen(ASTMutation* mut, const BuildContext& context);
 llvm::Value* Codegen(ASTCall* call, const BuildContext& context);
-llvm::Value* Codegen(ASTIntegerLiteral* intLiteral, const BuildContext& context);
-llvm::Value* Codegen(ASTFloatLiteral* floatLiteral, const BuildContext& context);
 
 void CodegenPackage(Package* package, const BuildContext& context) {
  	for (ASTNode* node : package->globalScope.members) {
@@ -48,10 +50,9 @@ void CodegenPackage(Package* package, const BuildContext& context) {
   }
 }
 
-
-llvm::Function* Codegen(ASTFunction* function, const BuildContext& context) {
+void Codegen(ASTFunction* function, const BuildContext& context) {
 	//HACK to skip function codegen if the function has allready been resolved
-	if (function->code != nullptr) return nullptr; // We never should have to return anything with these statements
+	if (function->code != nullptr) return; // We never should have to return anything with these statements
 	auto builder = context.builder;
 	LOG_VERBOSE("Codgen Function");
 	std::vector<llvm::Type*> args(function->args.size());
@@ -115,7 +116,6 @@ llvm::Function* Codegen(ASTFunction* function, const BuildContext& context) {
 	//Also do a sainy check to make sure that it has created return values for all flow paths
 
 	function->code = llvmFunc;
-	return llvmFunc;
 }
 
 void Codegen(ASTStruct* structDefn, const BuildContext& context) {
@@ -140,8 +140,6 @@ llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
 		return Codegen((ASTMemberExpr*)node, context);
 	case AST_VAR_EXPR:
 		return Codegen((ASTVarExpr*)node, context);
-	case AST_FUNCTION:
-		return Codegen((ASTFunction*) node, context);
 	case AST_CALL:
 		return Codegen((ASTCall*)node, context);
 	case AST_IF:
@@ -246,7 +244,7 @@ llvm::Value* Codegen(ASTMutation* mut, const BuildContext& context) {
 		LOG_ERROR("Cannot assign a value to an unitialized variable!");
 		return nullptr;
 	}
-	//TODO optional load flag!
+	// TODO optional load flag!
 	auto value = Codegen(mut->value, context);
 	if(value == nullptr) {
 		LOG_ERROR("Could not emit code for expression when assigning value to " << mut->variable->identifier);
@@ -280,23 +278,18 @@ llvm::Value* Codegen(ASTCall* call, const BuildContext& context) {
 
 	std::vector<llvm::Value*> argsV;
 	auto argList = (ASTExpression**)(call + 1);
-	for (U32 i = 0, e = llvmfunc->arg_size(); i != e; i++) {
-		auto arg = argList[i];
-		auto argV = Codegen(arg, context);
-
-		if (argV == nullptr) {
-			LOG_DEBUG("Failed to emit code for call argument!");
-			return nullptr;
-		} else {
-		  if (arg->nodeType == AST_STRING_LITERAL) {
-			auto zeroVal = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
-			std::vector<llvm::Value*> indices;
-			indices.push_back(zeroVal);
-			indices.push_back(zeroVal); // This is insane there has to be a better way
-			argV = llvm::GetElementPtrInst::Create(argV, indices, "str", builder->GetInsertBlock());
-		  }
-		  argsV.push_back(argV);
-		}
+	for (auto i = 0; i < call->function->args.size(); i++) {
+    auto arg = argList[i];
+    auto arg_value = Codegen(arg, context);
+	  assert(arg_value != nullptr);
+	  if (arg->nodeType == AST_STRING_LITERAL) {
+  		auto zeroVal = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
+  		std::vector<llvm::Value*> indices;
+  		indices.push_back(zeroVal);
+  		indices.push_back(zeroVal); // This is insane there has to be a better way
+  		arg_value = builder->CreateGEP(arg_value, indices, "strgep");
+	  }
+	  argsV.push_back(arg_value);
 	}
 
 	if(call->function->returnType != global_voidType) {
@@ -380,13 +373,9 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 	// We emit some code for the value of the end expression
 	// AKA the end integer
 	auto endValue = Codegen(iter->end, context);
+	auto stepValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 1);
 
 	auto parentBlock = builder->GetInsertBlock()->getParent();
-
-	// We create a new basic block where we will emit our loop body into
-	// We then create a branch from the currentBlock into the loopBlock
-	// and move the insertion point of the builder to the loopblock
-	// We create the two blocks that code will be emitted into
 	auto loopBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "loop", parentBlock);
 	auto exitBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "loopexit", parentBlock);
 
@@ -398,11 +387,11 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 		Codegen(node, context);
 	}
 
-	//We now create a instruction to increment the iterator
-	auto stepValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 1);
+	// Create an instruction to increment the iterator
 	auto currentValue = builder->CreateLoad(var->allocaInst);
 	auto nextValue = builder->CreateAdd(currentValue, stepValue, "increment");
 	builder->CreateStore(nextValue, var->allocaInst);
+
 
 	auto condLoad = builder->CreateLoad(var->allocaInst);
 	auto loopCond = builder->CreateICmpSLE(condLoad, endValue, "loopcond");	// I dont think this will work properly we need to do another load
@@ -425,8 +414,7 @@ llvm::Value* Codegen (ASTMemberAccess* access, const BuildContext& context) {
 
 	llvm::Value* value_ptr = structAlloca;
 	if (access->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
-	auto gep = llvm::GetElementPtrInst::Create(value_ptr, indices, "access", builder->GetInsertBlock());
-
+	auto gep = builder->CreateGEP(value_ptr, indices, "access");
 	switch(access->mode) {
 	case ACCESS_ASSIGN:
 		auto expr = Codegen(access->expr, context);
@@ -480,12 +468,13 @@ llvm::Value* Codegen (ASTVarExpr* expr, const BuildContext& context) {
 llvm::Value* Codegen (ASTIntegerLiteral* intNode, const BuildContext& context) {
 	return llvm::ConstantInt::get(intNode->type->llvmType, intNode->value);
 }
+
 llvm::Value* Codegen (ASTFloatLiteral* floatNode, const BuildContext& context) {
 	return llvm::ConstantFP::get(floatNode->type->llvmType, floatNode->value);
 }
 
-// For now we are not going to give a shit weather or not string literals
-// are duplicated, also it may be benifical to push them on the stack rather than
-// creating them as global constants but for now i will do what llvm does.
 llvm::Value* Codegen (ASTStringLiteral* str, const BuildContext& context) {
+	auto builder = context.builder;
+	auto str_value = builder->CreateGlobalStringPtr(str->value);
+	return str_value;
 }

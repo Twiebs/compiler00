@@ -57,6 +57,7 @@
 
 using namespace llvm;
 
+void CodegenPackage(Package* package, const BuildContext& context);
 void WriteBitcode(llvm::Module* module, const std::string& outputFile);
 int WriteNativeObject(llvm::Module* module, const BuildSettings& settings);
 int WriteExecutable(BuildSettings& settings);

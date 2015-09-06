@@ -1,6 +1,12 @@
 import "IO.bang"
 
+Data :: struct {
+  x : S32
+}
+
 Main :: () :> S32 {
-  Print("Woof!")
+  data : Data
+  data.x = 7
+  Println(data.x)
   return 0
 }
