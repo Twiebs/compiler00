@@ -5,7 +5,6 @@
 
 #include "llvm/IR/Value.h"
 #include "llvm/IR/Type.h"
-#include "llvm/IR/Module.h"
 #include "llvm/IR/Instructions.h"
 
 #include "Lexer.hpp"

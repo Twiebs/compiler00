@@ -4,6 +4,8 @@
 
 #include "AST.hpp"
 
+// Serious question why the fuck do we care about the llvmModule
+// here??? we have not even created it yet!!!!
 struct Package {
 	ASTBlock globalScope;
 	llvm::Module* module;
@@ -37,9 +39,9 @@ struct BuildSettings {
 	bool emitExecutable;
 };
 
-//NOTE consider seperating errorCount into a buildState
-//We could then have a global_buildState;
-//its a hack but we dont need to tote that information around with the context!
+// NOTE consider seperating errorCount into a buildState
+// We could then have a global_buildState;
+// its a hack but we dont need to tote that information around with the context!
 struct BuildContext {
 	std::vector<Package*> packages;
 	Package* currentPackage;

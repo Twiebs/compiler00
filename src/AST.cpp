@@ -1,3 +1,6 @@
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Instructions.h"
+
 #include "AST.hpp"
 
 ASTBlock global_defaultGlobalScope;
@@ -16,22 +19,22 @@ ASTDefinition* global_F64Type;
 ASTDefinition* global_F128Type;
 
 void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module) {
-	global_voidType = CreateType(scope, "Void", llvm::Type::getVoidTy(module->getContext()));
+	global_voidType = CreateType(scope, "Void", llvm::Type::getVoidTy(llvm::getGlobalContext()));
 
-	global_U8Type = CreateType(scope, "U8",   llvm::IntegerType::get(module->getContext(), 8));
-	global_U16Type = CreateType(scope, "U16", llvm::IntegerType::get(module->getContext(), 16));
-	global_U32Type = CreateType(scope, "U32", llvm::IntegerType::get(module->getContext(), 32));
-	global_U64Type = CreateType(scope, "U64", llvm::IntegerType::get(module->getContext(), 64));
+	global_U8Type = CreateType(scope, "U8",   llvm::IntegerType::get(llvm::getGlobalContext(), 8));
+	global_U16Type = CreateType(scope, "U16", llvm::IntegerType::get(llvm::getGlobalContext(), 16));
+	global_U32Type = CreateType(scope, "U32", llvm::IntegerType::get(llvm::getGlobalContext(), 32));
+	global_U64Type = CreateType(scope, "U64", llvm::IntegerType::get(llvm::getGlobalContext(), 64));
 
-	global_S8Type   = CreateType(scope, "S8", llvm::Type::getInt8Ty(module->getContext()));
-	global_S16Type = CreateType(scope, "S16", llvm::Type::getInt16Ty(module->getContext()));
-	global_S32Type = CreateType(scope, "S32", llvm::Type::getInt32Ty(module->getContext()));
-	global_S64Type = CreateType(scope, "S64", llvm::Type::getInt64Ty(module->getContext()));
+	global_S8Type   = CreateType(scope, "S8", llvm::Type::getInt8Ty(llvm::getGlobalContext()));
+	global_S16Type = CreateType(scope, "S16", llvm::Type::getInt16Ty(llvm::getGlobalContext()));
+	global_S32Type = CreateType(scope, "S32", llvm::Type::getInt32Ty(llvm::getGlobalContext()));
+	global_S64Type = CreateType(scope, "S64", llvm::Type::getInt64Ty(llvm::getGlobalContext()));
 
-	global_F16Type   = CreateType(scope, "F16", llvm::Type::getHalfTy(module->getContext()));
-	global_F32Type   = CreateType(scope, "F32", llvm::Type::getFloatTy(module->getContext()));
-	global_F64Type   = CreateType(scope, "F64", llvm::Type::getDoubleTy(module->getContext()));
-	global_F128Type = CreateType(scope, "F128", llvm::Type::getFP128Ty(module->getContext()));
+	global_F16Type   = CreateType(scope, "F16", llvm::Type::getHalfTy(llvm::getGlobalContext()));
+	global_F32Type   = CreateType(scope, "F32", llvm::Type::getFloatTy(llvm::getGlobalContext()));
+	global_F64Type   = CreateType(scope, "F64", llvm::Type::getDoubleTy(llvm::getGlobalContext()));
+	global_F128Type = CreateType(scope, "F128", llvm::Type::getFP128Ty(llvm::getGlobalContext()));
 }
 
 ASTDefinition* CreateType(ASTBlock* scope, const std::string& name, llvm::Type* type) {

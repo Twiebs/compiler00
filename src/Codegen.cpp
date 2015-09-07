@@ -1,3 +1,35 @@
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/FormattedStream.h"
+#include "llvm/Support/raw_os_ostream.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/Host.h"
+#include "llvm/Support/PluginLoader.h"
+#include "llvm/Support/PrettyStackTrace.h"
+#include "llvm/Support/Signals.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/ToolOutputFile.h"
+#include "llvm/Target/TargetLibraryInfo.h"
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/TargetSelect.h"
+
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
+
+#include "llvm/Bitcode/ReaderWriter.h"
+
+#include "llvm/CodeGen/CommandFlags.h"
+#include "llvm/CodeGen/LinkAllAsmWriterComponents.h"
+#include "llvm/CodeGen/LinkAllCodegenComponents.h"
+
+#include "llvm/PassManager.h"
+
+#include "llvm/IRReader/IRReader.h"
+
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Value.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/Constant.h"
@@ -7,54 +39,92 @@
 #include "Build.hpp"
 #include "Common.hpp"
 
+// TODO
+// Consider removing the need to have a buildContext passed arround
+// It litteraly serves no purpose whatsoever except the meerly exist
+// Instead we can just create a global builder inside of the cpp file
+// and use that to codegen the packages...  If we need to thread the
+// codegeneration phase.... which would operate on different llvm modules anyway
+// then we can move them into some type of LLVMWorker struct the holds the module
+// and the IRBuilder associated with that package.  This would allow some seperation
+// between my code and llvm nonsense...  We could get it to a point where llvm code only lives inside
+// of this codegen file  It would make build times 10000% faster (literaly)
+
+global_variable llvm::IRBuilder<>* builder = new llvm::IRBuilder<>(llvm::getGlobalContext());
+
+//HACK HACK HACK HACK!!!!! THIS IS A MASSIVE HACK!!!
+global_variable Package* global_package;
+
+// Top level statements
+// Eventualy we might consider allowing structs and functions to be declared localy at block level
+void Codegen(ASTStruct* structDefn);
+void Codegen(ASTFunction* function, llvm::Module* module);
+
+// TODO
+// I think that this and a mutation are essentialy the exact same thing
+// Member access just needs to hold some indicies to how deep its reaching into is constituaint members
+// With an extra U32 inside of the struct we can keep track of the indicies of the acces and just combine
+// the member access with a variable mutation... or we could just rename this to somthing better like
+// ASTMemberOperation and ASTVariableOperation which i think may be a much better alternative
+// These two things would be statements and would not require any return values
+
 // Statements
-void CodegenStatement(ASTNode* node, const BuildContext& context);
-void Codegen(ASTStruct* structDefn, const BuildContext& context);
-void Codegen(ASTIter* iter, const BuildContext& context);
-void Codegen(ASTFunction* function, const BuildContext& context);
+void CodegenStatement(ASTNode* node);
+void Codegen(ASTVariable* var);
+void Codegen(ASTMutation* mut);
+void Codegen(ASTMemberAccess* access);
+void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
+void Codegen(ASTIter* iter);
+void Codegen(ASTReturn* retVal);
 
 // Expressions
-llvm::Value* CodegenExpression(ASTExpression* expr, const BuildContext& context);
-llvm::Value* Codegen(ASTIntegerLiteral* intLiteral, const BuildContext& context);
-llvm::Value* Codegen(ASTFloatLiteral* floatLiteral, const BuildContext& context);
-llvm::Value* Codegen(ASTStringLiteral* str, const BuildContext& context);
+llvm::Value* CodegenExpr(ASTNode* expr);
+llvm::Value* Codegen(ASTIntegerLiteral* intLiteral);
+llvm::Value* Codegen(ASTFloatLiteral* floatLiteral);
+llvm::Value* Codegen(ASTBinaryOperation* binop);
+llvm::Value* Codegen(ASTMemberExpr* expr);
+llvm::Value* Codegen(ASTVarExpr* expr);
+llvm::Value* Codegen(ASTStringLiteral* str);
+llvm::Value* Codegen(ASTCall* call);
 
-llvm::BasicBlock* Codegen(ASTBlock* block, const BuildContext& context);
-llvm::Value* Codegen(ASTNode* node, const BuildContext& context);
-llvm::Value* Codegen(ASTReturn* retVal, const BuildContext& context);
-llvm::Value* Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function, const BuildContext& context);
+void CodegenPackage (Package* package, const BuildContext& context) {
+  global_package = package;
 
-llvm::Value* Codegen(ASTMemberAccess* access, const BuildContext& context);
-
-llvm::Value* Codegen(ASTMemberExpr* expr, const BuildContext& context);
-llvm::Value* Codegen(ASTVarExpr* expr, const BuildContext& context);
-
-llvm::Value* Codegen(ASTBinaryOperation* binop, const BuildContext& context);
-llvm::Value* Codegen(ASTVariable* var, const BuildContext& context);
-llvm::Value* Codegen(ASTMutation* mut, const BuildContext& context);
-llvm::Value* Codegen(ASTCall* call, const BuildContext& context);
-
-void CodegenPackage(Package* package, const BuildContext& context) {
  	for (ASTNode* node : package->globalScope.members) {
     switch (node->nodeType) {
       case AST_FUNCTION:
-        Codegen((ASTFunction*)node, context);
+        Codegen((ASTFunction*)node, package->module);
         break;
       case AST_STRUCT:
-        Codegen((ASTStruct*)node, context);
+        Codegen((ASTStruct*)node);
         break;
       default:
-        assert("A node was in the global scope that is not a function or a struct defn");
+        assert(!"A node was in the global scope that is not a function or a struct defn");
         break;
     }
   }
+
+  llvm::raw_os_ostream stream(std::cout);
+  if (llvm::verifyModule(*package->module, &stream)) {
+    LOG_ERROR("llvm::Module verification failed!");
+    LOG_ERROR("Build incomplete!  Skipping executable creation");
+  }
+
+
 }
 
-void Codegen(ASTFunction* function, const BuildContext& context) {
+void Codegen(ASTStruct* structDefn) {
+  std::vector<llvm::Type*> memberTypes;
+  for(auto type : structDefn->memberTypes)
+    memberTypes.push_back(type->llvmType);
+  auto& structName = structDefn->identifier->name;
+  structDefn->llvmType = llvm::StructType::create(memberTypes, structName);
+}
+
+void Codegen(ASTFunction* function, llvm::Module* module) {
 	//HACK to skip function codegen if the function has allready been resolved
 	if (function->code != nullptr) return; // We never should have to return anything with these statements
-	auto builder = context.builder;
-	LOG_VERBOSE("Codgen Function");
+
 	std::vector<llvm::Type*> args(function->args.size());
 	for (auto i = 0; i < args.size(); i++) {
 		auto& arg = function->args[i];
@@ -66,9 +136,9 @@ void Codegen(ASTFunction* function, const BuildContext& context) {
 	// Create the llvm function
 	llvm::FunctionType* funcType = llvm::FunctionType::get(function->returnType->llvmType, args, false);
 	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
-	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, context.currentPackage->module);
+	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, global_package->module);
 
-	//TODO arguments are created even if the function has no members!
+	// TODO arguments are created even if the function has no members!
 	if(function->members.size() > 0) {
 		llvm::BasicBlock* block = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", llvmFunc);
 		builder->SetInsertPoint(block);
@@ -92,7 +162,7 @@ void Codegen(ASTFunction* function, const BuildContext& context) {
 			auto node = function->members[i];
 			if(node->nodeType == AST_IF) {
 				auto mergeBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", llvmFunc);
-				Codegen((ASTIfStatement*)node, mergeBlock, llvmFunc, context);
+				Codegen((ASTIfStatement*)node, mergeBlock, llvmFunc);
 				builder->SetInsertPoint(mergeBlock);
 				continue;
 			}
@@ -100,7 +170,7 @@ void Codegen(ASTFunction* function, const BuildContext& context) {
 			if(node->nodeType == AST_RETURN) {
 				returnInstructionSeen = true;
 			}
-			Codegen(node, context);
+			CodegenStatement(node);
 		}
 	}
 
@@ -118,55 +188,67 @@ void Codegen(ASTFunction* function, const BuildContext& context) {
 	function->code = llvmFunc;
 }
 
-void Codegen(ASTStruct* structDefn, const BuildContext& context) {
-  std::vector<llvm::Type*> memberTypes;
-  for(auto type : structDefn->memberTypes)
-    memberTypes.push_back(type->llvmType);
-  auto& structName = structDefn->identifier->name;
-  structDefn->llvmType = llvm::StructType::create(memberTypes, structName);
+void CodegenStatement(ASTNode* node) {
+  switch(node->nodeType) {
+    case AST_VARIABLE: Codegen((ASTVariable*)node); break;
+    case AST_MEMBER_ACCESS: Codegen((ASTMemberAccess*)node); break;
+    case AST_MUTATION: Codegen((ASTMutation*)node); break;
+    case AST_CALL: Codegen((ASTCall*)node); break;
+    case AST_ITER: Codegen((ASTIter*)node); break;
+    case AST_RETURN: Codegen((ASTReturn*)node); break;
+    default: assert(!"A top level node was not a statement"); break;
+  }
 }
 
-llvm::Value* Codegen(ASTNode* node, const BuildContext& context) {
+void Codegen(ASTVariable* var) {
+
+  assert(var->allocaInst == nullptr);
+  auto type = var->type->llvmType;
+  if(var->isPointer) type = llvm::PointerType::get(type, 0);
+  var->allocaInst = builder->CreateAlloca(type, 0, var->identifier->name);
+
+  if (var->initalExpression == nullptr) {
+    if (var->type->llvmType->isIntegerTy()) {
+      var->initalExpression = CreateIntegerLiteral(0);
+    } else if (var->type->llvmType->isFloatingPointTy()) {
+      var->initalExpression = CreateFloatLiteral(0);
+    }
+  }
+
+  if (var->initalExpression != nullptr) {
+	  auto value = CodegenExpr(var->initalExpression);
+	  builder->CreateStore(value, var->allocaInst);
+  }
+
+}
+
+llvm::Value* CodegenExpr(ASTNode* node) {
+	assert(node != nullptr);
 	switch(node->nodeType) {
 	case AST_BINOP:
-		return Codegen((ASTBinaryOperation*)node, context);
-	case AST_VARIABLE:
-		return Codegen((ASTVariable*)node, context);
-	case AST_MUTATION:
-		return Codegen((ASTMutation*)node, context);
-	case AST_MEMBER_ACCESS:
-		return Codegen((ASTMemberAccess*)node, context);
+		return Codegen((ASTBinaryOperation*)node);
 	case AST_MEMBER_EXPR:
-		return Codegen((ASTMemberExpr*)node, context);
+		return Codegen((ASTMemberExpr*)node);
 	case AST_VAR_EXPR:
-		return Codegen((ASTVarExpr*)node, context);
+		return Codegen((ASTVarExpr*)node);
 	case AST_CALL:
-		return Codegen((ASTCall*)node, context);
-	case AST_IF:
-		LOG_ERROR("Attemping to genericly code gen an if! Note this is very very bad");
-		return nullptr;
-	case AST_ITER:
-		Codegen((ASTIter*)node, context);
-		return nullptr;
-		break;
+		return Codegen((ASTCall*)node);
 	case AST_INTEGER_LITERAL:
-		return Codegen((ASTIntegerLiteral*) node, context);
+		return Codegen((ASTIntegerLiteral*) node);
 	case AST_FLOAT_LITERAL:
-		return Codegen((ASTFloatLiteral*)node, context);
+		return Codegen((ASTFloatLiteral*)node);
   case AST_STRING_LITERAL:
-    return Codegen((ASTStringLiteral*)node, context);
-	case AST_RETURN:
-		return Codegen((ASTReturn*)node, context);
+    return Codegen((ASTStringLiteral*)node);
 	default:
-		assert(!"UNHANDELED CODEGEN OF UNKOWN NODE");
+		assert(!"ASTNode is not an expression!");
 		return nullptr;
 	}
 }
 
-llvm::Value* Codegen(ASTBinaryOperation* binop, const BuildContext& context)  {
-	auto builder = context.builder;
-	llvm::Value* lhs = Codegen(binop->lhs, context);
-	llvm::Value* rhs = Codegen(binop->rhs, context);
+llvm::Value* Codegen(ASTBinaryOperation* binop)  {
+
+	llvm::Value* lhs = CodegenExpr(binop->lhs);
+	llvm::Value* rhs = CodegenExpr(binop->rhs);
 
 	if(lhs == nullptr || rhs == nullptr) {
 		LOG_ERROR("Failed to emit code for binary operation!");
@@ -182,96 +264,43 @@ llvm::Value* Codegen(ASTBinaryOperation* binop, const BuildContext& context)  {
 		case TOKEN_MUL: return builder->CreateMul(lhs, rhs, "multmp");
 		case TOKEN_DIV: return builder->CreateSDiv(lhs, rhs, "divtmp");
 
-
 		default:
 			LOG_ERROR("Invalid binary operator");
 			return nullptr;
 	}
 }
 
-llvm::Value* Codegen(ASTVariable* var, const BuildContext& context) {
-	auto builder = context.builder;
+void Codegen(ASTMutation* mut) {
 
-	//This variable is being declared!
-	//TODO sanity check flag that ensures that this is indeed a declaration
-	if (var->allocaInst == nullptr) {
-		auto type = var->type->llvmType;
-		if(var->isPointer)
-				type = llvm::PointerType::get(type, 0);
-		var->allocaInst = builder->CreateAlloca(type, 0, var->identifier->name);
-		// This variable is being allocated on the stack but does not have an expr associated with it
-		// We need to generate a default initializer for it!
-		if(var->initalExpression == nullptr) {
-			if (var->type->llvmType->isIntegerTy()) {
-				var->initalExpression = CreateIntegerLiteral(0);
-			} else if (var->type->llvmType->isFloatingPointTy()) {
-				var->initalExpression = CreateFloatLiteral(0);
-			}
-		}
-
-		if (var->initalExpression != nullptr) {
-			auto value = Codegen(var->initalExpression, context);
-			builder->CreateStore(value, var->allocaInst);
-			var->initalExpression = nullptr;
-		}
-		return var->allocaInst;
-	}
-
-	// This variable has been allocated on the stack allready or was newly allocated
-	if (var->initalExpression != nullptr) {
-		auto value = Codegen(var->initalExpression, context);
-		builder->CreateStore(value, var->allocaInst);
-		var->initalExpression = nullptr;
-		return var->allocaInst;
-		//If the expression that this var is not null then we need to store the value of that expr
-		//This should never be used anywhere since its an assignment
-		//NOTE this might not be the case when we and increment opperators as those are used inline as they are
-		//assigned values so we might want to emit a load for this variable however for now we will assume that it will not
-		//be used and might actually catch some extra errors that way!
-	} else {
-		//The expr is null so this is just a plain-old-load
-		return builder->CreateLoad(var->allocaInst);
-	}
-
-	LOG_ERROR("Failed to emit code for varaible: " << var->identifier->name);
-	return nullptr;
-}
-
-llvm::Value* Codegen(ASTMutation* mut, const BuildContext& context) {
-	auto builder = context.builder;
 
 	if(mut->variable->allocaInst == nullptr) {
 		LOG_ERROR("Cannot assign a value to an unitialized variable!");
-		return nullptr;
+		return;
 	}
 	// TODO optional load flag!
-	auto value = Codegen(mut->value, context);
+	auto value = CodegenExpr(mut->value);
 	if(value == nullptr) {
 		LOG_ERROR("Could not emit code for expression when assigning value to " << mut->variable->identifier);
 	}
 	builder->CreateStore(value, mut->variable->allocaInst);
-	return mut->variable->allocaInst;
 }
 
-llvm::Value* Codegen(ASTReturn* retVal, const BuildContext& context) {
-	auto builder = context.builder;
+void Codegen(ASTReturn* retVal) {
 
-	auto value = Codegen(retVal->value, context);
+	auto value = CodegenExpr(retVal->value);
 	if (value != nullptr) {
 		builder->CreateRet(value);
-		return value;
-	}
-	LOG_ERROR("Unable to create return value for function ....");
-	return nullptr;
+	} else {
+    LOG_ERROR("Failed to emmit code for return value");
+  }
 }
 
+llvm::Value* Codegen(ASTCall* call) {
 
-llvm::Value* Codegen(ASTCall* call, const BuildContext& context) {
-	auto builder = context.builder;
 
 	if (!call->function->code) {
 		auto lastInsertBlock = builder->GetInsertBlock();
-		Codegen((ASTFunction*)call->function, context);
+		Codegen((ASTFunction*)call->function, global_package->module);
 		builder->SetInsertPoint(lastInsertBlock);
 	}
 	auto llvmfunc = call->function->code;
@@ -280,7 +309,7 @@ llvm::Value* Codegen(ASTCall* call, const BuildContext& context) {
 	auto argList = (ASTExpression**)(call + 1);
 	for (auto i = 0; i < call->function->args.size(); i++) {
     auto arg = argList[i];
-    auto arg_value = Codegen(arg, context);
+    auto arg_value = CodegenExpr(arg);
 	  assert(arg_value != nullptr);
 	  if (arg->nodeType == AST_STRING_LITERAL) {
   		auto zeroVal = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
@@ -299,13 +328,13 @@ llvm::Value* Codegen(ASTCall* call, const BuildContext& context) {
 	}
 }
 
-llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function, const BuildContext& context) {
-	auto builder = context.builder;
+void Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
 
-	auto condV = Codegen(ifStatement->expr, context);
-	if(condV == nullptr) {
+
+	auto condV = CodegenExpr(ifStatement->expr);
+	if (condV == nullptr) {
 		LOG_ERROR("Could not emit code for if statement expression");
-		return 0;
+		return;
 	}
 	auto compare = builder->CreateICmpEQ(condV, llvm::ConstantInt::getTrue(llvm::getGlobalContext()), "ifcond");
 	auto ifBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "if", function);
@@ -318,11 +347,11 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 	for(auto node : ifStatement->ifBlock->members) {
 		if(node->nodeType == AST_IF) {
 			ifBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", function);
-			Codegen((ASTIfStatement*)node, ifBlock, function, context);
+			Codegen((ASTIfStatement*)node, ifBlock, function);
 			builder->SetInsertPoint(ifBlock);
 			continue;
 		}
-		auto value = Codegen(node, context);
+		auto value = CodegenExpr(node);
 		if(!value) {
 			LOG_DEBUG("Failed to emit code for value in body of ifstatement!");
 		}
@@ -334,7 +363,7 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 		builder->SetInsertPoint(elseBlock);
 		if(ifStatement->elseBlock->nodeType == AST_IF) {
 			auto ifElse = (ASTIfStatement*)ifStatement->elseBlock;
-			auto condition = Codegen(ifElse->expr, context);
+			auto condition = CodegenExpr(ifElse->expr);
 			auto comp = builder->CreateICmpEQ(condition, llvm::ConstantInt::getTrue(llvm::getGlobalContext()), "elseifcond");
 			auto elseIfBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "elseif", function);
 			if(ifElse->elseBlock != nullptr) {
@@ -346,33 +375,32 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 		for(auto node : ifStatement->elseBlock->members) {
 			if(node->nodeType == AST_IF) {
 				elseBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", function);
-				Codegen((ASTIfStatement*)node, elseBlock, function, context);
+				Codegen((ASTIfStatement*)node, elseBlock, function);
 				builder->SetInsertPoint(elseBlock);
 				continue;
 			}
-			auto value = Codegen(node, context);
+			auto value = CodegenExpr(node);
 			if(!value) {
 				LOG_DEBUG("Failed to emit code for value in body of ifstatement!");
 			}
 		}
 		builder->CreateBr(mergeBlock);
 	}
-	return mergeBlock;
 }
 
- void Codegen(ASTIter* iter, const BuildContext& context) {
-	auto builder = context.builder;
+ void Codegen(ASTIter* iter) {
+
 	auto var = (ASTVariable*)iter->varIdent->node;
 
 	// Set the inital expr of the variable to the start node of the iter
 	// This should have allready been done inthe parsing phase but we will allow it for now
 	var->initalExpression = iter->start;
-	Codegen(var, context); // This creates the variable with an alloca inst.
+	Codegen(var); // This creates the variable with an alloca inst.
 	// Also does a store from the inital expr to the alloca
 
 	// We emit some code for the value of the end expression
 	// AKA the end integer
-	auto endValue = Codegen(iter->end, context);
+	auto endValue = CodegenExpr(iter->end);
 	auto stepValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 1);
 
 	auto parentBlock = builder->GetInsertBlock()->getParent();
@@ -382,9 +410,9 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 	builder->CreateBr(loopBlock);
 	builder->SetInsertPoint(loopBlock);
 
-	// Emit the iter body
+	// Emit the body for the iterstatement
 	for (auto node : iter->body->members) {
-		Codegen(node, context);
+		CodegenStatement(node);
 	}
 
 	// Create an instruction to increment the iterator
@@ -392,16 +420,15 @@ llvm::Value* Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, 
 	auto nextValue = builder->CreateAdd(currentValue, stepValue, "increment");
 	builder->CreateStore(nextValue, var->allocaInst);
 
-
 	auto condLoad = builder->CreateLoad(var->allocaInst);
-	auto loopCond = builder->CreateICmpSLE(condLoad, endValue, "loopcond");	// I dont think this will work properly we need to do another load
+	auto loopCond = builder->CreateICmpSLE(condLoad, endValue, "loopcond");
 
 	builder->CreateCondBr(loopCond, loopBlock, exitBlock);
-	builder->SetInsertPoint(exitBlock);	//Any codegenerated after this loop must be emitted into the exit block
+	builder->SetInsertPoint(exitBlock);
 }
 
-llvm::Value* Codegen (ASTMemberAccess* access, const BuildContext& context) {
-	auto builder = context.builder;
+void Codegen(ASTMemberAccess* access) {
+
 	auto structAlloca = access->structVar->allocaInst;
 
 	std::vector<llvm::Value*> indices;
@@ -417,17 +444,14 @@ llvm::Value* Codegen (ASTMemberAccess* access, const BuildContext& context) {
 	auto gep = builder->CreateGEP(value_ptr, indices, "access");
 	switch(access->mode) {
 	case ACCESS_ASSIGN:
-		auto expr = Codegen(access->expr, context);
+		auto expr = CodegenExpr(access->expr);
 		builder->CreateStore(expr, gep);
-		return nullptr;	// If this is a store operation we dont consider this an expression and the
-		//Nullptr value should be thrown out *hopefully*
+    return;
 	}
-
-	return gep;
 }
 
-llvm::Value* Codegen(ASTMemberExpr* expr, const BuildContext& context) {
-	auto builder = context.builder;
+llvm::Value* Codegen(ASTMemberExpr* expr) {
+
 	auto structAlloca = expr->structVar->allocaInst;
 
 	std::vector<llvm::Value*> indices;
@@ -446,8 +470,8 @@ llvm::Value* Codegen(ASTMemberExpr* expr, const BuildContext& context) {
 	return load;
 }
 
-llvm::Value* Codegen (ASTVarExpr* expr, const BuildContext& context) {
-	auto builder = context.builder;
+llvm::Value* Codegen (ASTVarExpr* expr) {
+
 	auto varAlloca = expr->var->allocaInst;
 	llvm::Value* value = nullptr;
 
@@ -465,16 +489,151 @@ llvm::Value* Codegen (ASTVarExpr* expr, const BuildContext& context) {
 	return value;
 }
 
-llvm::Value* Codegen (ASTIntegerLiteral* intNode, const BuildContext& context) {
+llvm::Value* Codegen (ASTIntegerLiteral* intNode) {
 	return llvm::ConstantInt::get(intNode->type->llvmType, intNode->value);
 }
 
-llvm::Value* Codegen (ASTFloatLiteral* floatNode, const BuildContext& context) {
+llvm::Value* Codegen (ASTFloatLiteral* floatNode) {
 	return llvm::ConstantFP::get(floatNode->type->llvmType, floatNode->value);
 }
 
-llvm::Value* Codegen (ASTStringLiteral* str, const BuildContext& context) {
-	auto builder = context.builder;
+llvm::Value* Codegen (ASTStringLiteral* str) {
+
 	auto str_value = builder->CreateGlobalStringPtr(str->value);
 	return str_value;
+}
+
+int WriteNativeObject(llvm::Module* module, const BuildSettings& settings) {
+	llvm::InitializeAllTargets();
+	llvm::InitializeAllTargetMCs();
+	llvm::InitializeAllAsmPrinters();
+	llvm::InitializeAllAsmParsers();
+
+	llvm::PassRegistry* registry = llvm::PassRegistry::getPassRegistry();
+	llvm::initializeCore(*registry);
+	llvm::initializeCodeGen(*registry);
+	llvm::initializeLowerIntrinsicsPass(*registry);
+	llvm::initializeLoopStrengthReducePass(*registry);
+	llvm::initializeUnreachableBlockElimPass(*registry);
+
+	llvm::cl::AddExtraVersionPrinter(llvm::TargetRegistry::printRegisteredTargetsForVersion);
+
+	// Load the module to be compiled...
+	llvm::SMDiagnostic err;
+	llvm::Triple triple;
+	if (MCPU == "native") MCPU = sys::getHostCPUName();
+	triple.setTriple(sys::getDefaultTargetTriple());
+
+	// Get the target specific parser.
+	std::string errorString;
+	const Target *TheTarget = TargetRegistry::lookupTarget(MArch, triple, errorString);
+	if (!TheTarget) {
+		return 1;
+	}
+	// Package up features to be passed to target/subtarget
+	std::string featuresStr;
+	if (MAttrs.size()) {
+		SubtargetFeatures Features;
+		for (unsigned i = 0; i != MAttrs.size(); ++i)
+			Features.AddFeature(MAttrs[i]);
+		featuresStr = Features.getString();
+	}
+
+	//TODO add optimization levels
+	CodeGenOpt::Level OLvl = CodeGenOpt::None;
+//	switch (OptLevel) {
+//		default:
+//			errs() << argv[0] << ": invalid optimization level.\n";
+//			return 1;
+//		case ' ': break;
+//		case '0': OLvl = CodeGenOpt::None; break;
+//		case '1': OLvl = CodeGenOpt::Less; break;
+//		case '2': OLvl = CodeGenOpt::Default; break;
+//		case '3': OLvl = CodeGenOpt::Aggressive; break;
+//	}
+
+	llvm::TargetOptions Options = InitTargetOptionsFromCodeGenFlags();
+	//TODO options are defaulted for now...
+//	Options.DisableIntegratedAS = NoIntegratedAssembler;
+//	Options.MCOptions.ShowMCEncoding = ShowMCEncoding;
+//	Options.MCOptions.MCUseDwarfDirectory = EnableDwarfDirectory;
+//	Options.MCOptions.AsmVerbose = AsmVerbose;
+
+	std::unique_ptr<TargetMachine> Target(TheTarget->createTargetMachine(triple.getTriple(), MCPU, featuresStr, Options, RelocModel, CMModel, OLvl));
+	assert(Target && "Could not allocate target machine!");
+
+	if (GenerateSoftFloatCalls)
+		FloatABIForCalls = FloatABI::Soft;
+
+	// TODO add options for viewing asm as text!
+	bool binary = true;
+	sys::fs::OpenFlags openFlags = sys::fs::F_None;
+	if (!binary) {
+		openFlags |= sys::fs::F_Text;
+	}
+
+	std::error_code errorCode;
+	auto fileOut = llvm::make_unique<tool_output_file>(settings.outputFile, errorCode, openFlags);
+	if (errorCode) {
+		LOG_ERROR(errorCode.message());
+		return -1;
+	}
+
+
+	// Build up all of the passes that we want to do to the module.
+	llvm::PassManager PM;
+
+	// Add an appropriate TargetLibraryInfo pass for the module's triple.
+	llvm::TargetLibraryInfo *TLI = new llvm::TargetLibraryInfo(triple);
+//	if (DisableSimplifyLibCalls)
+//		TLI->disableAllFunctions();
+	PM.add(TLI);
+
+	// Add the target data from the target machine, if it exists, or the module.
+	if (const DataLayout *DL = Target->getSubtargetImpl()->getDataLayout())
+		module->setDataLayout(DL);
+	PM.add(new DataLayoutPass());
+
+
+	{
+		formatted_raw_ostream FOS(fileOut->os());
+
+		AnalysisID StartAfterID = nullptr;
+		AnalysisID StopAfterID = nullptr;
+		const PassRegistry *PR = PassRegistry::getPassRegistry();
+		if (!StartAfter.empty()) {
+			const PassInfo *PI = PR->getPassInfo(StartAfter);
+			if (!PI) {
+				LOG_ERROR("start-after pass is not registered");
+				return 1;
+			}
+			StartAfterID = PI->getTypeInfo();
+		}
+		if (!StopAfter.empty()) {
+			const PassInfo *PI = PR->getPassInfo(StopAfter);
+			if (!PI) {
+				LOG_ERROR("stop-after pass is not registered.\n");
+				return 1;
+			}
+			StopAfterID = PI->getTypeInfo();
+		}
+
+		// Ask the target to add backend passes as necessary.
+		//Verification is on for now
+		// NOTE we may want to remove it since we are allready verifiying at Codegen
+		auto fileType = TargetMachine::CGFT_ObjectFile;
+		if (Target->addPassesToEmitFile(PM, FOS, fileType, true, StartAfterID, StopAfterID)) {
+			LOG_ERROR("target does not support generation of this filetype");
+			return 1;
+		}
+
+		// Before executing passes, print the final values of the LLVM options.
+		cl::PrintOptionValues();
+
+		PM.run(*module);
+	}
+
+	// Declare success.
+	fileOut->keep();	// NOTE What ass-fuckery is this?
+	return 0;
 }

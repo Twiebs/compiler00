@@ -2,3 +2,5 @@ build/
 eclipse/
 *.o
 app
+.tags
+.tags1
