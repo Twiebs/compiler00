@@ -477,7 +477,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 		auto structDefn = (ASTStruct*)structVar->type;
 		if(structDefn->nodeType != AST_STRUCT) ReportError(parseState, identToken.site, "Member access operator only applies to struct types!");
 
-		auto memberAccess = CreateMemberAccess(structVar);
+		auto memberAccess = CreateMemberOperation(structVar);
 		auto currentStruct = structDefn;
 
 		while (lex.token.type == TOKEN_ACCESS) {
@@ -574,7 +574,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 		}
 		// Why do variables need anyt ype of mutation whatsofever?
 		// That doesnt even make any sense whatso ever
-		return CreateMutation(var, expr);
+		return CreateVariableOperation(var, expr);
 	}
 
 	// We have gotten past all our routines

@@ -113,16 +113,16 @@ ASTStruct* CreateStruct() {
 	return result;
 }
 
-ASTMemberAccess* CreateMemberAccess(ASTVariable* structVar) {
-	auto result = new ASTMemberAccess;
-	result->nodeType = AST_MEMBER_ACCESS;
+ASTMemberOperation* CreateMemberOperation(ASTVariable* structVar) {
+	auto result = new ASTMemberOperation;
+	result->nodeType = AST_MEMBER_OPERATION;
 	result->structVar = structVar;
 	return result;
 }
 
-ASTMemberAccess* CreateMemberAccess(ASTVariable* structVar, U32 index, AccessMode mode) {
-	auto result = new ASTMemberAccess;
-	result->nodeType = AST_MEMBER_ACCESS;
+ASTMemberOperation* CreateMemberOperation(ASTVariable* structVar, U32 index, AccessMode mode) {
+	auto result = new ASTMemberOperation;
+	result->nodeType = AST_MEMBER_OPERATION;
 	result->structVar = structVar;
 	result->mode = mode;
 	return result;
@@ -299,10 +299,10 @@ ASTVariable* CreateVariable (ASTBlock* block) {
 
 // This is just analogous for a store
 // Why do we need to use this notation / jargon
-ASTMutation* CreateMutation(ASTVariable* variable, ASTExpression* expr) {
-	auto result = new ASTMutation();
-	result->nodeType = AST_MUTATION;
-	result->variable = variable;
+ASTVariableOperation* CreateVariableOperation(ASTVariable* var, ASTExpression* expr) {
+	auto result = new ASTVariableOperation();
+	result->nodeType = AST_VARIABLE_OPERATION;
+	result->variable = var;
 	result->value = expr;
 	return result;
 }

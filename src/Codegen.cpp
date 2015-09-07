@@ -71,8 +71,8 @@ void Codegen(ASTFunction* function, llvm::Module* module);
 // Statements
 void CodegenStatement(ASTNode* node);
 void Codegen(ASTVariable* var);
-void Codegen(ASTMutation* mut);
-void Codegen(ASTMemberAccess* access);
+void Codegen(ASTVariableOperation* varOp);
+void Codegen(ASTMemberOperation* memberOp);
 void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
 void Codegen(ASTIter* iter);
 void Codegen(ASTReturn* retVal);
@@ -191,8 +191,8 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 void CodegenStatement(ASTNode* node) {
   switch(node->nodeType) {
     case AST_VARIABLE: Codegen((ASTVariable*)node); break;
-    case AST_MEMBER_ACCESS: Codegen((ASTMemberAccess*)node); break;
-    case AST_MUTATION: Codegen((ASTMutation*)node); break;
+    case AST_MEMBER_OPERATION: Codegen((ASTMemberOperation*)node); break;
+    case AST_VARIABLE_OPERATION: Codegen((ASTVariableOperation*)node); break;
     case AST_CALL: Codegen((ASTCall*)node); break;
     case AST_ITER: Codegen((ASTIter*)node); break;
     case AST_RETURN: Codegen((ASTReturn*)node); break;
@@ -219,8 +219,15 @@ void Codegen(ASTVariable* var) {
 	  auto value = CodegenExpr(var->initalExpression);
 	  builder->CreateStore(value, var->allocaInst);
   }
-
 }
+
+void Codegen(ASTVariableOperation* varOp) {
+	assert(varOp->variable->allocaInst != nullptr);
+	auto value = CodegenExpr(varOp->value);
+  assert(value);
+	builder->CreateStore(value, varOp->variable->allocaInst);
+}
+
 
 llvm::Value* CodegenExpr(ASTNode* node) {
 	assert(node != nullptr);
@@ -270,21 +277,6 @@ llvm::Value* Codegen(ASTBinaryOperation* binop)  {
 	}
 }
 
-void Codegen(ASTMutation* mut) {
-
-
-	if(mut->variable->allocaInst == nullptr) {
-		LOG_ERROR("Cannot assign a value to an unitialized variable!");
-		return;
-	}
-	// TODO optional load flag!
-	auto value = CodegenExpr(mut->value);
-	if(value == nullptr) {
-		LOG_ERROR("Could not emit code for expression when assigning value to " << mut->variable->identifier);
-	}
-	builder->CreateStore(value, mut->variable->allocaInst);
-}
-
 void Codegen(ASTReturn* retVal) {
 
 	auto value = CodegenExpr(retVal->value);
@@ -296,8 +288,6 @@ void Codegen(ASTReturn* retVal) {
 }
 
 llvm::Value* Codegen(ASTCall* call) {
-
-
 	if (!call->function->code) {
 		auto lastInsertBlock = builder->GetInsertBlock();
 		Codegen((ASTFunction*)call->function, global_package->module);
@@ -329,8 +319,6 @@ llvm::Value* Codegen(ASTCall* call) {
 }
 
 void Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
-
-
 	auto condV = CodegenExpr(ifStatement->expr);
 	if (condV == nullptr) {
 		LOG_ERROR("Could not emit code for if statement expression");
@@ -389,7 +377,6 @@ void Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Fu
 }
 
  void Codegen(ASTIter* iter) {
-
 	auto var = (ASTVariable*)iter->varIdent->node;
 
 	// Set the inital expr of the variable to the start node of the iter
@@ -427,24 +414,23 @@ void Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Fu
 	builder->SetInsertPoint(exitBlock);
 }
 
-void Codegen(ASTMemberAccess* access) {
-
-	auto structAlloca = access->structVar->allocaInst;
+void Codegen(ASTMemberOperation* memberOp) {
+	auto structAlloca = memberOp->structVar->allocaInst;
 
 	std::vector<llvm::Value*> indices;
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
 	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
-	for (auto& memberIndex : access->memberIndices) {
+	for (auto& memberIndex : memberOp->memberIndices) {
 		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
 		indices.push_back(indexValue);
 	}
 
 	llvm::Value* value_ptr = structAlloca;
-	if (access->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
+	if (memberOp->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
 	auto gep = builder->CreateGEP(value_ptr, indices, "access");
-	switch(access->mode) {
+	switch (memberOp->mode) {
 	case ACCESS_ASSIGN:
-		auto expr = CodegenExpr(access->expr);
+		auto expr = CodegenExpr(memberOp->expr);
 		builder->CreateStore(expr, gep);
     return;
 	}

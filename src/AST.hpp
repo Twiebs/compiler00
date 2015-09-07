@@ -14,12 +14,12 @@ enum ASTNodeType {
 	AST_BLOCK,
 	AST_DEFINITION,
 
-	// We should be able to create a unifed structure for member access and plain old variable access
-	// the same applies to variable mutations
-	// Mutations should be considered toplevel expressionless statements and loads are consider expressions
-
+	AST_FUNCTION,
 	AST_STRUCT,
-	AST_MEMBER_ACCESS,
+
+	AST_MEMBER_OPERATION,
+	AST_VARIABLE_OPERATION,
+
 	AST_MEMBER_EXPR,
 
 	AST_VARIABLE,
@@ -29,7 +29,6 @@ enum ASTNodeType {
 	AST_IF,
 	AST_ITER,
 
-	AST_FUNCTION,
 	AST_CALL,
 	AST_RETURN,
 
@@ -44,19 +43,19 @@ struct ASTNode {
 	ASTNodeType nodeType;
 };
 
-//Both identfieirs and FunctionSets are not really part of the AST
-//They are metadata that mark up how nodes of the ast are handled
-//An identifier is simply a handle to a node in the ast.
-//This might end up being the best way to refer to ASTNodes rather than actualy passing around pointers
-//Then FilePositions might be able to be stored within the nodes themselfes along with there name
-//and ientifiers only become these abstract constructs that sole puprose it to access the actualy data of the nodes
-//which will be stored elsewhere!
-//Actualy it might be better to start that flag system that could be implemented
-//Then we could get some very intersing behaviours on these identifiers!
+// Both identfieirs and FunctionSets are not really part of the AST
+// They are metadata that mark up how nodes of the ast are handled
+// An identifier is simply a handle to a node in the ast.
+// This might end up being the best way to refer to ASTNodes rather than actualy passing around pointers
+// Then FilePositions might be able to be stored within the nodes themselfes along with there name
+// and ientifiers only become these abstract constructs that sole puprose it to access the actualy data of the nodes
+// which will be stored elsewhere!
+// Actualy it might be better to start that flag system that could be implemented
+// Then we could get some very intersing behaviours on these identifiers!
 struct ASTIdentifier {
 	FileSite site;	// Where was the identifier declared
 	std::string name;				// What is the name of the identifier
-	//It might be a good idea to store information about what this identifier is actualy refering to!
+	// It might be a good idea to store information about what this identifier is actualy refering to!
 	ASTNode* node = nullptr;		// What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
 };
 
@@ -146,7 +145,7 @@ struct ASTVarExpr : public ASTExpression {
 	ExprAccess accessMode;
 };
 
-struct ASTMemberAccess : public ASTNode {
+struct ASTMemberOperation : public ASTNode {
 	ASTVariable* structVar;
 	std::vector<U32> memberIndices;
 	AccessMode mode;
@@ -156,8 +155,10 @@ struct ASTMemberAccess : public ASTNode {
 // Structs
 ASTStruct* CreateStruct();
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
-ASTMemberAccess* CreateMemberAccess(ASTVariable* structVar);
-ASTMemberAccess* CreateMemberAccess(ASTVariable* structVar, U32 index, AccessMode mode);
+
+ASTMemberOperation* CreateMemberOperation(ASTVariable* structVar);
+ASTMemberOperation* CreateMemberOperation(ASTVariable* structVar, U32 index, AccessMode mode);
+
 ASTMemberExpr* CreateMemberExpr(ASTVariable* structVar, U32 memberIndex);
 ASTMemberExpr* CreateMemberExpr(ASTVariable* structVar);
 
@@ -188,7 +189,7 @@ struct ASTReturn : public ASTExpression {
 
 // This is the fullstatement that the parse ident should return
 // If a variable mutation is being parsed
-struct ASTMutation : public ASTNode {
+struct ASTVariableOperation : public ASTNode {
 	ASTVariable* variable;
 	ASTExpression* value;
 };
@@ -258,7 +259,7 @@ ASTReturn* CreateReturnValue(ASTExpression* value);
 ASTCall* CreateCall(ASTExpression** argumentList, U32 argumentCount);
 ASTVariable* CreateVariable(ASTBlock* block);
 ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
-ASTMutation* CreateMutation(ASTVariable* variable, ASTExpression* expr);
+ASTVariableOperation* CreateVariableOperation(ASTVariable* variable, ASTExpression* expr);
 
 ASTIntegerLiteral* CreateIntegerLiteral(S64 value);
 ASTFloatLiteral* CreateFloatLiteral(F64 value);
