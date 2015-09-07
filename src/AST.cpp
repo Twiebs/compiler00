@@ -252,7 +252,7 @@ ASTBlock* CreateBlock(ASTBlock* block) {
 }
 
 // This is a statement the value in its name might be confusing.
-// We should begin to seperate out the difference between the statements and the expressions
+// We should begin to separate out the difference between the statements and the expressions
 // And stuff like that
 ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value) {
 	auto result = (ASTReturn*)Allocate(arena, sizeof(ASTReturn));

@@ -40,7 +40,7 @@ ASTNode* ParseImport(ParseState& state, Lexer& lex) {
 	return ParseStatement(state, lex);
 }
 
-//TODO seperate ASTNode into two differently treated branches of the AST
+//TODO separate ASTNode into two differently treated branches of the AST
 // A statement either begins with an identifier, a keyword, or a new block
 
 ASTNode* ParseStatement (ParseState& state, Lexer& lex) {
