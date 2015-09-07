@@ -24,6 +24,7 @@ struct ParseState {
 	U32 flags = 0;
 	std::vector<std::string> importedFiles;
 	BuildSettings* settings;
+	MemoryArena arena;
 };
 
 void ParseFile(ParseState& parseState, const std::string& rootDir, const std::string& filename);

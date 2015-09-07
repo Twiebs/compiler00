@@ -58,11 +58,11 @@ ASTNode* ParseStatement (ParseState& state, Lexer& lex) {
 	}
 }
 
-ASTNode* ParseReturn(ParseState& parseState, Lexer& lex) {
+ASTNode* ParseReturn(ParseState& state, Lexer& lex) {
     LOG_VERBOSE(lex.token.site << ": Parsing a return statement");
     lex.next();
-    auto expr = ParseExpr(parseState, lex);
-    auto returnVal = CreateReturnValue(expr);
+    auto expr = ParseExpr(state, lex);
+    auto returnVal = CreateReturnValue(&state.arena, expr);
     return returnVal;
 }
 
@@ -78,7 +78,7 @@ ASTCall* ParseCall(ParseState& state, Lexer& lex, const Token& identToken) {
     }
   } lex.next();    // Eat the close paren
 
-  ASTCall* call = CreateCall(&args[0], args.size());
+  ASTCall* call = CreateCall(&state.arena, &args[0], args.size());
   auto ident = FindIdentifier(state.currentScope, identToken.string);
   if (ident == nullptr) {
     AddDependency(identToken.string, call);
@@ -123,26 +123,30 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
 			auto structDefn = (ASTStruct*)structVar->type;
 			if(structDefn->nodeType != AST_STRUCT) ReportError(parseState, lex.token.site, "Identifier: " + ident->name + " does not name a struct type");
 
-			auto expr = CreateMemberExpr(structVar);
+
 			auto currentStruct = structDefn;
+			std::vector<U32> indices;
+			ASTDefinition* exprType;
 			while(lex.token.type == TOKEN_ACCESS) {
 				lex.next(); // eat the member access
 				auto memberIndex = GetMemberIndex(currentStruct, lex.token.string);
 				if (memberIndex == -1) {
 					ReportError(parseState, lex.token.site, "Identifier: " + lex.token.string + " does not name a member in struct");
 				} else {
-					expr->memberIndices.push_back(memberIndex);
+					indices.push_back(memberIndex);
 					auto memberType = currentStruct->memberTypes[memberIndex];
 					if(memberType->nodeType == AST_STRUCT)
 						currentStruct = (ASTStruct*)memberType;
-					else expr->type = memberType;
+					else exprType = memberType;
 				}
 				lex.next();	// eat the member ident
 			}
+			auto expr = CreateMemberExpr(&parseState.arena, structVar, &indices[0], indices.size());
+			expr->type = exprType;
 			return expr;
 		} else {
 			auto var = (ASTVariable*)ident->node;
-			auto expr = CreateVarExpr(var);
+			auto expr = CreateVarExpr(&parseState.arena, var);
 			expr->accessMode = accessMode;
 			return expr;
 		}
@@ -159,12 +163,12 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
                 ReportError(parseState, lex.token.site, "Floating Point value contains two decimal points!");
             }
             auto value = std::stof(lex.token.string);
-            auto result = CreateFloatLiteral(value);
+            auto result = CreateFloatLiteral(&parseState.arena, value);
             lex.next(); // Eat the float literal
             return result;
         } else {
             auto value = std::stoi(lex.token.string);
-            auto result = CreateIntegerLiteral(value);
+            auto result = CreateIntegerLiteral(&parseState.arena, value);
             result->type = (ASTDefinition*) (FindIdentifier(parseState.currentScope, "S32")->node);
             lex.next(); // Eat the int literal
             return result;
@@ -174,7 +178,7 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
     case TOKEN_STRING: {
       LOG_VERBOSE("Parsing a string expression...");
       LOG_VERBOSE("WOOF WOOF WOOF! WORK SILLY DEBUGER WORKK!!! STOP HAVING BUGGSS ITS YOUR JOB TO BE THE OPPOSITEOF THAT!!!!!!");
-      auto str = CreateStringLiteral (lex.token.string);
+      auto str = CreateStringLiteral (&parseState.arena, lex.token.string);
       lex.next(); // Eat the string token
       return str;
     } break;
@@ -227,7 +231,7 @@ ASTExpression* ParseExprRHS(int exprPrec, ASTExpression* lhs, ParseState& parseS
 				// Binary Opperation
 				// This could be nested the most deep.
 				// Like totaly uber deep. Just to be clear.
-				lhs = (ASTExpression*)CreateBinaryOperation(binopToken.type, lhs, rhs);
+				lhs = (ASTExpression*)CreateBinaryOperation(&parseState.arena, binopToken.type, lhs, rhs);
 			}   // Goes back to the while loop
 }
 
@@ -264,13 +268,13 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 
     else {
     	ident = CreateIdentifier(parseState.currentScope, identToken.string);
-  		auto var = CreateVariable(parseState.currentScope);
+  		auto var = CreateVariable(&parseState.arena, parseState.currentScope);
   		var->identifier = ident;	// This is terrible
   		ident->node = var;
 
     	if (lex.token.type == TOKEN_POINTER) {
 			var->isPointer = true;
-    		lex.next(); //Eat the pointer token
+    		lex.next(); // Eat the pointer token
     	}
 
   		ASTIdentifier* typeIdent = nullptr;
@@ -459,6 +463,10 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
     return ParseStatement(parseState, lex); // Consider the struct handeled and just get another node
     //Most of this requiring to return a node on parsing is a reminatnt of the epxression pased
     // functional stype language where everything is considered an expression
+  } else {
+	  ReportError(parseState, lex.token.site, "Could not define type with identifier: " + identToken.string +" (unknown keyword '" + lex.token.string + "')");
+	  lex.next();
+	  return nullptr;
   }
 } break;
   case TOKEN_PAREN_OPEN:  {
@@ -477,57 +485,33 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 		auto structDefn = (ASTStruct*)structVar->type;
 		if(structDefn->nodeType != AST_STRUCT) ReportError(parseState, identToken.site, "Member access operator only applies to struct types!");
 
-		auto memberAccess = CreateMemberOperation(structVar);
 		auto currentStruct = structDefn;
-
+    std::vector<U32> memberIndices;
 		while (lex.token.type == TOKEN_ACCESS) {
 			lex.next();	// Eat the access token
 			if (lex.token.type != TOKEN_IDENTIFIER) ReportError(parseState, lex.token.site, "Member access must reference an identifier");
 			auto memberIndex = GetMemberIndex(currentStruct, lex.token.string);
 			if (memberIndex == -1) ReportError(parseState, lex.token.site, "Struct " + ident->name + "does not contain any member named " + lex.token.string);
-			memberAccess->memberIndices.push_back(memberIndex);
+			memberIndices.push_back(memberIndex);
 
 			auto memberType = currentStruct->memberTypes[memberIndex];
 			if(memberType->nodeType == AST_STRUCT) currentStruct = (ASTStruct*)memberType;
 			lex.next();	// Eat the member identifier
 		}
 
+    Operation operation;
 		switch (lex.token.type) {
-		case TOKEN_EQUALS:
-			lex.next();
-			memberAccess->mode = ACCESS_ASSIGN;
-			memberAccess->expr = ParseExpr(parseState, lex);
-			break;
-		case TOKEN_ADD_EQUALS:
-			lex.next();
-			memberAccess ->mode = ACCESS_ADD;
-			memberAccess ->expr = ParseExpr(parseState, lex);
-			break;
-		case TOKEN_SUB_EQUALS:
-			lex.next();
-			memberAccess ->mode = ACCESS_SUB;
-			memberAccess ->expr = ParseExpr(parseState, lex);
-			break;
-		case TOKEN_MUL_EQUALS:
-			lex.next();
-			memberAccess ->mode = ACCESS_MUL;
-			memberAccess ->expr = ParseExpr(parseState, lex);
-			break;
-		case TOKEN_DIV_EQUALS:
-			lex.next();
-			memberAccess ->mode = ACCESS_DIV;
-			memberAccess ->expr = ParseExpr(parseState, lex);
-			break;
-		default:
-			// Dont eat the op because this is probably the end of the statement.
-			// or this is being parsed in an expression
-			// And this code is probably dead
-			LOG_ERROR("Revised oppion.  This is allmost certianly dead code");
-			LOG_ERROR("This code is (probably) dead!  Come and check it out if you see this");
-			memberAccess ->mode = ACCESS_LOAD;
-			memberAccess ->expr = nullptr;
-		}
-		return memberAccess;
+		case TOKEN_EQUALS:      operation = OPERATION_ASSIGN; break;
+		case TOKEN_ADD_EQUALS:  operation = OPERATION_ADD;    break;
+		case TOKEN_SUB_EQUALS:  operation = OPERATION_SUB;    break;
+		case TOKEN_MUL_EQUALS:  operation = OPERATION_MUL;    break;
+		case TOKEN_DIV_EQUALS:  operation = OPERATION_DIV;    break;
+    default: ReportError(parseState, lex.token.site, "Unkown operator: " + lex.token.string);
+    } lex.next();
+
+    auto expr = ParseExpr(parseState, lex);
+    auto memberOperation = CreateMemberOperation(&parseState.arena, structVar, operation, expr, &memberIndices[0], memberIndices.size());
+    return memberOperation;
 
 	} break;
 
@@ -574,7 +558,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 		}
 		// Why do variables need anyt ype of mutation whatsofever?
 		// That doesnt even make any sense whatso ever
-		return CreateVariableOperation(var, expr);
+		return CreateVariableOperation(&parseState.arena, var, expr);
 	}
 
 	// We have gotten past all our routines
@@ -656,7 +640,7 @@ ASTNode* ParseIter(ParseState& state, Lexer& lex, const std::string& identName) 
      if (identName != "") {
       auto block = CreateBlock(state.currentScope);
       auto ident = CreateIdentifier(block, identName);
-      auto var = CreateVariable(block);
+      auto var = CreateVariable(&state.arena, block);
       var->type = global_S32Type;	//HACK
       var->identifier = ident;
       var->initalExpression = expr;

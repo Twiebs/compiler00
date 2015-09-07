@@ -9,10 +9,6 @@
 
 #include "llvm/Support/CommandLine.h"
 
-struct Worker {
-
-};
-
 void CodegenPackage(Package* package, const BuildContext& context);
 void WriteBitcode(llvm::Module* module, const std::string& outputFile);
 int WriteNativeObject(llvm::Module* module, const BuildSettings& settings);
@@ -38,7 +34,7 @@ void ResolveDependencies(ParseState& state) {
     dep.call->function = FindFunction(funcSet, args, dep.call->argCount);
     if (!dep.call->function) {
       FileSite site;
-      ReportError(state, site, "Could not match arguments against overloads for function " + dep.identName);
+      ReportError(state, site, "Could not match argument types to any function named: " + dep.identName);
     }
   }
 }
@@ -58,7 +54,10 @@ int Build(BuildContext& context, BuildSettings& settings) {
 	ParseState parseState;
 	parseState.currentScope = &package->globalScope;
 	parseState.settings = &settings;
+	parseState.arena.memory = malloc(4096);
+	parseState.arena.capacity = 4096;
 	ParseFile(parseState, settings.rootDir, settings.inputFile);
+
 	while (parseState.importedFiles.size() > 0) {
 		auto filename = parseState.importedFiles[parseState.importedFiles.size() - 1];
 		parseState.importedFiles.pop_back();

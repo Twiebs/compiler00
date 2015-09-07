@@ -201,24 +201,26 @@ void CodegenStatement(ASTNode* node) {
 }
 
 void Codegen(ASTVariable* var) {
-
   assert(var->allocaInst == nullptr);
   auto type = var->type->llvmType;
-  if(var->isPointer) type = llvm::PointerType::get(type, 0);
+  if(var->isPointer)
+	  type = llvm::PointerType::get(type, 0);
   var->allocaInst = builder->CreateAlloca(type, 0, var->identifier->name);
 
-  if (var->initalExpression == nullptr) {
-    if (var->type->llvmType->isIntegerTy()) {
-      var->initalExpression = CreateIntegerLiteral(0);
-    } else if (var->type->llvmType->isFloatingPointTy()) {
-      var->initalExpression = CreateFloatLiteral(0);
-    }
+  llvm::Value* expr = nullptr;
+  if (var->initalExpression != nullptr) {
+	  expr = CodegenExpr(var->initalExpression);
+  } else if (var->type->llvmType->isIntegerTy()) {
+	  expr = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0);
+  } else if (var->type->llvmType->isFloatingPointTy()) {
+	  expr = llvm::ConstantFP::get(llvm::Type::getFloatTy(llvm::getGlobalContext()), 0);
+  } else if (var->type->nodeType == AST_STRUCT) {
+	  // TODO default values inside of structs
+	  return;
   }
 
-  if (var->initalExpression != nullptr) {
-	  auto value = CodegenExpr(var->initalExpression);
-	  builder->CreateStore(value, var->allocaInst);
-  }
+  assert(expr != nullptr);
+  builder->CreateStore(expr, var->allocaInst);
 }
 
 void Codegen(ASTVariableOperation* varOp) {
@@ -420,7 +422,10 @@ void Codegen(ASTMemberOperation* memberOp) {
 	std::vector<llvm::Value*> indices;
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
 	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
-	for (auto& memberIndex : memberOp->memberIndices) {
+
+  auto memberIndices = (U32*)(memberOp + 1);
+  for (auto i = 0; i < memberOp->indexCount; i++) {
+    auto& memberIndex = memberIndices[i];
 		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
 		indices.push_back(indexValue);
 	}
@@ -428,8 +433,8 @@ void Codegen(ASTMemberOperation* memberOp) {
 	llvm::Value* value_ptr = structAlloca;
 	if (memberOp->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
 	auto gep = builder->CreateGEP(value_ptr, indices, "access");
-	switch (memberOp->mode) {
-	case ACCESS_ASSIGN:
+	switch (memberOp->operation) {
+	case OPERATION_ASSIGN:
 		auto expr = CodegenExpr(memberOp->expr);
 		builder->CreateStore(expr, gep);
     return;
@@ -437,17 +442,20 @@ void Codegen(ASTMemberOperation* memberOp) {
 }
 
 llvm::Value* Codegen(ASTMemberExpr* expr) {
-
+  assert(expr->structVar->allocaInst);
 	auto structAlloca = expr->structVar->allocaInst;
 
 	std::vector<llvm::Value*> indices;
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
 	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
 
-	for(auto& memberIndex : expr->memberIndices) {
-		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
-		indices.push_back(indexValue);
-	}
+  auto memberIndices = (U32*)(expr + 1);
+  for (auto i = 0; i < expr->indexCount; i++) {
+    auto& memberIndex = memberIndices[i];
+    auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
+    indices.push_back(indexValue);
+  }
+
 
 	llvm::Value* value_ptr = structAlloca;
 	if(expr->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
@@ -484,8 +492,8 @@ llvm::Value* Codegen (ASTFloatLiteral* floatNode) {
 }
 
 llvm::Value* Codegen (ASTStringLiteral* str) {
-
-	auto str_value = builder->CreateGlobalStringPtr(str->value);
+	auto str_ptr = (const char*)(str + 1);
+	auto str_value = builder->CreateGlobalStringPtr(str_ptr, "str");
 	return str_value;
 }
 

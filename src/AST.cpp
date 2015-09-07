@@ -3,6 +3,16 @@
 
 #include "AST.hpp"
 
+void* Allocate (MemoryArena* arena, size_t size) {
+  if (arena->used + size >= arena->capacity) {
+    assert(false);
+  } else {
+    auto ptr = arena->memory + arena->used;
+    arena->used += size;
+    return ptr;
+  }
+}
+
 ASTBlock global_defaultGlobalScope;
 ASTDefinition* global_voidType;
 ASTDefinition* global_U8Type;
@@ -92,8 +102,8 @@ ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name) {
 	return result;
 }
 
-ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, ASTExpression* rhs) {
-	auto result = new ASTBinaryOperation();
+ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, TokenType binop, ASTExpression* lhs, ASTExpression* rhs) {
+	auto result = (ASTBinaryOperation*)Allocate(arena, sizeof(ASTBinaryOperation));
 	result->nodeType = AST_BINOP;
 	result->binop = binop;
 	//HACK
@@ -113,41 +123,27 @@ ASTStruct* CreateStruct() {
 	return result;
 }
 
-ASTMemberOperation* CreateMemberOperation(ASTVariable* structVar) {
-	auto result = new ASTMemberOperation;
+ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, U32* indices, U32 indexCount) {
+	auto result = (ASTMemberOperation*)Allocate(arena, sizeof(ASTMemberOperation) + (sizeof(U32) * indexCount));
 	result->nodeType = AST_MEMBER_OPERATION;
 	result->structVar = structVar;
+	result->operation = operation;
+  result->expr = expr;
+  result->indexCount = indexCount;
+  auto indexptr = (U32*)(result + 1);
+  memcpy(indexptr, indices, sizeof(U32) * indexCount);
 	return result;
 }
 
-ASTMemberOperation* CreateMemberOperation(ASTVariable* structVar, U32 index, AccessMode mode) {
-	auto result = new ASTMemberOperation;
-	result->nodeType = AST_MEMBER_OPERATION;
-	result->structVar = structVar;
-	result->mode = mode;
-	return result;
-}
-
-ASTMemberExpr* CreateMemberExpr(ASTVariable* structVar, U32 memberIndex) {
-	auto result = new ASTMemberExpr();
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, U32* indices, U32 indexCount) {
+	auto result = (ASTMemberExpr*)Allocate(arena, (sizeof(ASTMemberExpr) + (sizeof(U32*)*indexCount)));
 	result->nodeType = AST_MEMBER_EXPR;
 	result->structVar = structVar;
-
-	auto structDefn = (ASTStruct*)structVar->type;
-	auto memberType = structDefn->memberTypes[memberIndex];
-	result->type = memberType;
+	result->indexCount = indexCount;
+	auto resultIndices = (U32*)(result + 1);
+	memcpy(resultIndices, indices, indexCount * sizeof(U32));
 	return result;
 }
-
-
-ASTMemberExpr* CreateMemberExpr(ASTVariable* structVar) {
-	auto result = new ASTMemberExpr();
-	result->nodeType = AST_MEMBER_EXPR;
-	result->structVar = structVar;
-	auto structDefn = (ASTStruct*)structVar->type;
-	return result;
-}
-
 
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
 	for (auto i = 0; i < structDefn->memberNames.size(); i++) {
@@ -159,8 +155,8 @@ S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
 	return -1;
 }
 
-ASTVarExpr* CreateVarExpr(ASTVariable* var) {
-	auto result = new ASTVarExpr;
+ASTVarExpr* CreateVarExpr (MemoryArena* arena, ASTVariable* var) {
+	auto result = (ASTVarExpr*)Allocate(arena, sizeof(ASTVarExpr));
 	result->nodeType = AST_VAR_EXPR;
 	result->var = var;
 	result->type = var->type;
@@ -176,7 +172,7 @@ ASTFunctionSet* CreateFunctionSet(ASTIdentifier* ident, ASTBlock* block) {
 }
 
 // Perhaps in the future a CreateFunction / could take a package instead of a block
-ASTFunction* CreateFunction(ASTFunctionSet* funcSet) {
+ASTFunction* CreateFunction (ASTFunctionSet* funcSet) {
 	ASTFunction* function = new ASTFunction;
 	function->nodeType = AST_FUNCTION;
 	function->parent = funcSet->parent;
@@ -234,8 +230,8 @@ ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function) {
 // Im not sure if we need to bother with the pointer since we know they will procede the argument count
 // but for now it keeps it simple so i will leave it it will be intresting to see if it actualy works.  Eventualy this will
 // use an allocator to create nodes for each package.
-ASTCall* CreateCall (ASTExpression** argList, U32 argCount) {
-	ASTCall* call = (ASTCall*)malloc(sizeof(ASTCall) + ((sizeof(ASTExpression*) * argCount)));
+ASTCall* CreateCall (MemoryArena* arena, ASTExpression** argList, U32 argCount) {
+	ASTCall* call = (ASTCall*)Allocate(arena, sizeof(ASTCall) + ((sizeof(ASTExpression*) * argCount)));
 	call->nodeType = AST_CALL;
 	call->argCount = argCount;
 	if (argCount > 0) {
@@ -258,49 +254,55 @@ ASTBlock* CreateBlock(ASTBlock* block) {
 // This is a statement the value in its name might be confusing.
 // We should begin to seperate out the difference between the statements and the expressions
 // And stuff like that
-ASTReturn* CreateReturnValue(ASTExpression* value) {
-	auto result = new ASTReturn();
+ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value) {
+	auto result = (ASTReturn*)Allocate(arena, sizeof(ASTReturn));
 	result->nodeType = AST_RETURN;
 	result->value = value;
 	return result;
 }
 
-ASTIntegerLiteral* CreateIntegerLiteral (S64 value) {
-	auto result = new ASTIntegerLiteral();
+ASTIntegerLiteral* CreateIntegerLiteral (MemoryArena* arena, S64 value) {
+	auto result = (ASTIntegerLiteral*)Allocate(arena, sizeof(ASTIntegerLiteral));
 	result->nodeType = AST_INTEGER_LITERAL;
 	result->type = (ASTDefinition*)global_S32Type;
 	result->value = value;
 	return result;
 }
 
-ASTFloatLiteral* CreateFloatLiteral(F64 value) {
-	auto result = new ASTFloatLiteral();
+ASTFloatLiteral* CreateFloatLiteral (MemoryArena* arena, F64 value) {
+	auto result = (ASTFloatLiteral*)Allocate(arena, sizeof(ASTFloatLiteral));
 	result->nodeType = AST_FLOAT_LITERAL;
 	result->type = (ASTDefinition*)global_F32Type;
 	result->value = value;
 	return result;
 }
 
-ASTStringLiteral* CreateStringLiteral (const std::string& str) {
-	auto result = new ASTStringLiteral ();
+ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& str) {
+	auto result = (ASTStringLiteral*)Allocate(arena, sizeof(ASTStringLiteral) + (str.size() + 1));
 	result->nodeType = AST_STRING_LITERAL;
 	result->type = global_U8Type;
-	result->value = str;
+	result->charCount = str.size();
+	auto strptr = (U8*)(result + 1);
+	memcpy(strptr, str.data(), str.size());
+	strptr += str.size();
+	*strptr = '\0';
 	return result;
 }
 
-ASTVariable* CreateVariable (ASTBlock* block) {
-	auto result = new ASTVariable;
+ASTVariable* CreateVariable (MemoryArena* arena, ASTBlock* block, ASTExpression* initalExpr) {
+	auto result = (ASTVariable*)Allocate(arena, sizeof(ASTVariable));
 	result->nodeType = AST_VARIABLE;
+	result->initalExpression = initalExpr;
 	result->block = block;
 	result->allocaInst = nullptr;
+	result->isPointer = false;
 	return result;
 }
 
 // This is just analogous for a store
 // Why do we need to use this notation / jargon
-ASTVariableOperation* CreateVariableOperation(ASTVariable* var, ASTExpression* expr) {
-	auto result = new ASTVariableOperation();
+ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* var, ASTExpression* expr) {
+	auto result = (ASTVariableOperation*)Allocate(arena, sizeof(ASTVariableOperation));
 	result->nodeType = AST_VARIABLE_OPERATION;
 	result->variable = var;
 	result->value = expr;

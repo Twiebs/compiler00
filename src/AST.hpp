@@ -9,6 +9,14 @@
 
 #include "Lexer.hpp"
 
+#define ARENA_BLOCK_SIZE 4096
+struct MemoryArena {
+  size_t used = 0;
+  size_t capacity = 0;
+  void* memory = nullptr;
+};
+void* Allocate (MemoryArena* arena, size_t size);
+
 enum ASTNodeType {
 	AST_IDENTIFIER,
 	AST_BLOCK,
@@ -115,22 +123,21 @@ struct ASTStruct : public ASTDefinition {
 };
 
 
-enum AccessMode {
-	ACCESS_LOAD,
-	ACCESS_ASSIGN,
-	ACCESS_ADD,
-	ACCESS_SUB,
-	ACCESS_MUL,
-	ACCESS_DIV
+enum Operation {
+  OPERATION_ASSIGN,
+  OPERATION_ADD,
+  OPERATION_SUB,
+  OPERATION_MUL,
+  OPERATION_DIV
 };
 
 // We need to treat all plain loads as a different form of expression
 // and things like memberMutations as statements.
-// This way there is no shanagains
+// This way there is no shananagains
 
 struct ASTMemberExpr : public ASTExpression {
 	ASTVariable* structVar;
-	std::vector<U32> memberIndices;
+	U32 indexCount;
 };
 
 enum ExprAccess {
@@ -147,30 +154,19 @@ struct ASTVarExpr : public ASTExpression {
 
 struct ASTMemberOperation : public ASTNode {
 	ASTVariable* structVar;
-	std::vector<U32> memberIndices;
-	AccessMode mode;
 	ASTExpression* expr;
+	Operation operation;
+  U32 indexCount;
 };
 
-// Structs
-ASTStruct* CreateStruct();
-S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
-
-ASTMemberOperation* CreateMemberOperation(ASTVariable* structVar);
-ASTMemberOperation* CreateMemberOperation(ASTVariable* structVar, U32 index, AccessMode mode);
-
-ASTMemberExpr* CreateMemberExpr(ASTVariable* structVar, U32 memberIndex);
-ASTMemberExpr* CreateMemberExpr(ASTVariable* structVar);
-
-ASTVarExpr* CreateVarExpr(ASTVariable* var);
 
 // REFACTOR this could use a better name
-//An identifier will point to a function set which will have various functions that corespond to that identifier stored
-//within it!  This might be a pretty large falicy but for now i will certianly allow it..
-//Mabye when namespace support is added to the language it might be possible to consider a function a namespace and it has
-//members that are the actual concrete functions that corespond to that identifier but have diffrence function signitures
-//@Refactor this is currently designated as a node even though this data structure does not particpate in the AST
-//It is simply just a container that points to overloaded functions!
+// An identifier will point to a function set which will have various functions that corespond to that identifier stored
+// within it!  This might be a pretty large falicy but for now i will certianly allow it..
+// Mabye when namespace support is added to the language it might be possible to consider a function a namespace and it has
+// members that are the actual concrete functions that corespond to that identifier but have diffrence function signitures
+// @Refactor this is currently designated as a node even though this data structure does not particpate in the AST
+// It is simply just a container that points to overloaded functions!
 struct ASTFunctionSet : public ASTNode {
 	ASTIdentifier* ident;
 	ASTBlock* parent;
@@ -212,7 +208,7 @@ struct ASTFloatLiteral : public ASTExpression {
 };
 
 struct ASTStringLiteral : public ASTExpression {
-	std::string value;
+	U32 charCount;
 };
 
 void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module);
@@ -233,36 +229,51 @@ extern ASTDefinition* global_F64Type;
 extern ASTDefinition* global_F128Type;
 
 //Identifiers
-ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name);
-ASTIdentifier* FindIdentifier(ASTBlock* block, const Token& token);
 ASTIdentifier* CreateIdentifier(ASTBlock* scope, const Token& token);
 ASTIdentifier* CreateIdentifier(ASTBlock* scope, const std::string& name);
-ASTIdentifier* FindIdentifier(const std::string& name);
 ASTIdentifier* CreateIdentifier(const std::string& name);
-void ResolveIdentifier(ASTBlock* block, const std::string& name);	//WTF
+ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name);
+ASTIdentifier* FindIdentifier(ASTBlock* block, const Token& token);
+ASTIdentifier* FindIdentifier(const std::string& name);
+void ResolveIdentifier(ASTBlock* block, const std::string& name);	// WTF
 
-ASTDefinition* CreateType(ASTBlock* block, const std::string& name, llvm::Type* type);
-
-ASTStruct* CreateStruct (ASTBlock* block);
-S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
-
+// Statements
 ASTFunctionSet* CreateFunctionSet(ASTIdentifier* ident, ASTBlock* block);		// This is where identifiers are resolved into
 ASTFunction* CreateFunction(ASTFunctionSet* funcSet);	// Functions now must be created within a function set
 ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function);
 ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc);
 
 ASTBlock* CreateBlock(ASTBlock* block);
-ASTIfStatement* CreateIfStatement(ASTExpression* expr);	//TODO Why are ifstatements created without a body?
+
+ASTStruct* CreateStruct (ASTBlock* block);
+ASTStruct* CreateStruct();
+S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
+
+S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
+
+ASTDefinition* CreateType(ASTBlock* block, const std::string& name, llvm::Type* type);
+
+ASTVariable* CreateVariable(MemoryArena* arena, ASTBlock* block, ASTExpression* initalExpr = nullptr);
+
+// Operations
+ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* variable, ASTExpression* expr);
+ASTBinaryOperation*   CreateBinaryOperation(MemoryArena* arena, TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
+ASTMemberOperation*   CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation mode, ASTExpression* expr, U32* indices, U32 indexCount);
+
+// Control Flow
+ASTIfStatement* CreateIfStatement(ASTExpression* expr);	// TODO Why are ifstatements created without a body? also the body should probably be emitted into a stack thingyyy and then coppied into the if statement???
 ASTIter* CreateIter(ASTIdentifier* ident, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
-ASTReturn* CreateReturnValue(ASTExpression* value);
+ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
 
-ASTCall* CreateCall(ASTExpression** argumentList, U32 argumentCount);
-ASTVariable* CreateVariable(ASTBlock* block);
-ASTBinaryOperation* CreateBinaryOperation(TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
-ASTVariableOperation* CreateVariableOperation(ASTVariable* variable, ASTExpression* expr);
+//===============
+//  Expressions
+//===============
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, U32* indices, U32 indexCount);
+ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var);
+ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argumentCount);
+ASTIntegerLiteral* CreateIntegerLiteral(MemoryArena* arena, S64 value);
+ASTFloatLiteral* CreateFloatLiteral(MemoryArena* arena, F64 value);
+ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& string);
 
-ASTIntegerLiteral* CreateIntegerLiteral(S64 value);
-ASTFloatLiteral* CreateFloatLiteral(F64 value);
-ASTStringLiteral* CreateStringLiteral (const std::string& string);
 
 std::string ToString(ASTNodeType nodeType);

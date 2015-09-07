@@ -1,15 +1,25 @@
 import "IO.bang"
 
-SomeData :: struct {
-  theData : S32
+MemoryArena :: struct {
+  used : S32
+  capacity : S32
+}
+
+Worker :: struct {
+  arena : MemoryArena
+}
+
+PrintArena :: (arena : @MemoryArena) {
+  Println(arena.used)
+  Println(arena.capacity)
 }
 
 Main :: () :> S32 {
-  data : SomeData
-  data.theData = 6
+  worker : Worker
+  worker.arena.used = 2
+  worker.arena.capacity = 4096
 
-  foo : S32 = 2
-  foo = foo + 1
+  PrintArena(@worker.arena)
 
   return 0
 }
