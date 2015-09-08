@@ -255,7 +255,6 @@ llvm::Value* CodegenExpr(ASTNode* node) {
 }
 
 llvm::Value* Codegen(ASTBinaryOperation* binop)  {
-
 	llvm::Value* lhs = CodegenExpr(binop->lhs);
 	llvm::Value* rhs = CodegenExpr(binop->rhs);
 
@@ -280,7 +279,6 @@ llvm::Value* Codegen(ASTBinaryOperation* binop)  {
 }
 
 void Codegen(ASTReturn* retVal) {
-
 	auto value = CodegenExpr(retVal->value);
 	if (value != nullptr) {
 		builder->CreateRet(value);
@@ -459,8 +457,12 @@ llvm::Value* Codegen(ASTMemberExpr* expr) {
 	llvm::Value* value_ptr = structAlloca;
 	if(expr->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
 	auto gep = llvm::GetElementPtrInst::Create(value_ptr, indices, "access", builder->GetInsertBlock());
-	auto load = builder->CreateLoad(gep);
-	return load;
+	if (expr->accessMod == ACCESS_ADDRESS) {
+		return gep;
+	} else {
+		auto load = builder->CreateLoad(gep);
+		return load;
+	}
 }
 
 llvm::Value* Codegen (ASTVarExpr* expr) {
