@@ -456,7 +456,6 @@ llvm::Value* Codegen(ASTMemberExpr* expr) {
     indices.push_back(indexValue);
   }
 
-
 	llvm::Value* value_ptr = structAlloca;
 	if(expr->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
 	auto gep = llvm::GetElementPtrInst::Create(value_ptr, indices, "access", builder->GetInsertBlock());
@@ -465,18 +464,18 @@ llvm::Value* Codegen(ASTMemberExpr* expr) {
 }
 
 llvm::Value* Codegen (ASTVarExpr* expr) {
-
+  assert(expr->var->allocaInst);
 	auto varAlloca = expr->var->allocaInst;
-	llvm::Value* value = nullptr;
 
-	switch(expr->accessMode) {
-	case EXPR_LOAD:
+	llvm::Value* value = nullptr;
+	switch(expr->accessMod) {
+	case ACCESS_LOAD:
 		value = builder->CreateLoad(varAlloca);
 		break;
-	case EXPR_POINTER:
+	case ACCESS_ADDRESS:
 		value = varAlloca;
 		break;
-	case EXPR_DEREF:
+	case ACCESS_VALUE:
 		value = builder->CreateLoad(varAlloca);
 		break;
 	}

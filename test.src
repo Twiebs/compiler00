@@ -1,25 +1,25 @@
-import "IO.bang"
+IMPORT "IO.bang"
 
-MemoryArena :: struct {
-  used : S32
-  capacity : S32
+Vector3 :: STRUCT {
+  x : S32
+  y : S32
+  z : S32
 }
 
-Worker :: struct {
-  arena : MemoryArena
+Transform :: STRUCT {
+  position : Vector3
 }
 
-PrintArena :: (arena : @MemoryArena) {
-  Println(arena.used)
-  Println(arena.capacity)
+PrintVector :: (vector : @Vector3) {
+  Println(vector.x)
+  Println(vector.y)
+  Println(vector.z)
 }
 
 Main :: () :> S32 {
-  worker : Worker
-  worker.arena.used = 2
-  worker.arena.capacity = 4096
+  transform : Transform
+  transform.position.x = 5
+  PrintVector(@transform.position)
 
-  PrintArena(@worker.arena)
-
-  return 0
+  RETURN 0
 }

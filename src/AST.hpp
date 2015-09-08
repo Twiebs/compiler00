@@ -131,25 +131,22 @@ enum Operation {
   OPERATION_DIV
 };
 
-// We need to treat all plain loads as a different form of expression
-// and things like memberMutations as statements.
-// This way there is no shananagains
+enum AccessModifer {
+	ACCESS_LOAD,
+	ACCESS_VALUE,
+	ACCESS_ADDRESS,
+};
 
 struct ASTMemberExpr : public ASTExpression {
 	ASTVariable* structVar;
-	U32 indexCount;
-};
-
-enum ExprAccess {
-	EXPR_LOAD,
-	EXPR_DEREF,
-	EXPR_POINTER,
+  AccessModifer accessMod;
+  U32 indexCount;
 };
 
 struct ASTVarExpr : public ASTExpression {
 	ASTVariable* var;
 	std::vector<U32> accessIndices;
-	ExprAccess accessMode;
+	AccessModifer accessMod;
 };
 
 struct ASTMemberOperation : public ASTNode {
@@ -268,8 +265,9 @@ ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
 //===============
 //  Expressions
 //===============
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, U32* indices, U32 indexCount);
-ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var);
+ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var, AccessModifer accessMod);
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, AccessModifer accessMod, U32* indices, U32 indexCount);
+
 ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argumentCount);
 ASTIntegerLiteral* CreateIntegerLiteral(MemoryArena* arena, S64 value);
 ASTFloatLiteral* CreateFloatLiteral(MemoryArena* arena, F64 value);

@@ -44,14 +44,14 @@ void Lexer::next(bool statement) {
 	// The Current Token is an Identifier or a Language Keyword
 	if (isalpha(nextChar) || nextChar == '_') {
 		while ((isalnum(nextChar) || nextChar == '_') && nextChar != '.') appendNextChar();
-		if 		(token.string == "import") 			token.type = TOKEN_IMPORT;
-		else if (token.string == "foreign")	 	token.type = TOKEN_FOREIGN;
-		else if (token.string == "struct")		token.type = TOKEN_STRUCT;
-		else if (token.string == "if")				token.type = TOKEN_IF;
-		else if (token.string == "else") 		  token.type = TOKEN_ELSE;
-		else if (token.string == "iter")			token.type = TOKEN_ITER;
-		else if (token.string == "to")				token.type = TOKEN_TO;
-		else if (token.string == "return")		token.type = TOKEN_RETURN;
+		if 		(token.string == "IMPORT") 			token.type = TOKEN_IMPORT;
+		else if (token.string == "FOREIGN")	 	token.type = TOKEN_FOREIGN;
+		else if (token.string == "STRUCT")		token.type = TOKEN_STRUCT;
+		else if (token.string == "IF")				token.type = TOKEN_IF;
+		else if (token.string == "ELSE") 		  token.type = TOKEN_ELSE;
+		else if (token.string == "ITER")			token.type = TOKEN_ITER;
+		else if (token.string == "TO")				token.type = TOKEN_TO;
+		else if (token.string == "RETURN")		token.type = TOKEN_RETURN;
 		else token.type = TOKEN_IDENTIFIER;
 	}
 

@@ -1,10 +1,10 @@
-__PrintInt     :: (msg : S32) foreign
-__PrintFloat   :: (msg : F32) foreign
-__PrintStr     :: (msg : @U8) foreign
+__PrintInt     :: (msg : S32) FOREIGN
+__PrintFloat   :: (msg : F32) FOREIGN
+__PrintStr     :: (msg : @U8) FOREIGN
 
-__PrintlnInt   :: (msg : S32) foreign
-__PrintlnFloat :: (msg : F32) foreign
-__PrintlnStr   :: (msg : @U8) foreign
+__PrintlnInt   :: (msg : S32) FOREIGN
+__PrintlnFloat :: (msg : F32) FOREIGN
+__PrintlnStr   :: (msg : @U8) FOREIGN
 
 Print :: (msg : S32)  { __PrintInt(msg) }
 Print :: (msg : F32)  { __PrintFloat(msg) }

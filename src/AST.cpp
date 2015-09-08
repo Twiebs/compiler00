@@ -7,9 +7,9 @@ void* Allocate (MemoryArena* arena, size_t size) {
   if (arena->used + size >= arena->capacity) {
     assert(false);
   } else {
-    auto ptr = arena->memory + arena->used;
+    auto ptr = (U8*)arena->memory + arena->used;
     arena->used += size;
-    return ptr;
+    return (void*)ptr;
   }
 }
 
@@ -135,13 +135,23 @@ ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* struc
 	return result;
 }
 
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, U32* indices, U32 indexCount) {
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, AccessModifer accessMod, U32* indices, U32 indexCount) {
 	auto result = (ASTMemberExpr*)Allocate(arena, (sizeof(ASTMemberExpr) + (sizeof(U32*)*indexCount)));
 	result->nodeType = AST_MEMBER_EXPR;
 	result->structVar = structVar;
 	result->indexCount = indexCount;
+  result->accessMod = accessMod;
 	auto resultIndices = (U32*)(result + 1);
 	memcpy(resultIndices, indices, indexCount * sizeof(U32));
+	return result;
+}
+
+ASTVarExpr* CreateVarExpr (MemoryArena* arena, ASTVariable* var, AccessModifer accessMod) {
+	auto result = (ASTVarExpr*)Allocate(arena, sizeof(ASTVarExpr));
+	result->nodeType = AST_VAR_EXPR;
+	result->var = var;
+	result->type = var->type;
+  result->accessMod = accessMod;
 	return result;
 }
 
@@ -153,14 +163,6 @@ S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
 		}
 	}
 	return -1;
-}
-
-ASTVarExpr* CreateVarExpr (MemoryArena* arena, ASTVariable* var) {
-	auto result = (ASTVarExpr*)Allocate(arena, sizeof(ASTVarExpr));
-	result->nodeType = AST_VAR_EXPR;
-	result->var = var;
-	result->type = var->type;
-	return result;
 }
 
 ASTFunctionSet* CreateFunctionSet(ASTIdentifier* ident, ASTBlock* block) {
@@ -234,6 +236,7 @@ ASTCall* CreateCall (MemoryArena* arena, ASTExpression** argList, U32 argCount) 
 	ASTCall* call = (ASTCall*)Allocate(arena, sizeof(ASTCall) + ((sizeof(ASTExpression*) * argCount)));
 	call->nodeType = AST_CALL;
 	call->argCount = argCount;
+	call->function = nullptr;
 	if (argCount > 0) {
 		auto callArgs = (ASTExpression**)(call + 1);
 		for (auto i = 0; i < argCount; i++) {

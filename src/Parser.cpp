@@ -96,12 +96,12 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
 	case TOKEN_POINTER:
 	case TOKEN_DEREF:
 	case TOKEN_IDENTIFIER: {
-		ExprAccess accessMode = EXPR_LOAD;
+		AccessModifer accessMod = ACCESS_LOAD;
 		if (lex.token.type == TOKEN_POINTER) {
-			accessMode = EXPR_POINTER;
+			accessMod = ACCESS_ADDRESS;
 			lex.next();	//Eat the pointer token
 		} else if (lex.token.type == TOKEN_DEREF) {
-			accessMode = EXPR_DEREF;
+			accessMod = ACCESS_VALUE;
 			lex.next();	//Eat the deref token
 		}
 
@@ -121,12 +121,12 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
 		} else if (lex.token.type == TOKEN_ACCESS) {
 			auto structVar = (ASTVariable*)ident->node;
 			auto structDefn = (ASTStruct*)structVar->type;
-			if(structDefn->nodeType != AST_STRUCT) ReportError(parseState, lex.token.site, "Identifier: " + ident->name + " does not name a struct type");
-
+			if(structDefn->nodeType != AST_STRUCT)
+        ReportError(parseState, lex.token.site, "Identifier: " + ident->name + " does not name a struct type");
 
 			auto currentStruct = structDefn;
+			ASTDefinition* exprType = nullptr;
 			std::vector<U32> indices;
-			ASTDefinition* exprType;
 			while(lex.token.type == TOKEN_ACCESS) {
 				lex.next(); // eat the member access
 				auto memberIndex = GetMemberIndex(currentStruct, lex.token.string);
@@ -137,17 +137,17 @@ ASTExpression* ParsePrimaryExpr(ParseState& parseState, Lexer& lex) {
 					auto memberType = currentStruct->memberTypes[memberIndex];
 					if(memberType->nodeType == AST_STRUCT)
 						currentStruct = (ASTStruct*)memberType;
-					else exprType = memberType;
+					exprType = memberType;
 				}
 				lex.next();	// eat the member ident
 			}
-			auto expr = CreateMemberExpr(&parseState.arena, structVar, &indices[0], indices.size());
+
+			auto expr = CreateMemberExpr(&parseState.arena, structVar, accessMod, &indices[0], indices.size());
 			expr->type = exprType;
 			return expr;
 		} else {
 			auto var = (ASTVariable*)ident->node;
-			auto expr = CreateVarExpr(&parseState.arena, var);
-			expr->accessMode = accessMode;
+			auto expr = CreateVarExpr(&parseState.arena, var, accessMod);
 			return expr;
 		}
 
