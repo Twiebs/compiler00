@@ -52,7 +52,7 @@
 
 global_variable llvm::IRBuilder<>* builder = new llvm::IRBuilder<>(llvm::getGlobalContext());
 
-//HACK HACK HACK HACK!!!!! THIS IS A MASSIVE HACK!!!
+// HACK HACK HACK HACK!!!!!!!!!!!!!!!!!!!!!! THIS IS A MASSIVE HACK!!!!!!!!!!!!!!!!!!1
 global_variable Package* global_package;
 
 // Top level statements
@@ -109,8 +109,6 @@ void CodegenPackage (Package* package, const BuildContext& context) {
     LOG_ERROR("llvm::Module verification failed!");
     LOG_ERROR("Build incomplete!  Skipping executable creation");
   }
-
-
 }
 
 void Codegen(ASTStruct* structDefn) {

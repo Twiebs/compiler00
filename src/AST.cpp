@@ -1,6 +1,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Instructions.h"
 
+#include "Common.hpp"
 #include "AST.hpp"
 
 void* Allocate (MemoryArena* arena, size_t size) {

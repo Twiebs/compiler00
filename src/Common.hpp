@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <stdint.h>
 
+#define internal static
 #define global_variable static
 
 typedef int8_t    S8;

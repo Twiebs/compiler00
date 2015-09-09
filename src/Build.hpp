@@ -2,6 +2,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
 
+#include <fstream>
+
 #include "AST.hpp"
 
 // Serious question why the fuck do we care about the llvmModule
@@ -10,6 +12,20 @@ struct Package {
 	ASTBlock globalScope;
 	llvm::Module* module;
 	U64 flags;
+};
+
+struct Worker {
+  std::ifstream stream;
+	char lastChar = 0, nextChar = 0;
+	U32 lineNumber = 0, colNumber = 0;
+	int currentIndentLevel = 0;
+	Token token;
+
+  ASTBlock* currentScope;
+  U32 errorCount;
+  MemoryArena arena;
+
+  std::vector<std::string> workQueue;
 };
 
 enum PackageFlags {
