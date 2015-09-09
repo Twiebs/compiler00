@@ -35,6 +35,4 @@ Main :: () :> S32
   PrintVector(@pos_cpy)
 
   ref : VecRef
-  ref.vecPtr.x = 5
-
   RETURN 0

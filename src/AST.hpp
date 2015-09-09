@@ -3,10 +3,6 @@
 #include <vector>
 #include <unordered_map>
 
-#include "llvm/IR/Value.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/Instructions.h"
-
 #include "Common.hpp"
 
 enum TokenType {
@@ -135,7 +131,7 @@ struct ASTIdentifier {
 
 struct ASTDefinition : public ASTNode {
 	ASTIdentifier* identifier;
-	llvm::Type* llvmType;
+	void* llvmType;  // Wha the fuck???? this makes no sense
 };
 
 struct ASTExpression : public ASTNode {
@@ -169,7 +165,7 @@ struct ASTVariable : public ASTExpression {
 	ASTIdentifier* identifier;
 	ASTBlock* block;
 	ASTExpression* initalExpression = nullptr;
-	llvm::AllocaInst* allocaInst;
+	void* allocaInst;
 	bool isPointer = false;
 };
 
@@ -177,7 +173,7 @@ struct ASTFunction : public ASTBlock {
 	ASTIdentifier* ident;
 	ASTDefinition* returnType;
 	std::vector<ASTVariable*> args;
-	llvm::Function* code = nullptr;
+	void* llvmFunction;
 };
 
 // I dont like the idea of storing identifiers
@@ -186,7 +182,7 @@ struct ASTFunction : public ASTBlock {
 struct ASTStruct : public ASTDefinition {
 	std::vector<std::string> memberNames;
 	std::vector<ASTDefinition*> memberTypes;
-  std::vector<bool> memberIsPointer;
+	std::vector<bool> memberIsPointer;
 };
 
 
@@ -206,8 +202,8 @@ enum AccessModifer {
 
 struct ASTMemberExpr : public ASTExpression {
 	ASTVariable* structVar;
-  AccessModifer accessMod;
-  U32 indexCount;
+	AccessModifer accessMod;
+	U32 indexCount;
 };
 
 struct ASTVarExpr : public ASTExpression {
@@ -220,7 +216,7 @@ struct ASTMemberOperation : public ASTNode {
 	ASTVariable* structVar;
 	ASTExpression* expr;
 	Operation operation;
-  U32 indexCount;
+	U32 indexCount;
 };
 
 
@@ -275,7 +271,7 @@ struct ASTStringLiteral : public ASTExpression {
 	U32 charCount;
 };
 
-void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module);
+void InitalizeLanguagePrimitives(ASTBlock* scope);
 
 extern ASTBlock global_defaultGlobalScope;
 extern ASTDefinition* global_voidType;
@@ -314,8 +310,6 @@ ASTStruct* CreateStruct();
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
-
-ASTDefinition* CreateType(ASTBlock* block, const std::string& name, llvm::Type* type);
 
 ASTVariable* CreateVariable(MemoryArena* arena, ASTBlock* block, ASTExpression* initalExpr = nullptr);
 

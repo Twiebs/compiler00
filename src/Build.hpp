@@ -1,16 +1,11 @@
 #pragma once
-#include "llvm/IR/Module.h"
-#include "llvm/IR/IRBuilder.h"
-
 #include <fstream>
-
 #include "AST.hpp"
 
 // Serious question why the fuck do we care about the llvmModule
 // here??? we have not even created it yet!!!!
 struct Package {
 	ASTBlock globalScope;
-	llvm::Module* module;
 	U64 flags;
 };
 
@@ -61,7 +56,6 @@ struct BuildSettings {
 struct BuildContext {
 	std::vector<Package*> packages;
 	Package* currentPackage;
-	llvm::IRBuilder<>* builder;
 	U32 errorCount;
 };
 

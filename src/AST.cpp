@@ -1,7 +1,6 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Instructions.h"
 
-#include "Common.hpp"
 #include "AST.hpp"
 
 void* Allocate (MemoryArena* arena, size_t size) {
@@ -29,33 +28,32 @@ ASTDefinition* global_F32Type;
 ASTDefinition* global_F64Type;
 ASTDefinition* global_F128Type;
 
-void InitalizeLanguagePrimitives(ASTBlock* scope, llvm::Module* module) {
-	global_voidType = CreateType(scope, "Void", llvm::Type::getVoidTy(llvm::getGlobalContext()));
-
-	global_U8Type = CreateType(scope, "U8",   llvm::IntegerType::get(llvm::getGlobalContext(), 8));
-	global_U16Type = CreateType(scope, "U16", llvm::IntegerType::get(llvm::getGlobalContext(), 16));
-	global_U32Type = CreateType(scope, "U32", llvm::IntegerType::get(llvm::getGlobalContext(), 32));
-	global_U64Type = CreateType(scope, "U64", llvm::IntegerType::get(llvm::getGlobalContext(), 64));
-
-	global_S8Type   = CreateType(scope, "S8", llvm::Type::getInt8Ty(llvm::getGlobalContext()));
-	global_S16Type = CreateType(scope, "S16", llvm::Type::getInt16Ty(llvm::getGlobalContext()));
-	global_S32Type = CreateType(scope, "S32", llvm::Type::getInt32Ty(llvm::getGlobalContext()));
-	global_S64Type = CreateType(scope, "S64", llvm::Type::getInt64Ty(llvm::getGlobalContext()));
-
-	global_F16Type   = CreateType(scope, "F16", llvm::Type::getHalfTy(llvm::getGlobalContext()));
-	global_F32Type   = CreateType(scope, "F32", llvm::Type::getFloatTy(llvm::getGlobalContext()));
-	global_F64Type   = CreateType(scope, "F64", llvm::Type::getDoubleTy(llvm::getGlobalContext()));
-	global_F128Type = CreateType(scope, "F128", llvm::Type::getFP128Ty(llvm::getGlobalContext()));
-}
-
-ASTDefinition* CreateType(ASTBlock* scope, const std::string& name, llvm::Type* type) {
+internal ASTDefinition* CreatePrimitiveType(ASTBlock* scope, const std::string& name) {
 	auto ident = CreateIdentifier(scope, name);
 	auto typeDefn = new ASTDefinition;
 	typeDefn->nodeType = AST_DEFINITION;
 	typeDefn->identifier = ident;
-	typeDefn->llvmType = type;
 	ident->node = typeDefn;
 	return typeDefn;
+}
+
+void InitalizeLanguagePrimitives(ASTBlock* scope) {
+	global_voidType = CreatePrimitiveType(scope, "Void");
+
+	global_U8Type  = CreatePrimitiveType(scope, "U8");
+	global_U16Type = CreatePrimitiveType(scope, "U16");
+	global_U32Type = CreatePrimitiveType(scope, "U32");
+	global_U64Type = CreatePrimitiveType(scope, "U64");
+
+	global_S8Type  = CreatePrimitiveType(scope, "S8");
+	global_S16Type = CreatePrimitiveType(scope, "S16");
+	global_S32Type = CreatePrimitiveType(scope, "S32");
+	global_S64Type = CreatePrimitiveType(scope, "S64");
+
+	global_F16Type   = CreatePrimitiveType(scope, "F16");
+	global_F32Type   = CreatePrimitiveType(scope, "F32");
+	global_F64Type   = CreatePrimitiveType(scope, "F64");
+	global_F128Type  = CreatePrimitiveType(scope, "F128");
 }
 
 global_variable std::unordered_map<std::string, ASTIdentifier*> global_identifierLookupMap;

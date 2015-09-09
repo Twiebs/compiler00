@@ -4,16 +4,12 @@
 
 #include <string>
 #include <iostream>
-#include <fstream>
 #include <system_error>
 #include <unistd.h>
 
 #include "llvm/Support/CommandLine.h"
 
-void CodegenPackage(Package* package, const BuildContext& context);
-void WriteBitcode(llvm::Module* module, const std::string& outputFile);
-int WriteNativeObject(llvm::Module* module, const BuildSettings& settings);
-int WriteExecutable(BuildSettings& settings);
+void CodegenPackage(Package* package, const BuildContext& context, BuildSettings* settings);
 
 global_variable std::vector<CallDependency> global_calldeps;
 void AddDependency(const std::string& identName, ASTCall* call) {
@@ -45,10 +41,8 @@ int PreBuild(const BuildContext& context, const BuildSettings& settings) {
 }
 
 int Build(BuildContext& context, BuildSettings& settings) {
-	// Package Must Persist pass this stage
 	auto package = new Package;
-	package->module = new llvm::Module("LLVMLang Compiler (TODO PackageName)", llvm::getGlobalContext());
-	InitalizeLanguagePrimitives(&package->globalScope, package->module);
+	InitalizeLanguagePrimitives(&package->globalScope);
 	context.packages.push_back(package);
 	context.currentPackage = package;
 
@@ -56,6 +50,7 @@ int Build(BuildContext& context, BuildSettings& settings) {
 	worker.currentScope = &package->globalScope;
 	worker.arena.memory = malloc(4096);
 	worker.arena.capacity = 4096;
+	worker.errorCount = 0;
 	ParseFile(&worker, settings.rootDir, settings.inputFile);
 
 	while (worker.workQueue.size() > 0) {
@@ -67,20 +62,7 @@ int Build(BuildContext& context, BuildSettings& settings) {
 
 	if (worker.errorCount == 0) {
     LOG_INFO("Emitting code for package...")
-		CodegenPackage(package, context);
-		if (settings.logModuleDump) {
-			package->module->dump();
-		}
-
-		if (settings.outputFile == "") {
-			auto inputBase = settings.inputFile.substr(0, settings.inputFile.find(".") + 1);
-			settings.outputFile = settings.rootDir + inputBase + "o";
-		}
-
-		if (settings.emitNativeOBJ)
-			WriteNativeObject(package->module, settings);
-		if (settings.emitExecutable)
-			WriteExecutable(settings);
+		CodegenPackage(package, context, &settings);
 	} else {
 		LOG_ERROR("There were errors building the package");
 		return -1;
@@ -92,19 +74,6 @@ int PostBuild(const BuildContext& context, const BuildSettings& settings) {
 	return 0;
 }
 
-
-int WriteExecutable(BuildSettings& settings) {
-	std::string allLibs;
-	for(auto& dir : settings.libDirs)
-		allLibs.append("-L" + settings.rootDir + dir + " ");
-	for(auto& lib : settings.libNames)
-		allLibs.append("-l" + lib + " ");
-
-	std::string cmd = "clang++ " + settings.outputFile + " " + allLibs + " -o " + settings.rootDir + "app";
-	LOG_INFO("Writing Executable: " << cmd);
-	system(cmd.c_str());
-	return 0;
-}
 
 int main (int argc, char** argv) {
 	BuildSettings settings;
@@ -118,7 +87,6 @@ int main (int argc, char** argv) {
 	settings.emitExecutable = true;
 
 	BuildContext context;
-	context.builder = new llvm::IRBuilder<>(llvm::getGlobalContext());
 
 	static llvm::cl::opt<std::string> inputFile(llvm::cl::Positional, llvm::cl::desc("<input file>"));
 	static llvm::cl::opt<std::string> outputFile("o", llvm::cl::desc("Output filename"), llvm::cl::value_desc("filename"));

@@ -1,10 +1,9 @@
 #include "Parser.hpp"
 
-/*
-TODO a better way would be to store the precedences in a array
-and directly lookup the value without branching... especialy if the
-number of opperators begins to increase For now 'if' hax FTW!
-*/
+// TODO a better way would be to store the precedences in a array
+// and directly lookup the value without branching... especialy if the
+// of opperators begins to increase For now 'if' hax FTW!
+
 void NextToken(Worker* worker);
 internal int GetTokenPrecedence(const Token& token);
 
@@ -41,13 +40,13 @@ ASTNode* ParseImport(Worker* worker) {
 	return ParseStatement(worker);
 }
 
-//TODO seperate ASTNode into two differently treated branches of the AST
+// TODO seperate ASTNode into two differently treated branches of the AST
 // A statement either begins with an identifier, a keyword, or a new block
 
 ASTNode* ParseStatement (Worker* worker) {
 	switch (worker->token.type) {
 	case TOKEN_IDENTIFIER:  return ParseIdentifier(worker);
-	case TOKEN_IF: 		      return ParseIF(worker);
+	case TOKEN_IF: 		    return ParseIF(worker);
 	case TOKEN_ITER:        return ParseIter(worker);
 	case TOKEN_RETURN: 	    return ParseReturn(worker);
 	case TOKEN_SCOPE_OPEN:  return ParseBlock(worker);
@@ -657,18 +656,22 @@ ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 }
 
 void ParseFile(Worker* worker, const std::string& rootDir, const std::string& filename) {
-  worker->stream.open(rootDir + filename);
+	worker->stream.open(rootDir + filename);
 	if (!worker->stream.is_open()) {
 		LOG_ERROR("Could not open file " + filename);
 		return;
 	}
 
-  worker->nextChar = worker->stream.get();
-  worker->token.site.filename = filename;
-  NextToken(worker);
-
+	worker->nextChar = worker->stream.get();
+	worker->token.site.filename = filename;
+	worker->lineNumber = 1;
+	worker->colNumber = 1;
 	NextToken(worker);
+
 	while (worker->token.type != TOKEN_EOF) {
 		ParseStatement(worker);
 	}
+
+	worker->stream.close();
 }
+

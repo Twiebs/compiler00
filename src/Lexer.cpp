@@ -4,17 +4,17 @@
 #include "Common.hpp"
 #include "Build.hpp"
 
-internal void EatNext(Worker* worker) {
+internal void EatNext (Worker* worker) {
 	worker->lastChar = worker->nextChar;
 	worker->nextChar = worker->stream.get();
 	worker->colNumber++;
-	if(worker->lastChar == '\n') {
+	if (worker->lastChar == '\n') {
 		 worker->lineNumber++;
 		 worker->colNumber = 1;
 	}
 }
 
-internal void AppendNext(Worker* worker) {
+internal void AppendNext (Worker* worker) {
 	worker->lastChar =  worker->nextChar;
 	worker->nextChar = worker->stream.get();
 	worker->colNumber++;
@@ -26,7 +26,7 @@ internal void AppendNext(Worker* worker) {
 	}
 }
 
-void NextToken(Worker* worker) {
+void NextToken (Worker* worker) {
 	#ifdef USE_INDENT_BLOCK
 		if (worker->nextChar == '\n' || worker->nextChar == '\r') {
 			EatNext(worker);
