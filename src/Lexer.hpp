@@ -1,7 +1,6 @@
 #pragma once
 
 //#define USE_SCOPE_INDENT
-#define SCOPE_SPACE_COUNT 2
 
 #include <iostream>
 #include <istream>
@@ -81,16 +80,12 @@ public:
 	std::ifstream stream;
 	char lastChar = 0, nextChar = 0;
 	U32 lineNumber = 0, colNumber = 0;
+	int currentIndentLevel = 0;
 
-#ifdef USE_SCOPE_INDENT
-	int currentIndentLevel;
-#endif
-
-	void next(bool statement = false);
+	void next();
 
 private:
 
 	void eatNextChar();
 	void appendNextChar();
-	int GetIndentLevel();
 };

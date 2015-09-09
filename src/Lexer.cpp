@@ -1,50 +1,61 @@
 #include "Lexer.hpp"
 
+#define USE_INDENT_BLOCK
 #define INDENT_SPACE_COUNT 2
-int Lexer::GetIndentLevel() {
-	int indentLevel = 0;
-	if (nextChar == '\t' || nextChar == '\r') {
+
+void Lexer::next() {
+#ifdef USE_INDENT_BLOCK
+	if (nextChar == '\n' || nextChar == '\r') {
 		eatNextChar();
-		indentLevel++;
-	} else if (nextChar == ' ') {
-		int spaceCount = 1;
-		eatNextChar();
-		while(nextChar == ' ') {
-			spaceCount++;
+		if (nextChar == '\n' || nextChar == '\r') {
+			next();
+			return;
+		}
+
+		int indentLevel = 0;
+		if (nextChar == '\t') {
 			eatNextChar();
-			if(spaceCount > INDENT_SPACE_COUNT) {
-				indentLevel++;
-				spaceCount = 0;
+			indentLevel++;
+		} else if (nextChar == ' ') {
+			int spaceCount = 1;
+			eatNextChar();
+			while (nextChar == ' ') {
+				spaceCount++;
+				eatNextChar();
+				if (spaceCount >= INDENT_SPACE_COUNT) {
+					indentLevel++;
+					spaceCount = 0;
+				}
 			}
 		}
-	}
-	return indentLevel;
-}
 
-void Lexer::next(bool statement) {
+		if (indentLevel > currentIndentLevel) {
+			token.string = "";
+			token.type = TOKEN_SCOPE_OPEN;;
+			token.site.lineNumber = lineNumber;
+			token.site.columNumber = colNumber;
+			currentIndentLevel = indentLevel;
+			return;
+		} else if (indentLevel < currentIndentLevel) {
+			token.string = "";
+			token.type = TOKEN_SCOPE_CLOSE;
+			token.site.lineNumber = lineNumber;
+			token.site.columNumber = colNumber;
+			currentIndentLevel = indentLevel;
+			return;
+		}
+	}
+#endif
+
 	token.string = "";
 	token.type = TOKEN_UNKOWN;
 	token.site.lineNumber = lineNumber;
 	token.site.columNumber = colNumber;
+	while (isspace(nextChar)) eatNextChar();
 
-#ifdef USE_SCOPE_INDENT
-	if(statement) {
-		int indentLevel = GetIndentLevel();
-		if (indentLevel > currentIndentLevel) {
-			token.type = TOKEN_SCOPE_OPEN;
-		} else if (indentLevel < currentIndentLevel) {
-			token.type = TOKEN_SCOPE_CLOSE;
-		}
-		return;
-	}
-#endif
-
-	while (isspace(nextChar)) eatNextChar();	// Eat the whitespaces
-
-	// The Current Token is an Identifier or a Language Keyword
 	if (isalpha(nextChar) || nextChar == '_') {
 		while ((isalnum(nextChar) || nextChar == '_') && nextChar != '.') appendNextChar();
-		if 		(token.string == "IMPORT") 			token.type = TOKEN_IMPORT;
+		if 		  (token.string == "IMPORT") 	  token.type = TOKEN_IMPORT;
 		else if (token.string == "FOREIGN")	 	token.type = TOKEN_FOREIGN;
 		else if (token.string == "STRUCT")		token.type = TOKEN_STRUCT;
 		else if (token.string == "IF")				token.type = TOKEN_IF;
@@ -195,9 +206,11 @@ void Lexer::next(bool statement) {
 	} else if (this->nextChar == '{') {
 		appendNextChar();
 		token.type = TOKEN_SCOPE_OPEN;
+		// currentIndentLevel++;
 	} else if (this->nextChar == '}') {
 		appendNextChar();
 		token.type = TOKEN_SCOPE_CLOSE;
+		// currentIndentLevel++;
 	} else if (this->nextChar == EOF) {
 		//Dont append or ead the EOF
 		token.type = TOKEN_EOF;

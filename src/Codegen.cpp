@@ -327,52 +327,58 @@ void Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Fu
 	auto compare = builder->CreateICmpEQ(condV, llvm::ConstantInt::getTrue(llvm::getGlobalContext()), "ifcond");
 	auto ifBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "if", function);
 	auto elseBlock = mergeBlock;
-	if(ifStatement->elseBlock != nullptr) {
+	if(ifStatement->elseBody != nullptr) {
 		elseBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "else", function);
 	}
 	builder->CreateCondBr(compare, ifBlock, elseBlock);
 	builder->SetInsertPoint(ifBlock);
-	for(auto node : ifStatement->ifBlock->members) {
-		if(node->nodeType == AST_IF) {
-			ifBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", function);
-			Codegen((ASTIfStatement*)node, ifBlock, function);
-			builder->SetInsertPoint(ifBlock);
-			continue;
-		}
-		auto value = CodegenExpr(node);
-		if(!value) {
-			LOG_DEBUG("Failed to emit code for value in body of ifstatement!");
-		}
-	}
+
+  if (ifStatement->ifBody->nodeType == AST_BLOCK) {
+    auto block = (ASTBlock*)ifStatement->ifBody;
+    for(auto node : block->members) {
+      if (node->nodeType == AST_IF) {
+        ifBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", function);
+        Codegen((ASTIfStatement*)node, ifBlock, function);
+        builder->SetInsertPoint(ifBlock);
+        continue;
+      }
+      auto value = CodegenExpr(node);
+      if(!value) {
+        LOG_DEBUG("Failed to emit code for value in body of ifstatement!");
+      }
+    }
+  } else {
+    CodegenStatement(ifStatement->ifBody);
+  }
 
 	builder->CreateBr(mergeBlock);
 
-	if(ifStatement->elseBlock != nullptr) {
+	if(ifStatement->elseBody != nullptr) {
 		builder->SetInsertPoint(elseBlock);
-		if(ifStatement->elseBlock->nodeType == AST_IF) {
-			auto ifElse = (ASTIfStatement*)ifStatement->elseBlock;
+		if(ifStatement->elseBody->nodeType == AST_IF) {
+			auto ifElse = (ASTIfStatement*)ifStatement->elseBody;
 			auto condition = CodegenExpr(ifElse->expr);
 			auto comp = builder->CreateICmpEQ(condition, llvm::ConstantInt::getTrue(llvm::getGlobalContext()), "elseifcond");
 			auto elseIfBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "elseif", function);
-			if(ifElse->elseBlock != nullptr) {
+    }
 
-		}
-			}
+    if (ifStatement->elseBody->nodeType == AST_BLOCK) {
+      auto block = (ASTBlock*)ifStatement->elseBody;
+      for(auto node : block->members) {
+        if(node->nodeType == AST_IF) {
+          elseBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", function);
+          Codegen((ASTIfStatement*)node, elseBlock, function);
+          builder->SetInsertPoint(elseBlock);
+          continue;
+        }
+        auto value = CodegenExpr(node);
+        assert(value);
+    }
+  } else {
+    CodegenStatement(ifStatement->elseBody);
+  }
 
-
-		for(auto node : ifStatement->elseBlock->members) {
-			if(node->nodeType == AST_IF) {
-				elseBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", function);
-				Codegen((ASTIfStatement*)node, elseBlock, function);
-				builder->SetInsertPoint(elseBlock);
-				continue;
-			}
-			auto value = CodegenExpr(node);
-			if(!value) {
-				LOG_DEBUG("Failed to emit code for value in body of ifstatement!");
-			}
-		}
-		builder->CreateBr(mergeBlock);
+	builder->CreateBr(mergeBlock);
 	}
 }
 

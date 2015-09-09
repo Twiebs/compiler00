@@ -317,8 +317,8 @@ ASTIfStatement* CreateIfStatement(ASTExpression* expr) {
 	auto result = new ASTIfStatement;
 	result->nodeType = AST_IF;
 	result->expr = expr;
-	result->ifBlock = nullptr;
-	result->elseBlock = nullptr;
+	result->ifBody = nullptr;
+	result->elseBody = nullptr;
 	return result;
 }
 

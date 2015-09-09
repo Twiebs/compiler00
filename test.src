@@ -1,25 +1,13 @@
 IMPORT "IO.bang"
 
-Vector3 :: STRUCT {
-  x : S32
-  y : S32
-  z : S32
-}
+Vector3 :: STRUCT
+  x : F32
+  y : F32
+  z : F32
 
-Transform :: STRUCT {
-  position : Vector3
-}
+Main :: () :> S32
 
-PrintVector :: (vector : @Vector3) {
-  Println(vector.x)
-  Println(vector.y)
-  Println(vector.z)
-}
-
-Main :: () :> S32 {
-  transform : Transform
-  transform.position.x = 5
-  PrintVector(@transform.position)
+  IF 1 Println(0)
+  ELSE Println(1)
 
   RETURN 0
-}

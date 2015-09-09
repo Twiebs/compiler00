@@ -46,14 +46,14 @@ ASTNode* ParseImport(ParseState& state, Lexer& lex) {
 ASTNode* ParseStatement (ParseState& state, Lexer& lex) {
 	switch (lex.token.type) {
 	case TOKEN_IDENTIFIER:  return ParseIdentifier(state, lex);
-	case TOKEN_IF: 		    return ParseIF(state, lex);
-  	case TOKEN_ITER:        return ParseIter(state, lex);
+	case TOKEN_IF: 		      return ParseIF(state, lex);
+	case TOKEN_ITER:        return ParseIter(state, lex);
 	case TOKEN_RETURN: 	    return ParseReturn(state, lex);
 	case TOKEN_SCOPE_OPEN:  return ParseBlock(state, lex);
-	case TOKEN_IMPORT:		return ParseImport(state, lex);
+	case TOKEN_IMPORT:      return ParseImport(state, lex);
 	default:
 		ReportError(state, lex.token.site, "Could not parse statement: unkown Token");
-		lex.next(true);
+		lex.next();
 		return nullptr;
 	}
 }
@@ -370,7 +370,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 			else if (lex.token.type == TOKEN_SCOPE_OPEN || lex.token.type == TOKEN_FOREIGN) {
 				function->returnType = global_voidType;
 			} else {
-				LOG_ERROR(lex.token.site << "A new scope or foreign keyword must follow a function definition");
+				ReportError(parseState, lex.token.site, "Expected new block or statemnt after function defininition");
 			}
 
 		auto func = FindMatchingFunction(ident, function);
@@ -568,63 +568,22 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
 }
 
 ASTNode* ParseIF(ParseState& parseState, Lexer& lex) {
-    LOG_VERBOSE(lex.token.site << " Parsing an if statement!");
-    lex.next();	//Eat the IF token
-
+  lex.next();	// Eat the IF token
 	auto expr = ParseExpr(parseState, lex);
-	if (!expr) {
-		LOG_ERROR("Could not evaluate expression when parsing if statement!");
-		return nullptr;
+  if (!expr) {
+		ReportError(parseState, lex.token.site, "Could not parse expresion for IF statement evaluation");
 	}
 
-    if(lex.token.type == TOKEN_SCOPE_OPEN) {
-        lex.next(); //Eat the open scope
-        auto ifStatement = CreateIfStatement(expr);
-        ifStatement->ifBlock = CreateBlock(parseState.currentScope);
+  auto ifStatement = CreateIfStatement(expr);
+  auto body = ParseStatement(parseState, lex);
+  ifStatement->ifBody = body;
 
-        auto previousScope = parseState.currentScope;
-        parseState.currentScope = ifStatement->ifBlock;
-		while (lex.token.type != TOKEN_SCOPE_CLOSE) {
-            auto node = ParseStatement(parseState, lex);
-            if (!node) {
-                LOG_ERROR("Could not parse statement inside of IF statement");
-            } else {
-                parseState.currentScope->members.push_back(node);
-            }
-        }
-
-        parseState.currentScope = previousScope;
-        lex.next(); //Eat the '}'
-        if (lex.token.type == TOKEN_ELSE) {
-            LOG_VERBOSE("Parsing else statement");
-            lex.next(); //Eat the else keyword!
-            if (lex.token.type == TOKEN_SCOPE_OPEN) {
-                lex.next();//Eat the '{'
-                ifStatement->elseBlock = CreateBlock(parseState.currentScope);
-                previousScope = parseState.currentScope;
-                parseState.currentScope = ifStatement->elseBlock;
-                while(lex.token.type != TOKEN_SCOPE_CLOSE) {
-                    auto node = ParseStatement(parseState, lex);
-                    if (!node) {
-                        LOG_ERROR("Could not parse statement inside of IF statement");
-                    } else {
-                        parseState.currentScope->members.push_back(node);
-                    }
-                }
-                parseState.currentScope = previousScope;
-                lex.next(); //Eat the '}'
-            } else if (lex.token.type == TOKEN_IF){
-            	//Interestingly enough this actualy is slightly cleaner
-                ifStatement->elseBlock = (ASTBlock*)ParseStatement(parseState, lex);
-            } else {
-                LOG_ERROR("Expected a new scope to open after else keyword or the if keyword!! for else if statements dawggggggggggg!!!");
-            }
-        }
-        return ifStatement;
-    } else {
-        LOG_ERROR("expected an open scope after if expression!");
-        return nullptr;
-    }
+  if (lex.token.type == TOKEN_ELSE) {
+    lex.next(); //Eat the else keyword!
+    auto elseBody = ParseStatement(parseState, lex);
+    ifStatement->elseBody = elseBody;
+  }
+  return ifStatement;
 }
 
 ASTNode* ParseIter(ParseState& state, Lexer& lex, const std::string& identName) {
@@ -641,7 +600,7 @@ ASTNode* ParseIter(ParseState& state, Lexer& lex, const std::string& identName) 
       auto block = CreateBlock(state.currentScope);
       auto ident = CreateIdentifier(block, identName);
       auto var = CreateVariable(&state.arena, block);
-      var->type = global_S32Type;	//HACK
+      var->type = global_S32Type;	// HACK
       var->identifier = ident;
       var->initalExpression = expr;
       ident->node = var;
@@ -667,15 +626,15 @@ ASTNode* ParseIter(ParseState& state, Lexer& lex, const std::string& identName) 
   return nullptr;
 }
 
-ASTNode* ParseBlock(ParseState& state, Lexer& lex, ASTBlock* block) {
-  LOG_VERBOSE("Parsing a new block");
-
+ASTNode* ParseBlock (ParseState& state, Lexer& lex, ASTBlock* block) {
+  assert(lex.token.type == TOKEN_SCOPE_OPEN);
   lex.next();   // Eat the SCOPE_OPEN
   auto previousScope = state.currentScope;
 
   if (block == nullptr) {
     block = CreateBlock(previousScope);
   }
+
   state.currentScope = block;
 
   while(lex.token.type != TOKEN_SCOPE_CLOSE && lex.token.type != TOKEN_EOF) {
@@ -687,7 +646,7 @@ ASTNode* ParseBlock(ParseState& state, Lexer& lex, ASTBlock* block) {
     }
   }
 
-  lex.next();  //Eat the close scope
+  lex.next();  // Eat the close scope
   state.currentScope = previousScope;
   return block;
 }

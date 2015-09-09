@@ -87,8 +87,8 @@ struct ASTBlock : public ASTNode {
 
 struct ASTIfStatement : public ASTNode {
 	ASTExpression* expr;
-	ASTBlock* ifBlock;
-	ASTBlock* elseBlock;
+	ASTNode* ifBody;
+	ASTNode* elseBody;
 };
 
 struct ASTIter : public ASTNode {
