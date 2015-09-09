@@ -1,7 +1,5 @@
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Instructions.h"
-
 #include "AST.hpp"
+#include <cstring>
 
 void* Allocate (MemoryArena* arena, size_t size) {
   if (arena->used + size >= arena->capacity) {
@@ -164,7 +162,7 @@ S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
 	return -1;
 }
 
-ASTFunctionSet* CreateFunctionSet(ASTIdentifier* ident, ASTBlock* block) {
+ASTFunctionSet* CreateFunctionSet (ASTIdentifier* ident, ASTBlock* block) {
 	ASTFunctionSet* funcSet = new ASTFunctionSet;
 	funcSet->nodeType = AST_FUNCTION;
 	funcSet->parent = block;
@@ -177,6 +175,7 @@ ASTFunction* CreateFunction (ASTFunctionSet* funcSet) {
 	ASTFunction* function = new ASTFunction;
 	function->nodeType = AST_FUNCTION;
 	function->parent = funcSet->parent;
+  function->llvmFunction = nullptr;
 	funcSet->functions.push_back(function);
 	funcSet->parent->members.push_back(function);	// HACK the hacks are real!
 	return function;

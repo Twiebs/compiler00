@@ -243,12 +243,15 @@ void Codegen(ASTVariable* var) {
 	  type = llvm::PointerType::get(type, 0);
   var->allocaInst = builder->CreateAlloca(type, 0, var->identifier->name);
 
+
+  // TODO This is silly and should not be determined at this phase of the compiler state
+
   llvm::Value* expr = nullptr;
   if (var->initalExpression != nullptr) {
 	  expr = CodegenExpr(var->initalExpression);
-  } else if ((llvm::Type*)(var->type->llvmType)->isIntegerTy()) {
+  } else if (((llvm::Type*)(var->type->llvmType))->isIntegerTy()) {
 	  expr = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0);
-  } else if ((llvm::Type*)(var->type->llvmType)->isFloatingPointTy()) {
+  } else if (((llvm::Type*)(var->type->llvmType))->isFloatingPointTy()) {
 	  expr = llvm::ConstantFP::get(llvm::Type::getFloatTy(llvm::getGlobalContext()), 0);
   } else if (var->type->nodeType == AST_STRUCT) {
 	  // TODO default values inside of structs
@@ -260,7 +263,7 @@ void Codegen(ASTVariable* var) {
 }
 
 void Codegen(ASTVariableOperation* varOp) {
-	assert((llvm::AlocaInst*)varOp->variable->allocaInst != nullptr);
+	assert((llvm::AllocaInst*)varOp->variable->allocaInst != nullptr);
 	auto value = CodegenExpr(varOp->value);
   assert(value);
 	builder->CreateStore(value, (llvm::AllocaInst*)varOp->variable->allocaInst);
@@ -324,12 +327,13 @@ void Codegen(ASTReturn* retVal) {
 }
 
 llvm::Value* Codegen(ASTCall* call) {
-	if (!call->function->code) {
+	if (!call->function->llvmFunction) {
 		auto lastInsertBlock = builder->GetInsertBlock();
 		Codegen((ASTFunction*)call->function, global_module);
 		builder->SetInsertPoint(lastInsertBlock);
 	}
-	auto llvmfunc = call->function->code;
+
+	auto llvmfunc = (llvm::Function*)call->function->llvmFunction;
 
 	std::vector<llvm::Value*> argsV;
 	auto argList = (ASTExpression**)(call + 1);
@@ -445,11 +449,11 @@ void Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Fu
 	}
 
 	// Create an instruction to increment the iterator
-	auto currentValue = builder->CreateLoad(var->allocaInst);
+	auto currentValue = builder->CreateLoad((llvm::AllocaInst*)var->allocaInst);
 	auto nextValue = builder->CreateAdd(currentValue, stepValue, "increment");
-	builder->CreateStore(nextValue, var->allocaInst);
+	builder->CreateStore(nextValue, (llvm::AllocaInst*)var->allocaInst);
 
-	auto condLoad = builder->CreateLoad(var->allocaInst);
+	auto condLoad = builder->CreateLoad((llvm::AllocaInst*)var->allocaInst);
 	auto loopCond = builder->CreateICmpSLE(condLoad, endValue, "loopcond");
 
 	builder->CreateCondBr(loopCond, loopBlock, exitBlock);
@@ -457,7 +461,7 @@ void Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Fu
 }
 
 void Codegen(ASTMemberOperation* memberOp) {
-	auto structAlloca = memberOp->structVar->allocaInst;
+	auto structAlloca = (llvm::AllocaInst*)memberOp->structVar->allocaInst;
 
 	std::vector<llvm::Value*> indices;
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
@@ -484,7 +488,7 @@ void Codegen(ASTMemberOperation* memberOp) {
 
 llvm::Value* Codegen(ASTMemberExpr* expr) {
   assert(expr->structVar->allocaInst);
-	auto structAlloca = expr->structVar->allocaInst;
+	auto structAlloca = (llvm::AllocaInst*)expr->structVar->allocaInst;
 
 	std::vector<llvm::Value*> indices;
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
@@ -510,7 +514,7 @@ llvm::Value* Codegen(ASTMemberExpr* expr) {
 
 llvm::Value* Codegen (ASTVarExpr* expr) {
   assert(expr->var->allocaInst);
-	auto varAlloca = expr->var->allocaInst;
+	auto varAlloca = (llvm::AllocaInst*)expr->var->allocaInst;
 
 	llvm::Value* value = nullptr;
 	switch(expr->accessMod) {
@@ -528,11 +532,11 @@ llvm::Value* Codegen (ASTVarExpr* expr) {
 }
 
 llvm::Value* Codegen (ASTIntegerLiteral* intNode) {
-	return llvm::ConstantInt::get(intNode->type->llvmType, intNode->value);
+	return llvm::ConstantInt::get((llvm::Type*)intNode->type->llvmType, intNode->value);
 }
 
 llvm::Value* Codegen (ASTFloatLiteral* floatNode) {
-	return llvm::ConstantFP::get(floatNode->type->llvmType, floatNode->value);
+	return llvm::ConstantFP::get((llvm::Type*)floatNode->type->llvmType, floatNode->value);
 }
 
 llvm::Value* Codegen (ASTStringLiteral* str) {

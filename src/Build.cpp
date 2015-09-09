@@ -4,10 +4,6 @@
 
 #include <string>
 #include <iostream>
-#include <system_error>
-#include <unistd.h>
-
-#include "llvm/Support/CommandLine.h"
 
 void CodegenPackage(Package* package, const BuildContext& context, BuildSettings* settings);
 
@@ -88,18 +84,16 @@ int main (int argc, char** argv) {
 
 	BuildContext context;
 
-	static llvm::cl::opt<std::string> inputFile(llvm::cl::Positional, llvm::cl::desc("<input file>"));
-	static llvm::cl::opt<std::string> outputFile("o", llvm::cl::desc("Output filename"), llvm::cl::value_desc("filename"));
-	llvm::cl::ParseCommandLineOptions(argc, argv);
+  // Get the input filename
+  if (argc < 2) {
+    LOG_ERROR("You must specify the filename of the program to be compiled.  Use --help to see the options.");
+    return -1;
+  }
 
-	if (inputFile == "") {
-		LOG_ERROR("You must specify the filename of the program to be compiled.  Use --help to see the options.");
-		abort();
-	}
-
-	std::string input = inputFile;
+  const char* inputFilename = argv[1];
+  auto input = std::string(inputFilename);
 	auto lastSlash = input.find_last_of("/");
-	if(lastSlash == std::string::npos) {
+	if (lastSlash == std::string::npos) {
 		settings.rootDir = "";
 	} else {
 		settings.rootDir = input.substr(0, lastSlash + 1);
