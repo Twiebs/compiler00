@@ -115,8 +115,11 @@ void CodegenPackage (Package* package, const BuildContext& context) {
 
 void Codegen(ASTStruct* structDefn) {
   std::vector<llvm::Type*> memberTypes;
-  for(auto type : structDefn->memberTypes)
-    memberTypes.push_back(type->llvmType);
+  for (auto i = 0; i < structDefn->memberTypes.size(); i++) {
+    auto& type = structDefn->memberTypes[i];
+    auto llvmType = structDefn->memberIsPointer[i] ? llvm::PointerType::get(type->llvmType, 0) : type->llvmType;
+    memberTypes.push_back(llvmType);
+  }
   auto& structName = structDefn->identifier->name;
   structDefn->llvmType = llvm::StructType::create(memberTypes, structName);
 }
@@ -435,7 +438,8 @@ void Codegen(ASTMemberOperation* memberOp) {
 	}
 
 	llvm::Value* value_ptr = structAlloca;
-	if (memberOp->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
+	if (memberOp->structVar->isPointer)
+		value_ptr = builder->CreateLoad(structAlloca);
 	auto gep = builder->CreateGEP(value_ptr, indices, "access");
 	switch (memberOp->operation) {
 	case OPERATION_ASSIGN:

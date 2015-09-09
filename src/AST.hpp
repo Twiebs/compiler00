@@ -120,6 +120,7 @@ struct ASTFunction : public ASTBlock {
 struct ASTStruct : public ASTDefinition {
 	std::vector<std::string> memberNames;
 	std::vector<ASTDefinition*> memberTypes;
+  std::vector<bool> memberIsPointer;
 };
 
 

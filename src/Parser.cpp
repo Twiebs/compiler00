@@ -424,7 +424,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
       structDefn->identifier = ident;
       ident->node = structDefn;
 
-      while(lex.token.type != TOKEN_SCOPE_CLOSE) {
+      while (lex.token.type != TOKEN_SCOPE_CLOSE) {
         if (lex.token.type != TOKEN_IDENTIFIER) {
           ReportError(parseState, lex.token.site, "All statements inside structDefns must be identifier decls");
         }
@@ -433,20 +433,27 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
         lex.next(); // Eat the identifier token;
 
         if (lex.token.type != TOKEN_TYPE_DECLARE) {
-          ReportError(parseState, lex.token.site, "All identifiers inside a struct defn must be used with a type declare");
+          ReportError(parseState, lex.token.site, "All identifiers inside a struct defn must be member declarations!");
         }
+
         lex.next(); // Eat the typedecl
+        bool isPointer = false;
+        if (lex.token.type == TOKEN_POINTER) {
+          isPointer = true;
+          lex.next();
+        }
+
         auto typeIdent = FindIdentifier(parseState.currentScope, lex.token.string);
         if (!typeIdent) {
-          ReportError(parseState, lex.token.site, "Could not reslove type " + lex.token.string);
+          ReportError(parseState, lex.token.site, "Could not resolve type " + lex.token.string);
         }
 
         auto typedefn = (ASTDefinition*)typeIdent->node;
         structDefn->memberNames.push_back(memberToken.string);
         structDefn->memberTypes.push_back(typedefn);
-        lex.next(); //eat the type ident
+        structDefn->memberIsPointer.push_back(isPointer); //This is utterly hilarious!
+        lex.next(); // eat the type ident
       }
-
 
       assert(structDefn->memberNames.size() == structDefn->memberTypes.size());
 		    lex.next(); //Eat the close scope
@@ -461,7 +468,7 @@ ASTNode* ParseIdentifier(ParseState& parseState, Lexer& lex) {
     }
 
     return ParseStatement(parseState, lex); // Consider the struct handeled and just get another node
-    //Most of this requiring to return a node on parsing is a reminatnt of the epxression pased
+    // Most of this requiring to return a node on parsing is a reminatnt of the epxression pased
     // functional stype language where everything is considered an expression
   } else {
 	  ReportError(parseState, lex.token.site, "Could not define type with identifier: " + identToken.string +" (unknown keyword '" + lex.token.string + "')");
