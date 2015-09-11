@@ -26,7 +26,7 @@ typedef double 	  F64;
 #define LOG_LEVEL_DEBUG   3
 #define LOG_LEVEL_VERBOSE 4
 
-#define LOG_LEVEL LOG_LEVEL_ERROR
+#define LOG_LEVEL LOG_LEVEL_INFO
 
 #undef ENABLE_COLOR_OUTPUT
 

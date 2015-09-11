@@ -4,6 +4,8 @@
 
 #include <string>
 #include <iostream>
+#include <fstream>
+#include <thread>
 
 void CodegenPackage(Package* package, const BuildContext& context, BuildSettings* settings);
 
@@ -36,34 +38,53 @@ int PreBuild(const BuildContext& context, const BuildSettings& settings) {
 	return 0;
 }
 
+#define ARENA_BLOCK_SIZE 4096
+#define TEMP_BLOCK_SIZE 1 << 8
 int Build(BuildContext& context, BuildSettings& settings) {
 	auto package = new Package;
 	InitalizeLanguagePrimitives(&package->globalScope);
 	context.packages.push_back(package);
 	context.currentPackage = package;
 
-	Worker worker;
-	worker.currentScope = &package->globalScope;
-	worker.arena.memory = malloc(4096);
-	worker.arena.capacity = 4096;
-	worker.errorCount = 0;
-	ParseFile(&worker, settings.rootDir, settings.inputFile);
+  int workerCount = std::thread::hardware_concurrency();
+  U32 arenaMemorySize = ARENA_BLOCK_SIZE * workerCount;
+  U32 tempMemorySize = workerCount * TEMP_BLOCK_SIZE;
+  U32 memorySize = (sizeof(Worker) * workerCount) + arenaMemorySize + tempMemorySize;
+  void* workerMemory = malloc(memorySize);
+  LOG_INFO("Created " << workerCount << " workers! and allocated inital memory sized: " << memorySize);
 
-	while (worker.workQueue.size() > 0) {
-		auto filename = worker.workQueue[worker.workQueue.size() - 1];
-		worker.workQueue.pop_back();
-		ParseFile(&worker, settings.rootDir, filename);
+  Worker* workers = (Worker*)workerMemory;
+  U8* arenaMemory = (U8*)(workers + workerCount);
+  for (auto i = 0; i < workerCount; i++) {
+    Worker* worker = &workers[i];
+    worker->currentScope = &package->globalScope;
+    worker->arena.memory = arenaMemory + (i * ARENA_BLOCK_SIZE);
+    worker->arena.capacity = ARENA_BLOCK_SIZE;
+    worker->errorCount = 0;
+    worker->stream = std::ifstream();
+    worker->workQueue = std::vector<std::string>();
+  }
+
+  Worker* worker = &workers[0];
+	ParseFile(worker, settings.rootDir, settings.inputFile);
+
+	while (worker->workQueue.size() > 0) {
+		auto filename = worker->workQueue[worker->workQueue.size() - 1];
+		worker->workQueue.pop_back();
+		ParseFile(worker, settings.rootDir, filename);
 	}
-	ResolveDependencies(&worker);
 
-	if (worker.errorCount == 0) {
-    LOG_INFO("Emitting code for package...")
+	ResolveDependencies(worker);
+	if (worker->errorCount == 0) {
+    LOG_INFO("Emitting code for package...");
 		CodegenPackage(package, context, &settings);
 	} else {
 		LOG_ERROR("There were errors building the package");
 		return -1;
 	}
 	return 0;
+
+  free(workerMemory);
 }
 
 int PostBuild(const BuildContext& context, const BuildSettings& settings) {
