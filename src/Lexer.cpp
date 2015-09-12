@@ -6,7 +6,7 @@
 
 internal void EatNext (Worker* worker) {
 	worker->lastChar = worker->nextChar;
-	worker->nextChar = worker->stream.get();
+	worker->nextChar = getc(worker->file);
 	worker->colNumber++;
 	if (worker->lastChar == '\n') {
 		 worker->lineNumber++;
@@ -16,7 +16,7 @@ internal void EatNext (Worker* worker) {
 
 internal void AppendNext (Worker* worker) {
 	worker->lastChar =  worker->nextChar;
-	worker->nextChar = worker->stream.get();
+	worker->nextChar = getc(worker->file);
 	worker->colNumber++;
 	if (worker->lastChar == '\n') {
 		worker->lineNumber++;

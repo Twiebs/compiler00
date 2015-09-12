@@ -41,11 +41,12 @@ int PreBuild(const BuildContext& context, const BuildSettings& settings) {
 #define ARENA_BLOCK_SIZE 4096
 #define TEMP_BLOCK_SIZE 1 << 8
 int Build(BuildContext& context, BuildSettings& settings) {
-	auto package = new Package;
-	InitalizeLanguagePrimitives(&package->globalScope);
-	context.packages.push_back(package);
-	context.currentPackage = package;
+  auto package = new Package;
+  InitalizeLanguagePrimitives(&package->globalScope);
+  context.packages.push_back(package);
+  context.currentPackage = package;
 
+  // Create workers for threads
   int workerCount = std::thread::hardware_concurrency();
   U32 arenaMemorySize = ARENA_BLOCK_SIZE * workerCount;
   U32 tempMemorySize = workerCount * TEMP_BLOCK_SIZE;
@@ -57,13 +58,14 @@ int Build(BuildContext& context, BuildSettings& settings) {
   U8* arenaMemory = (U8*)(workers + workerCount);
   for (auto i = 0; i < workerCount; i++) {
     Worker* worker = &workers[i];
+    worker = new (worker) Worker;
     worker->currentScope = &package->globalScope;
     worker->arena.memory = arenaMemory + (i * ARENA_BLOCK_SIZE);
     worker->arena.capacity = ARENA_BLOCK_SIZE;
-    worker->errorCount = 0;
-    worker->stream = std::ifstream();
-    worker->workQueue = std::vector<std::string>();
   }
+
+  // TODO Push some tasks into a global queue and then kick off the parsing
+  // Process with the worker threads
 
   Worker* worker = &workers[0];
 	ParseFile(worker, settings.rootDir, settings.inputFile);
@@ -74,17 +76,24 @@ int Build(BuildContext& context, BuildSettings& settings) {
 		ParseFile(worker, settings.rootDir, filename);
 	}
 
-	ResolveDependencies(worker);
-	if (worker->errorCount == 0) {
-    LOG_INFO("Emitting code for package...");
-		CodegenPackage(package, context, &settings);
-	} else {
-		LOG_ERROR("There were errors building the package");
-		return -1;
-	}
-	return 0;
+  // That's what i will do!
+  // TODO we need a more robust way of doing this resolve dependencies work
+  // Perhaps the best way to acomplish this is to do absoutly no working during the parsing phase of the AST
+  // and then allways typecheck and resolve deps for every statement /expr in the tree after all files within a
+  // package have been parsed
 
+  // During the parsing phase the compiler will only check to make sure that you are not overwriting somthing that has allreayd been declared
+	ResolveDependencies(worker);
+
+
+  if (worker->errorCount != 0) {
+    LOG_ERROR("There were " << worker->errorCount << " errors building the package");
+    return -1;
+  }
+
+  CodegenPackage(package, context, &settings);
   free(workerMemory);
+  return 0;
 }
 
 int PostBuild(const BuildContext& context, const BuildSettings& settings) {

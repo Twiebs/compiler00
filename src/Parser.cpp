@@ -27,7 +27,12 @@ internal int GetTokenPrecedence(const Token& token) {
 
 void ReportError(Worker* worker, FileSite& site, const std::string& msg) {
 	worker->errorCount++;
-	std::cout << "ERROR" << site << " " << msg  << "\n";
+	std::cout << site << " ERROR: " << msg  << "\n";
+}
+
+void ReportError(Worker* worker, const std::string& msg) {
+	worker->errorCount++;
+	std::cout << "ERROR" << " " << msg  << "\n";
 }
 
 ASTNode* ParseImport(Worker* worker) {
@@ -517,7 +522,6 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
     auto expr = ParseExpr(worker);
     auto memberOperation = CreateMemberOperation(&worker->arena, structVar, operation, expr, &memberIndices[0], memberIndices.size());
     return memberOperation;
-
 	} break;
 
 	case TOKEN_EQUALS:
@@ -656,13 +660,13 @@ ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 }
 
 void ParseFile(Worker* worker, const std::string& rootDir, const std::string& filename) {
-	worker->stream.open(rootDir + filename);
-	if (!worker->stream.is_open()) {
-		LOG_ERROR("Could not open file " + filename);
+  worker->file = fopen((rootDir + filename).c_str(), "r");
+  if (!worker->file) {
+    ReportError(worker, "Could not open file: " + filename);
 		return;
-	}
+  }
 
-	worker->nextChar = worker->stream.get();
+	worker->nextChar = getc(worker->file);
 	worker->token.site.filename = filename;
 	worker->lineNumber = 1;
 	worker->colNumber = 1;
@@ -672,6 +676,5 @@ void ParseFile(Worker* worker, const std::string& rootDir, const std::string& fi
 		ParseStatement(worker);
 	}
 
-	worker->stream.close();
+	fclose(worker->file);
 }
-

@@ -26,4 +26,5 @@ struct ParseState {
 };
 
 void ReportError (Worker* worker, FileSite& site, const std::string& msg);
+void ReportError (Worker* worker, const std::string& msg);
 void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename);

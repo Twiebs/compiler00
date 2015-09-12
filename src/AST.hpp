@@ -254,6 +254,14 @@ struct ASTVariableOperation : public ASTNode {
 // The procede directly after the arg count and are just pointers to
 // other nodes in the AST... for now... perhaps these should be concrete structs
 // stored here and we do some crazyness to pack them at the end
+
+// We could create a call with a name here instead and store some bytes for the name of the functions
+// it would take a small amount of extra memory and it would be silly to do resoltuion like that for everysingle function...
+// or would it??? it seams to be the best option rather than doing craziness with jumping around with a dependcy graph
+// because we need to hit all these nodes again to typecheck them anyway
+// it also allows the complier to be more flexiable and provide things like syntax highlighting without having to do more complex things like resolving the type of stuff
+// for now we can pack this name on the back of the node... it may turn out that we dont even need to store stuff like the function that this call points to since that is
+// only neseccary for compile time to be fair this is a serious amount of data that would do things... however; it may be a good idea for now... at least for the purposes of experimentation
 struct ASTCall : public ASTNode {
 	ASTFunction* function;
 	U32 argCount;

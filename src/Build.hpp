@@ -10,16 +10,15 @@ struct Package {
 };
 
 struct Worker {
-  std::ifstream stream;
+	FILE* file = nullptr;
 	char lastChar = 0, nextChar = 0;
 	U32 lineNumber = 0, colNumber = 0;
 	int currentIndentLevel = 0;
 	Token token;
 
-  ASTBlock* currentScope;
-  U32 errorCount;
+  ASTBlock* currentScope = nullptr;
+  U32 errorCount = 0;
   MemoryArena arena;
-
   std::vector<std::string> workQueue;
 };
 
