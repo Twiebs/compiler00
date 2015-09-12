@@ -8,31 +8,10 @@
 #include <thread>
 
 void CodegenPackage(Package* package, const BuildContext& context, BuildSettings* settings);
-
-global_variable std::vector<CallDependency> global_calldeps;
-void AddDependency(const std::string& identName, ASTCall* call) {
-  global_calldeps.push_back({identName, call});
-}
-
-void ResolveDependencies(Worker* worker) {
-  for(auto i = 0; i < global_calldeps.size(); i++) {
-    auto& dep = global_calldeps[i];
-    auto ident = FindIdentifier(worker->currentScope, dep.identName);
-    if (ident == nullptr) {
-    	FileSite site;
-      ReportError(worker, site, "Could not find any function matching the identifier: " + dep.identName);
-      break;
-    }
-    auto funcSet = (ASTFunctionSet*)ident->node;
-    assert(funcSet->nodeType == AST_FUNCTION);
-    auto args = (ASTExpression**)(dep.call + 1);
-    dep.call->function = FindFunction(funcSet, args, dep.call->argCount);
-    if (!dep.call->function) {
-      FileSite site;
-      ReportError(worker, site, "Could not match argument types to any function named: " + dep.identName);
-    }
-  }
-}
+void ResolveAbstractSyntaxTree (Worker* worker);  // TODO consider ResolvePacakgeDeps or somthing
+// ParsePackage()
+// ResolvePackage()
+// CodegenPackage()
 
 int PreBuild(const BuildContext& context, const BuildSettings& settings) {
 	return 0;
@@ -83,8 +62,8 @@ int Build(BuildContext& context, BuildSettings& settings) {
   // package have been parsed
 
   // During the parsing phase the compiler will only check to make sure that you are not overwriting somthing that has allreayd been declared
-	ResolveDependencies(worker);
-
+	//ResolveDependencies(worker);
+  ResolveAbstractSyntaxTree(worker);
 
   if (worker->errorCount != 0) {
     LOG_ERROR("There were " << worker->errorCount << " errors building the package");
@@ -99,7 +78,6 @@ int Build(BuildContext& context, BuildSettings& settings) {
 int PostBuild(const BuildContext& context, const BuildSettings& settings) {
 	return 0;
 }
-
 
 int main (int argc, char** argv) {
 	BuildSettings settings;

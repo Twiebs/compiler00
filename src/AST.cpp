@@ -92,6 +92,14 @@ ASTIdentifier* FindIdentifier(ASTBlock* block, const Token& token) {
 	return result;
 }
 
+
+ASTIdentifier* FindIdentifier(ASTBlock* block, const char* name) {
+	auto result = block->identifiers[name];
+	if (!result && block->parent != nullptr)
+		result = FindIdentifier(block->parent, name);
+	return result;
+}
+
 ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name) {
 	auto result = block->identifiers[name];
 	if (!result && block->parent != nullptr)
@@ -230,17 +238,15 @@ ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function) {
 // Im not sure if we need to bother with the pointer since we know they will procede the argument count
 // but for now it keeps it simple so i will leave it it will be intresting to see if it actualy works.  Eventualy this will
 // use an allocator to create nodes for each package.
-ASTCall* CreateCall (MemoryArena* arena, ASTExpression** argList, U32 argCount) {
-	ASTCall* call = (ASTCall*)Allocate(arena, sizeof(ASTCall) + ((sizeof(ASTExpression*) * argCount)));
+ASTCall* CreateCall (MemoryArena* arena, ASTExpression** argList, U32 argCount, const char* name) {
+	ASTCall* call = (ASTCall*)Allocate(arena, sizeof(ASTCall) + ((sizeof(ASTExpression*) * argCount)) + (strlen(name) + 1));
 	call->nodeType = AST_CALL;
 	call->argCount = argCount;
 	call->function = nullptr;
-	if (argCount > 0) {
-		auto callArgs = (ASTExpression**)(call + 1);
-		for (auto i = 0; i < argCount; i++) {
-			callArgs[i] = argList[i];
-		}
-	}
+  auto argptr = (U8*)(call + 1);
+  auto argsize = sizeof(ASTExpression*) * argCount;
+  memcpy(argptr, argList, argsize);
+  memcpy((argptr + argsize), name, strlen(name) + 1);
 	return call;
 }
 

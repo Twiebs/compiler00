@@ -301,6 +301,7 @@ ASTIdentifier* CreateIdentifier(ASTBlock* scope, const Token& token);
 ASTIdentifier* CreateIdentifier(ASTBlock* scope, const std::string& name);
 ASTIdentifier* CreateIdentifier(const std::string& name);
 ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name);
+ASTIdentifier* FindIdentifier(ASTBlock* block, const char* name);
 ASTIdentifier* FindIdentifier(ASTBlock* block, const Token& token);
 ASTIdentifier* FindIdentifier(const std::string& name);
 void ResolveIdentifier(ASTBlock* block, const std::string& name);	// WTF
@@ -337,7 +338,8 @@ ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
 ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var, AccessModifer accessMod);
 ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, AccessModifer accessMod, U32* indices, U32 indexCount);
 
-ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argumentCount);
+ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argumentCount, const char* name);
+
 ASTIntegerLiteral* CreateIntegerLiteral(MemoryArena* arena, S64 value);
 ASTFloatLiteral* CreateFloatLiteral(MemoryArena* arena, F64 value);
 ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& string);

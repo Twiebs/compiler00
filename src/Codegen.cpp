@@ -327,6 +327,7 @@ void Codegen(ASTReturn* retVal) {
 }
 
 llvm::Value* Codegen(ASTCall* call) {
+	assert(call->function);	// A call should always have a function resolved when here
 	if (!call->function->llvmFunction) {
 		auto lastInsertBlock = builder->GetInsertBlock();
 		Codegen((ASTFunction*)call->function, global_module);

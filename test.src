@@ -19,7 +19,8 @@ DoStuff :: (bool : S32)
   ELSE Println(76)
 
 Main :: () :> S32
-  IF 0 Println(0)
+  foo : S32 = 7
+  IF 7 Println(0)
   ELSE Println(1)
   DoStuff(0)
 

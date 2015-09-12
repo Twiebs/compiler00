@@ -26,13 +26,6 @@ enum PackageFlags {
 	PACKAGE_INVALID = 1 << 0,
 };
 
-struct CallDependency {
-  std::string identName;
-  ASTCall* call;
-};
-
-void AddDependency(const std::string& identName, ASTCall* call);
-
 struct BuildSettings {
 	std::string rootDir;
 	std::string inputFile; // For now this is just a singular thing for simplicity

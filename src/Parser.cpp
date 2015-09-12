@@ -83,16 +83,7 @@ ASTCall* ParseCall(Worker* worker, const Token& identToken) {
     }
   } NextToken(worker);    // Eat the close paren
 
-  ASTCall* call = CreateCall(&worker->arena, &args[0], args.size());
-  auto ident = FindIdentifier(worker->currentScope, identToken.string);
-  if (ident == nullptr) {
-    AddDependency(identToken.string, call);
-} else {
-  auto funcSet = (ASTFunctionSet*)ident->node;
-  assert(funcSet->nodeType == AST_FUNCTION);
-  call->function = FindFunction(funcSet, (ASTExpression**)&args[0], args.size());
-  if (!call->function) AddDependency(identToken.string, call);
-}
+  ASTCall* call = CreateCall(&worker->arena, &args[0], args.size(), identToken.string.c_str());
   return call;
 }
 
@@ -657,6 +648,93 @@ ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
   NextToken(worker);  // Eat the close scope
   worker->currentScope = previousScope;
   return block;
+}
+
+internal void ResolveExpr(Worker* worker, ASTExpression* expr);
+internal void TypeCheckExpr(Worker* worker, ASTExpression* expr);
+
+internal void ResolveStatement(Worker* worker, ASTNode* node);
+internal void ResolveBlock(Worker* worker, ASTBlock* block);
+internal void ResolveIfStatement (Worker* worker, ASTIfStatement* ifStatement);
+internal void ResolveCall(Worker* worker, ASTCall* call);
+
+// TODO these resolve call functions should not be required to take a worker
+// except mabye they do?
+internal void ResolveCall(Worker* worker, ASTCall* call) {
+  assert(call->nodeType == AST_CALL);
+  auto name = (const char*)(((U8*)(call + 1)) + ((sizeof(ASTExpression*) * call->argCount)));
+  auto ident = FindIdentifier(worker->currentScope, name);
+  if (!ident) {
+    ReportError(worker, "Could not find any function matching the identifier" + std::string(name));
+    return;
+  }
+  auto args = (ASTExpression**)(call + 1);
+  auto funcSet = (ASTFunctionSet*)ident->node;
+  assert(funcSet->nodeType = AST_FUNCTION);
+  call->function = FindFunction(funcSet, args, call->argCount);
+  if (!call->function) {
+    ReportError(worker, "Could not match argument types to any function named: " + std::string(name));
+  } else {
+    LOG_INFO("Resolved call to function " + std::string(name));
+  }
+}
+
+internal void TypeCheckExpr(Worker* worker, ASTExpression* expr) {
+  if (expr->nodeType == AST_CALL) {
+    auto call = (ASTCall*)expr;
+    ResolveCall(worker, call);
+  }
+}
+
+internal void ResolveBlock(Worker* worker, ASTBlock* block) {
+  for(auto i = 0; i < block->members.size(); i++) {
+    auto node = block->members[i];
+    switch(node->nodeType) {
+    case AST_IF:
+      ResolveIfStatement(worker, (ASTIfStatement*)node);
+      break;
+    case AST_CALL:
+      ResolveCall(worker,(ASTCall*)node);
+      break;
+    }
+  }
+}
+
+internal void ResolveStatement(Worker* worker, ASTNode* node) {
+  switch(node->nodeType) {
+  case AST_BLOCK:
+    ResolveBlock(worker, (ASTBlock*)node);
+    break;
+  case AST_CALL:
+    ResolveCall(worker, (ASTCall*)node);
+    break;
+  default:
+    ReportError(worker, "Unhandled statement resolution!!!!");
+    break;
+  }
+}
+
+internal void ResolveIfStatement (Worker* worker, ASTIfStatement* ifStatement) {
+  assert(ifStatement->expr != nullptr);
+  TypeCheckExpr(worker, ifStatement->expr);
+  ResolveStatement(worker, ifStatement->ifBody);
+  ResolveStatement(worker, ifStatement->elseBody);
+}
+
+// NOTE / TODO / WOOF
+// Should we maintain some list of epxressions for each worker
+// this list of expressions can be used to do things followed by stuff
+// except this become much more complicated than expected because you need to consider
+// mutliple compound expressions and how they related to their coresponding statements!
+// Bollocks!
+void ResolveAbstractSyntaxTree (Worker* worker) {
+    for(auto i = 0; i < worker->currentScope->members.size(); i++) {
+      auto node = worker->currentScope->members[i];
+      if (node->nodeType == AST_FUNCTION) {
+        auto function = (ASTFunction*)node;
+        ResolveBlock(worker, function);
+      }
+  }
 }
 
 void ParseFile(Worker* worker, const std::string& rootDir, const std::string& filename) {
