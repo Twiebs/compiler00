@@ -50,11 +50,14 @@
 // between my code and llvm nonsense...  We could get it to a point where llvm code only lives inside
 // of this codegen file  It would make build times 10000% faster (literaly)
 
+// Lol we seriously need to do somthing about this....
+// .. maybe
 global_variable llvm::IRBuilder<>* builder = new llvm::IRBuilder<>(llvm::getGlobalContext());
 global_variable llvm::Module* global_module;
 
-int WriteNativeObject(llvm::Module* module, BuildSettings* settings);
-int WriteExecutable(BuildSettings* settings);
+internal int WriteIR (llvm::Module* module, BuildSettings* settings);
+internal int WriteNativeObject (llvm::Module* module, BuildSettings* settings);
+internal int WriteExecutable (BuildSettings* settings);
 
 // Top level statements
 // Eventualy we might consider allowing structs and functions to be declared localy at block level
@@ -126,24 +129,25 @@ void CodegenPackage (Package* package, const BuildContext& context, BuildSetting
     }
   }
 
- 	if (settings->logModuleDump) {
- 		global_module->dump();
- 	}
-	llvm::raw_os_ostream stream(std::cout);
-	if (llvm::verifyModule(*global_module, &stream)) {
-		LOG_ERROR("llvm::Module verification failed!");
-		LOG_ERROR("Build incomplete!  Skipping executable creation");
-	}
+  if (settings->outputFile == "") {
+    auto inputBase = settings->inputFile.substr(0, settings->inputFile.find(".") + 1);
+    settings->outputFile = settings->rootDir + inputBase + "o";
+  }
 
-	if (settings->outputFile == "") {
-		auto inputBase = settings->inputFile.substr(0, settings->inputFile.find(".") + 1);
-		settings->outputFile = settings->rootDir + inputBase + "o";
-	}
+  if (settings->emitIR)
+    WriteIR(global_module, settings);
 
-	if (settings->emitNativeOBJ)
-		WriteNativeObject(global_module, settings);
-	if (settings->emitExecutable)
-		WriteExecutable(settings);
+  llvm::raw_os_ostream stream(std::cout);
+  if (llvm::verifyModule(*global_module, &stream)) {
+    LOG_ERROR("llvm::Module verification failed!");
+    LOG_ERROR("Build incomplete!  Skipping executable creation");
+  } else {
+    if (settings->emitNativeOBJ)
+      WriteNativeObject(global_module, settings);
+    if (settings->emitExecutable)
+      WriteExecutable(settings);
+    LOG_INFO("Sucuessfuly created executable there were 0 errors");
+  }
 }
 
 void Codegen(ASTStruct* structDefn) {
@@ -679,6 +683,17 @@ int WriteNativeObject(llvm::Module* module, BuildSettings* settings) {
 	// Declare success.
 	fileOut->keep();	// NOTE What ass-fuckery is this?
 	return 0;
+}
+
+int WriteIR(llvm::Module* module, BuildSettings* settings) {
+  std::ofstream filestream;
+  auto filename = settings->rootDir + settings->packageName + ".ll";
+  filestream.open(filename);
+  if (!filestream.is_open()) {
+    LOG_ERROR("Could not open file: " << filename);
+  }
+  llvm::raw_os_ostream ostream(filestream);
+  module->print(ostream, nullptr);
 }
 
 int WriteExecutable(BuildSettings* settings) {

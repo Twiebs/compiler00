@@ -39,7 +39,7 @@ void PushWork (const std::string& filename) {
 	global_workQueue.workCount++;
   global_workQueue.mutex.unlock();
   global_workQueue.cond.notify_one();
-  LOG_INFO("Added filename: " << filename << " to the global work queue");
+  LOG_DEBUG("Added filename: " << filename << " to the global work queue");
 }
 
 internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID,  BuildSettings* settings) {
@@ -49,7 +49,7 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID,  B
 		const std::string filename = workQueue->workList[workQueue->workList.size() - 1];
 		workQueue->workList.pop_back();
 		workQueue->workCount--;
-		LOG_INFO("Thread " << threadID << " Popped filename: " << filename << " off the global work queue");
+		LOG_DEBUG("Thread " << threadID << " Popped filename: " << filename << " off the global work queue");
 		return filename;
 	};
 
@@ -60,7 +60,7 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID,  B
 		if (workQueue->activeWorkers == 0 && workQueue->workCount == 0) {
 			workQueue->cond.notify_all();
 			working = false;
-			LOG_INFO("Thread " << threadID << " exiting");
+			LOG_DEBUG("Thread " << threadID << " exiting");
 		}
 	};
 
@@ -74,7 +74,7 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID,  B
 			workQueue->cond.notify_all();
 			workQueue->mutex.unlock();
 			working = false;
-			LOG_INFO("Thread " << threadID << " exiting because there was no work and no active workers");
+			LOG_DEBUG("Thread " << threadID << " exiting");
 		} else {
 			workQueue->mutex.unlock();
 			std::unique_lock<std::mutex> lock(workQueue->mutex);
@@ -90,7 +90,7 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID,  B
 				// but im going to do it anyway because why not?
 				workQueue->cond.notify_all();
 				working = false;
-				LOG_INFO("Thread " << threadID << " exiting");
+				LOG_DEBUG("Thread " << threadID << " exiting");
 			}
 		}
 	}
@@ -127,6 +127,8 @@ int Build(BuildContext& context, BuildSettings& settings) {
     worker->arena.capacity = ARENA_BLOCK_SIZE;
   }
 
+	// TODO consider pushing these theads on to the transient state of the main thread or somthing
+	// like that
   std::vector<std::thread> threads(workerCount - 1);
 	if (workerCount > 1) {
 	  for (auto i = workerCount - 2; i >= 0; i--) { // if 4 workers then start at index 2 end at 0
@@ -202,7 +204,7 @@ int main (int argc, char** argv) {
 	settings.libNames.push_back("SDL");
 	settings.libNames.push_back("GL");
 
-	settings.logModuleDump = true;
+	settings.emitIR = true;
 	settings.emitNativeOBJ = true;
 	settings.emitExecutable = true;
 
@@ -224,6 +226,9 @@ int main (int argc, char** argv) {
 		input.erase(0, lastSlash + 1);
 	}
 
+	auto lastDot = input.find_last_of(".");
+	auto packageName = input.substr(0, lastDot);
+	settings.packageName = packageName;
 	settings.inputFile = input;
 
 	PreBuild(context, settings);

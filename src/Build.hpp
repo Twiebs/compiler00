@@ -29,6 +29,7 @@ enum PackageFlags {
 struct BuildSettings {
 	std::string rootDir;
 	std::string inputFile; // For now this is just a singular thing for simplicity
+	std::string packageName;
 	std::string outputFile;
 
 	std::vector<std::string> libDirs;
@@ -38,6 +39,7 @@ struct BuildSettings {
 	bool logModuleDump;
 	bool emitBitcode;
 	bool emitAsm;
+	bool emitIR;
 	bool emitNativeOBJ;
 	bool emitExecutable;
 };

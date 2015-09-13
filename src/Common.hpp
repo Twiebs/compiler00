@@ -28,10 +28,7 @@ typedef double 	  F64;
 
 #define LOG_LEVEL LOG_LEVEL_INFO
 
-#undef ENABLE_COLOR_OUTPUT
-
 #define INTERNAL_ERROR(msg) std::cout << "INTERNAL_ERROR: " << msg << "\n";
-
 
 #if LOG_LEVEL > 0
 #ifdef ENABLE_COLOR_OUTPUT
@@ -45,9 +42,9 @@ typedef double 	  F64;
 
 #if LOG_LEVEL > 1
 #ifdef ENABLE_COLOR_OUTPUT
-#define LOG_INFO(x) std::cout << "\x1b[36mINFO: " << x << "\033[39m\n"
+#define LOG_INFO(msg) std::cout << "[INFO] \x1b[33m" << msg << "\033[39m\n"
 #else
-#define LOG_INFO(x) std::cout << "INFO: " << x << "\n"
+#define LOG_INFO(x) std::cout << "[INFO] " << x << "\n"
 #endif	//COLOR_OUTPUT
 #else
 #define LOG_INFO(x)

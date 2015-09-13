@@ -34,12 +34,12 @@ void ReportError (Worker* worker, const std::string& msg);
 
 void ReportError(Worker* worker, FileSite& site, const std::string& msg) {
 	worker->errorCount++;
-	std::cout << site << " ERROR: " << msg  << "\n";
+	std::cout << site << " \x1b[31m" << msg  << "\033[39m\n";
 }
 
 void ReportError(Worker* worker, const std::string& msg) {
 	worker->errorCount++;
-	std::cout << "ERROR" << " " << msg  << "\n";
+	std::cout << "[ERROR] " << msg  << "\n";
 }
 
 ASTNode* ParseImport(Worker* worker) {
@@ -296,9 +296,9 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
   		if (worker->token.type == TOKEN_EQUALS) {
   			NextToken(worker);    //Eat the assignment operator
   			var->initalExpression = ParseExpr(worker);	// We parse the inital expression for the variable!
-  			LOG_INFO(ident->site << "Identifier(" << ident->name << ") of Type(" << typeIdent->name << ") declared with an inital expression specified!");
+  			LOG_DEBUG(ident->site << "Identifier(" << ident->name << ") of Type(" << typeIdent->name << ") declared with an inital expression specified!");
   		} else {
-  			LOG_INFO(ident->site << "Identifier(" << ident->name << ") of Type(" << typeIdent->name << ") declared!");
+  			LOG_DEBUG(ident->site << "Identifier(" << ident->name << ") of Type(" << typeIdent->name << ") declared!");
   		}
   		return var;
     }
@@ -312,10 +312,10 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 
 
 	case TOKEN_TYPE_DEFINE: {
-		LOG_VERBOSE("Parsing TypeDefine");
+		LOG_DEBUG("Parsing TypeDefine");
 		NextToken(worker); // Eat the typedef
 		if (worker->token.type == TOKEN_PAREN_OPEN) {
-			LOG_VERBOSE("Parsing FunctionDefinition");
+			LOG_DEBUG("Parsing FunctionDefinition");
 
 			ASTFunctionSet* funcSet;
 			if (ident == nullptr) {	// The identifier is null so the function set for this ident has not been created
@@ -391,13 +391,13 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 			}
 
 		} else if (worker->token.type != TOKEN_FOREIGN) {
-			LOG_ERROR("Expected a new scope to open after function definition!");
+      ReportError(worker, worker->token.site, "Expected a new scope to open after function definition!");
 			LOG_INFO("Did you misspell foreign?");
 			return nullptr;
 		} else {
 			if(function->parent->parent != nullptr) {
 				// TODO why wouldn't we allow this?
-				LOG_ERROR("Cannot create a foreign function nested in another block!  Foreign functions must be declared in the global scope!");
+				ReportError(worker, worker->token.site, "Cannot create a foreign function nested in another block!  Foreign functions must be declared in the global scope!");
 				return nullptr;
 			}
 		}
@@ -409,8 +409,7 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 
   // NOTE @STRUCT
   else if (worker->token.type == TOKEN_STRUCT) {
-    LOG_VERBOSE("Parsing a struct definition");
-    LOG_INFO("Parsing a struct definition!");
+    LOG_DEBUG("Parsing a struct definition!");
     NextToken(worker); // Eat the struct keyword
 
     if (ident != nullptr) {
@@ -529,43 +528,45 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 	case TOKEN_MUL_EQUALS:
 	case TOKEN_DIV_EQUALS:
 	case TOKEN_MOD_EQUALS:
-		if(ident == nullptr) {
-      ReportError(worker, worker->token.site, "Cannot parse variable operation on unkown identifier" + identToken.string);
-		}
+    NextToken(worker);  // Eat the mutation
 
-    NextToken(worker);    //Eat mutation
-		auto var = (ASTVariable*)ident->node;
-		if(var->nodeType != AST_VARIABLE) {
-			LOG_ERROR(identToken.site << ": Recognized identifier " << identToken.string << " but it is not a variable!  Its a " << ToString(var->nodeType));
-		}
+    ASTVariable* var = nullptr;
+    if (ident == nullptr) {
+      ReportError(worker, identToken.site, "Cannot parse variable operation on unkown identifier: " + identToken.string);
+		} else {
+      var = (ASTVariable*)ident->node;
+    }
 
-		// TODO
-		//This is actualy a good spot to return null because these are top level errors!
-		//Make a new error called top level error that specifies actual errors in the program
-		//Secondary errors might not be actual errors once you fix primary errors
-		auto expr = ParseExpr(worker);
-		if (expr == nullptr) {
-			//For now binops will auto resolve themselves based on the respective rhs and lhs expressions inthe
-			//operation
-			LOG_ERROR("Could not parse expression on the right of the assignment operator");
+    auto expr = ParseExpr(worker);
+    if (expr == nullptr) {
+      return nullptr;
+    } else {
+      // NOTE typechecking used to go down here
+      return CreateVariableOperation(&worker->arena, var, expr);
+    }
 
-			// Which is actualy totaly cool!
-			// We dont actualy care if this doesnt have a resolved type... because there is some tom foolay invloved
-			//With headerless compliation.. However we can simplfy this probelm for now by simply ingoring it!
-			// YEs! thats totaly the answer to everything in life.. Just Ingnore it.
-			// ha no.
-			return nullptr;
-		} else if (expr->type != var->type) {
-			if (expr->type == nullptr) {
-				LOG_ERROR("Internal Compiler error: Expression is a nullptr");
-				return nullptr;
-			}
-			LOG_ERROR(identToken.site << "Type mismatch between variable " << identToken.string << "(" << var->type->identifier->name << ") and RHS expression(" << expr->type->identifier->name << ")!");
-			return nullptr;
-		}
+		// if (expr == nullptr) {
+		// 	//For now binops will auto resolve themselves based on the respective rhs and lhs expressions inthe
+		// 	//operation
+		// 	LOG_ERROR("Could not parse expression on the right of the assignment operator");
+    //
+		// 	// Which is actualy totaly cool!
+		// 	// We dont actualy care if this doesnt have a resolved type... because there is some tom foolay invloved
+		// 	//With headerless compliation.. However we can simplfy this probelm for now by simply ingoring it!
+		// 	// YEs! thats totaly the answer to everything in life.. Just Ingnore it.
+		// 	// ha no.
+		// 	return nullptr;
+		// } else if (expr->type != var->type) {
+		// 	if (expr->type == nullptr) {
+		// 		LOG_ERROR("Internal Compiler error: Expression is a nullptr");
+		// 		return nullptr;
+		// 	}
+		// 	LOG_ERROR(identToken.site << "Type mismatch between variable " << identToken.string << "(" << var->type->identifier->name << ") and RHS expression(" << expr->type->identifier->name << ")!");
+		// 	return nullptr;
+		// }
 		// Why do variables need anyt ype of mutation whatsofever?
 		// That doesnt even make any sense whatso ever
-		return CreateVariableOperation(&worker->arena, var, expr);
+
 	}
 
 	// We have gotten past all our routines
@@ -683,7 +684,7 @@ internal void ResolveCall(Worker* worker, ASTCall* call) {
   if (!call->function) {
     ReportError(worker, "Could not match argument types to any function named: " + std::string(name));
   } else {
-    LOG_INFO("Resolved call to function " + std::string(name));
+    LOG_DEBUG("Resolved call to function " + std::string(name));
   }
 }
 
