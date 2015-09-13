@@ -1,8 +1,12 @@
-#include "Parser.hpp"
+#include "Common.hpp"
+#include "AST.hpp"
+#include "Build.hpp"
 
 // TODO a better way would be to store the precedences in a array
 // and directly lookup the value without branching... especialy if the
 // of opperators begins to increase For now 'if' hax FTW!
+
+void PushWork (const std::string& filename);
 
 void NextToken(Worker* worker);
 internal int GetTokenPrecedence(const Token& token);
@@ -18,12 +22,15 @@ internal ASTNode* ParseBlock(Worker* worker, ASTBlock* block = nullptr);
 
 // Determines the precedence level of the provided token
 internal int GetTokenPrecedence(const Token& token) {
-    if (token.type == TOKEN_ADD) return 20;
-    if (token.type == TOKEN_SUB) return 20;
-    if (token.type == TOKEN_MUL) return 40;
-    if (token.type == TOKEN_DIV) return 40;
-    return -1;
+  if (token.type == TOKEN_ADD) return 20;
+  if (token.type == TOKEN_SUB) return 20;
+  if (token.type == TOKEN_MUL) return 40;
+  if (token.type == TOKEN_DIV) return 40;
+  return -1;
 }
+
+void ReportError (Worker* worker, FileSite& site, const std::string& msg);
+void ReportError (Worker* worker, const std::string& msg);
 
 void ReportError(Worker* worker, FileSite& site, const std::string& msg) {
 	worker->errorCount++;
@@ -39,8 +46,9 @@ ASTNode* ParseImport(Worker* worker) {
 	NextToken(worker); //Eat the import statement
 	if (worker->token.type != TOKEN_STRING)
 		ReportError(worker, worker->token.site, "Import keyword requires a string to follow it");
-	else
-		worker->workQueue.push_back(worker->token.string);
+	else {
+    PushWork(worker->token.string);
+  }
 	NextToken(worker);	 //Eat the import string
 	return ParseStatement(worker);
 }
@@ -727,13 +735,14 @@ internal void ResolveIfStatement (Worker* worker, ASTIfStatement* ifStatement) {
 // except this become much more complicated than expected because you need to consider
 // mutliple compound expressions and how they related to their coresponding statements!
 // Bollocks!
+
 void ResolveAbstractSyntaxTree (Worker* worker) {
-    for(auto i = 0; i < worker->currentScope->members.size(); i++) {
-      auto node = worker->currentScope->members[i];
-      if (node->nodeType == AST_FUNCTION) {
-        auto function = (ASTFunction*)node;
-        ResolveBlock(worker, function);
-      }
+  for (auto i = 0; i < worker->currentScope->members.size(); i++) {
+    auto node = worker->currentScope->members[i];
+    if (node->nodeType == AST_FUNCTION) {
+      auto function = (ASTFunction*)node;
+      ResolveBlock(worker, function);
+    }
   }
 }
 

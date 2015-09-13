@@ -20,7 +20,7 @@ DoStuff :: (bool : S32)
 
 Main :: () :> S32
   foo : S32 = 7
-  IF 7 Println(0)
+  IF 5 Println(0)
   ELSE Println(1)
   DoStuff(0)
 
