@@ -187,10 +187,10 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 	// Create the allocas for our arguments!
 	U32 i = 0;
 	for(auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++){
-		auto& name = function->args[i]->identifier->name;
+    auto name = (const char*)(function->args[i] + 1);
 		iter->setName(name);
 		if(function->members.size() > 0) {
-			function->args[i]->allocaInst = builder->CreateAlloca(iter->getType(), 0, function->args[i]->identifier->name);
+			function->args[i]->allocaInst = builder->CreateAlloca(iter->getType(), 0, name);
 			builder->CreateStore(iter, (llvm::AllocaInst*)function->args[i]->allocaInst);
 		}
 	}
@@ -245,7 +245,8 @@ void Codegen(ASTVariable* var) {
   auto type = (llvm::Type*)var->type->llvmType;
   if(var->isPointer)
 	  type = llvm::PointerType::get(type, 0);
-  var->allocaInst = builder->CreateAlloca(type, 0, var->identifier->name);
+  auto name = (const char*)(var + 1);
+  var->allocaInst = builder->CreateAlloca(type, 0, name);
 
 
   // TODO This is silly and should not be determined at this phase of the compiler state

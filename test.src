@@ -23,6 +23,10 @@ Main :: () :> S32
   IF 5 Println(0)
   ELSE Println(1)
   DoStuff(0)
+  #
+  inferedType := 5
+  inferedType = inferedType + 1
+  # Println(inferedType)
 
   position : Vector3
   position.x = 1.1

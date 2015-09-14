@@ -161,9 +161,16 @@ struct ASTIter : public ASTNode {
 	ASTBlock* body;
 };
 
+// Idetnifiers are described with this variable as a
+// pointer to an identifier which is just a way of saying
+// it points to a string that contains its name....
+// unfourtantly this is rather silly because were just reaching through the pointer for
+// no reason at all... instead of having this ident type we can use somthing like FindNodeForIdentifier()
+// which would grab the node that is stored in some hash map and points to these stringgg dodaddsss
+// Its much more sane because we are no longer reaching through this pointer and doing this wierd lookup stuff
 struct ASTVariable : public ASTExpression {
-	ASTIdentifier* identifier;
-	ASTBlock* block;
+	FileSite site;	// This is where this variable was declared.
+	ASTBlock* block;	// also why would we ever need to store this???
 	ASTExpression* initalExpression = nullptr;
 	void* allocaInst;
 	bool isPointer = false;
@@ -320,7 +327,7 @@ S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 
-ASTVariable* CreateVariable(MemoryArena* arena, ASTBlock* block, ASTExpression* initalExpr = nullptr);
+ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, ASTBlock* block, const char* name, ASTExpression* initalExpr = nullptr);
 
 // Operations
 ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* variable, ASTExpression* expr);

@@ -270,12 +270,11 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 
     else {
     	ident = CreateIdentifier(worker->currentScope, identToken.string);
-  		auto var = CreateVariable(&worker->arena, worker->currentScope);
-  		var->identifier = ident;	// This is terrible
-  		ident->node = var;
+      auto var = CreateVariable(&worker->arena, worker->token.site, worker->currentScope, identToken.string.c_str());
+      ident->node = var;
 
     	if (worker->token.type == TOKEN_POINTER) {
-			var->isPointer = true;
+  			var->isPointer = true;
     		NextToken(worker); // Eat the pointer token
     	}
 
@@ -288,6 +287,7 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
   				ReportError(worker, worker->token.site, "could not resolve typde identifier '" + worker->token.string + "'!");
   			}
   		}
+
 
   		var->type = (ASTDefinition*) typeIdent->node;
 
@@ -306,10 +306,17 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 
 
 	case TOKEN_TYPE_INFER: {
-		LOG_ERROR("Unsupported type inference feature!");
-		return nullptr;
+		NextToken(worker);  // Eat the inference
+    auto expr = ParseExpr(worker);
+    if (ident == nullptr) {
+      ident = CreateIdentifier(identToken.string);
+      auto var = CreateVariable(&worker->arena, worker->token.site, worker->currentScope, identToken.string.c_str(), expr);
+      return var;
+    } else {
+      ReportError(worker, identToken.site, "Redefinition of identifier: " + identToken.string);
+      return nullptr;
+    }
 	} break;
-
 
 	case TOKEN_TYPE_DEFINE: {
 		LOG_DEBUG("Parsing TypeDefine");
@@ -607,9 +614,8 @@ ASTNode* ParseIter(Worker* worker, const std::string& identName) {
      if (identName != "") {
       auto block = CreateBlock(worker->currentScope);
       auto ident = CreateIdentifier(block, identName);
-      auto var = CreateVariable(&worker->arena, block);
+      auto var = CreateVariable(&worker->arena, worker->token.site, block, identName.c_str());
       var->type = global_S32Type;	// HACK
-      var->identifier = ident;
       var->initalExpression = expr;
       ident->node = var;
 
@@ -695,6 +701,22 @@ internal void TypeCheckExpr(Worker* worker, ASTExpression* expr) {
   }
 }
 
+// This is where we can implement implict castinging between ints / floats / whatever
+// TODO implement implicit casting
+internal bool TypeCheck(ASTExpression* exprA, ASTExpression* exprB) {
+  if (exprA->type != exprB->type) {
+    return false;
+  }
+  return true;
+}
+
+internal bool TypeCheck(ASTExpression* expr, ASTDefinition* typedefn) {
+  if (expr->type != typedefn) {
+    return false;
+  }
+  return true;
+}
+
 internal void ResolveBlock(Worker* worker, ASTBlock* block) {
   for(auto i = 0; i < block->members.size(); i++) {
     auto node = block->members[i];
@@ -704,6 +726,22 @@ internal void ResolveBlock(Worker* worker, ASTBlock* block) {
       break;
     case AST_CALL:
       ResolveCall(worker,(ASTCall*)node);
+      break;
+    case AST_VARIABLE:
+      auto var = static_cast<ASTVariable*>(node);
+      if (var->initalExpression != nullptr) {
+        TypeCheckExpr(worker, var->initalExpression);
+      }
+
+      if (var->type == nullptr) {
+        var->type = var->initalExpression->type;
+      } else if (var->initalExpression != nullptr){
+        if(!TypeCheck(var->initalExpression, var->type)) {
+          ReportError(worker, "Type mismatch...: (insert clever and useful error here)");
+        }
+      } else {
+    	  // Nothing to do here this is just a declaration without an expression which has a type and is auto initialized
+      }
       break;
     }
   }

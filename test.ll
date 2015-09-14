@@ -70,8 +70,11 @@ entry:
 
 merge:                                            ; preds = %else, %if
   call void @DoStuff(i32 0)
+  %inferedType = alloca i32
+  store i32 5, i32* %inferedType
   %position = alloca %Vector3
   %access = getelementptr %Vector3* %position, i32 0, i32 0
+  store float 0x3FF19999A0000000, float* %access
   %access1 = getelementptr %Vector3* %position, i32 0, i32 1
   store float 0x3FF19999A0000000, float* %access1
   %access2 = getelementptr %Vector3* %position, i32 0, i32 2

@@ -296,13 +296,18 @@ ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& st
 	return result;
 }
 
-ASTVariable* CreateVariable (MemoryArena* arena, ASTBlock* block, ASTExpression* initalExpr) {
-	auto result = (ASTVariable*)Allocate(arena, sizeof(ASTVariable));
+ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, ASTBlock* block, const char* name, ASTExpression* initalExpr) {
+	auto result = (ASTVariable*)Allocate(arena, sizeof(ASTVariable) + strlen(name) + 1);
 	result->nodeType = AST_VARIABLE;
+	//result->site = site;
 	result->initalExpression = initalExpr;
 	result->block = block;
 	result->allocaInst = nullptr;
 	result->isPointer = false;
+  auto strptr = (U8*)(result + 1);
+  memcpy(strptr, name, strlen(name));
+  strptr += strlen(name);
+  *strptr = '\0';
 	return result;
 }
 
