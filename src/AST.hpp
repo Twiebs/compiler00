@@ -17,23 +17,22 @@ enum TokenType {
 	TOKEN_TYPE_RETURN,
 
 	TOKEN_STRUCT,
-	TOKEN_ACCESS,
+	TOKEN_ACCESS,	// MemberAcess to be clearer?
 
-	TOKEN_POINTER,
-	TOKEN_DEREF,
+	TOKEN_ADDRESS,
+	TOKEN_VALUE,
 
 	//Binops
 	TOKEN_ADD,
 	TOKEN_SUB,
 	TOKEN_MUL,
 	TOKEN_DIV,
-	TOKEN_MOD,
+
 	TOKEN_EQUALS,
 	TOKEN_ADD_EQUALS,
 	TOKEN_SUB_EQUALS,
 	TOKEN_MUL_EQUALS,
 	TOKEN_DIV_EQUALS,
-	TOKEN_MOD_EQUALS,
 
 	//Keywords
 	TOKEN_IF,
@@ -69,6 +68,11 @@ struct Token {
 	FileSite site;
 	TokenType type;
 	std::string string;
+};
+
+struct IdentMap {
+	U64* keys;
+	void** values;
 };
 
 #define ARENA_BLOCK_SIZE 4096
@@ -161,7 +165,7 @@ struct ASTIter : public ASTNode {
 	ASTBlock* body;
 };
 
-// Idetnifiers are described with this variable as a
+// Identifiers are described with this variable as a
 // pointer to an identifier which is just a way of saying
 // it points to a string that contains its name....
 // unfourtantly this is rather silly because were just reaching through the pointer for
@@ -191,7 +195,6 @@ struct ASTStruct : public ASTDefinition {
 	std::vector<ASTDefinition*> memberTypes;
 	std::vector<bool> memberIsPointer;
 };
-
 
 enum Operation {
   OPERATION_ASSIGN,
@@ -252,6 +255,8 @@ struct ASTReturn : public ASTExpression {
 
 // This is the fullstatement that the parse ident should return
 // If a variable mutation is being parsed
+// TODO consider renaming varop->value to expr because it does not really refer to a value
+// it refers to a expresion of arbitary granulatiry
 struct ASTVariableOperation : public ASTNode {
 	ASTVariable* variable;
 	ASTExpression* value;

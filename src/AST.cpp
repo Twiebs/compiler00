@@ -92,7 +92,6 @@ ASTIdentifier* FindIdentifier(ASTBlock* block, const Token& token) {
 	return result;
 }
 
-
 ASTIdentifier* FindIdentifier(ASTBlock* block, const char* name) {
 	auto result = block->identifiers[name];
 	if (!result && block->parent != nullptr)
@@ -111,17 +110,12 @@ ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, TokenType binop, A
 	auto result = (ASTBinaryOperation*)Allocate(arena, sizeof(ASTBinaryOperation));
 	result->nodeType = AST_BINOP;
 	result->binop = binop;
-	//HACK
-	//Reduntant error checking for the purposes of the HACK
-	if(lhs->type != rhs->type) {
-		LOG_ERROR("BINOP fail");
-	}
-	result->type = lhs->type;
 	result->lhs = lhs;
 	result->rhs = rhs;
 	return result;
 }
 
+//TODO move structs to new allocator system
 ASTStruct* CreateStruct() {
 	auto result = new ASTStruct;
 	result->nodeType = AST_STRUCT;

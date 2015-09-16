@@ -1,43 +1,10 @@
-IMPORT "IO.bang"
 
-Vector3 :: STRUCT
-  x : F32
-  y : F32
-  z : F32
+DoStuff :: ()
+  x : S32 = 2
+  x = x + 1
 
-VecRef :: STRUCT
-  woof : S32
-  vecPtr : @Vector3
-
-PrintVector :: (vector : @Vector3)
-  Println(vector.x)
-  Println(vector.y)
-  Println(vector.z)
-
-DoStuff :: (bool : S32)
-  IF 5 Println(5)
-  ELSE Println(76)
 
 Main :: () :> S32
-  foo : S32 = 7
-  IF 5 Println(0)
-  ELSE Println(1)
-  DoStuff(0)
-  #
   inferedType := 5
-  inferedType = inferedType + 1
-  # Println(inferedType)
-
-  position : Vector3
-  position.x = 1.1
-  position.y = 1.1
-  position.z = 1.1
-
-  pos_ptr : @Vector3 = @position
-  PrintVector(pos_ptr)
-
-  pos_cpy : Vector3 = $position
-  PrintVector(@pos_cpy)
-
-  ref : VecRef
+  inferedType = inferedType + 6
   RETURN 0

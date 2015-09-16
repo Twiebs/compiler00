@@ -39,21 +39,8 @@
 #include "Build.hpp"
 #include "Common.hpp"
 
-// TODO
-// Consider removing the need to have a buildContext passed arround
-// It litteraly serves no purpose whatsoever except the meerly exist
-// Instead we can just create a global builder inside of the cpp file
-// and use that to codegen the packages...  If we need to thread the
-// codegeneration phase.... which would operate on different llvm modules anyway
-// then we can move them into some type of LLVMWorker struct the holds the module
-// and the IRBuilder associated with that package.  This would allow some seperation
-// between my code and llvm nonsense...  We could get it to a point where llvm code only lives inside
-// of this codegen file  It would make build times 10000% faster (literaly)
-
-// Lol we seriously need to do somthing about this....
-// .. maybe
 global_variable llvm::IRBuilder<>* builder = new llvm::IRBuilder<>(llvm::getGlobalContext());
-global_variable llvm::Module* global_module;
+global_variable llvm::Module* global_module;  // HACK HACK HACK HACK
 
 internal int WriteIR (llvm::Module* module, BuildSettings* settings);
 internal int WriteNativeObject (llvm::Module* module, BuildSettings* settings);
@@ -139,6 +126,7 @@ void CodegenPackage (Package* package, const BuildContext& context, BuildSetting
 
   llvm::raw_os_ostream stream(std::cout);
   if (llvm::verifyModule(*global_module, &stream)) {
+    std::cout << "\n";
     LOG_ERROR("llvm::Module verification failed!");
     LOG_ERROR("Build incomplete!  Skipping executable creation");
   } else {

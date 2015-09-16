@@ -1,28 +1,11 @@
-__PrintlnStr :: (msg : @U8) foreign
-__PrintInt :: (value : S32) foreign
-__PrintFloat :: (value : F32) foreign
-__PrintStr :: (msg : @U8) foreign
-Println :: (msg : @U8) { __PrintlnStr(msg) }
-Print :: (value : S32) { __PrintInt(value) }
-Print :: (value : F32) { __PrintFloat(value) }
-Print :: (msg : @U8) { __PrintStr(msg) }
+IMPORT "IO.bang"
 
-Vector3 :: struct {
-	x : S32
-	y : S32
-	z : S32
-}
+Vector3 :: STRUCT
+  x : F32
+  y : F32
+  z : F32
 
-Print :: (vector : @Vector3) {
-	Print("[")
-	Print(vector.x)
-	Print(", ")
-	Print(vector.y)
-	Print(", ")
-	Print(vector.z)
-	Println("]")
-}
-
-Main :: () :> S32 {
-	return 0
-}
+PrintVector :: (vector : @Vector3)
+  Println(vector.x)
+  Println(vector.y)
+  Println(vector.z)

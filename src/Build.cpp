@@ -11,10 +11,11 @@
 #include <condition_variable>
 #include <mutex>
 
+#include "Analysis.cpp"
 
 void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename);
 void CodegenPackage(Package* package, const BuildContext& context, BuildSettings* settings);
-void ResolveAbstractSyntaxTree (Worker* worker);  // TODO consider ResolvePacakgeDeps or somthing
+void AnalyzeAST (Worker* worker);  // TODO consider ResolvePacakgeDeps or somthing
 
 // ParsePackage()
 // ResolvePackage()
@@ -96,11 +97,11 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID,  B
 	}
 }
 
-#define FORCE_SINGLE_THREADED 0
+#define FORCE_SINGLE_THREADED 1
 #define ARENA_BLOCK_SIZE 4096
 #define TEMP_BLOCK_SIZE 1 << 8
 int Build(BuildContext& context, BuildSettings& settings) {
-  auto package = new Package;
+  auto package = new Package;	// ok... this stuff really needs to go
   InitalizeLanguagePrimitives(&package->globalScope);
   context.packages.push_back(package);
   context.currentPackage = package;
@@ -153,11 +154,11 @@ int Build(BuildContext& context, BuildSettings& settings) {
 		}
 		// Now we resolve the dependices of our workers
 		for(auto i = workerCount - 2; i >= 0; i--) {
-			threads[i] = std::thread(ResolveAbstractSyntaxTree, &workers[i + 1]);
+			threads[i] = std::thread(AnalyzeAST, &workers[i + 1]);
 		}
 	}
 
-	ResolveAbstractSyntaxTree(&workers[0]);	// The main thread resolves its tree
+	AnalyzeAST(&workers[0]);	// The main thread resolves its tree
 
 	// The main thread has finsihed execution of AST resolution
 	// we have no idea how much work is left for the other threads so

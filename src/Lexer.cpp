@@ -145,12 +145,12 @@ void NextToken (Worker* worker) {
 
 		else if (worker->nextChar == '@') {
 			AppendNext(worker);
-			worker->token.type = TOKEN_POINTER;
+			worker->token.type = TOKEN_ADDRESS;
 		}
 
 		else if (worker->nextChar == '$') {
 			AppendNext(worker);
-			worker->token.type = TOKEN_DEREF;
+			worker->token.type = TOKEN_VALUE;
 		}
 
 		// BIN OPS
@@ -200,15 +200,17 @@ void NextToken (Worker* worker) {
 			}
 		}
 
-		else if (worker->nextChar == '%') {
-			AppendNext(worker);
-			if (worker->nextChar == '=') {
-				AppendNext(worker);
-				worker->token.type = TOKEN_MOD_EQUALS;
-			} else {
-				worker->token.type = TOKEN_MOD;
-			}
-		}
+		// REMOVE NEED FOR MODULUS BECAUSE FUCK THAT
+		// Mod(5, 2) would be better!
+		// else if (worker->nextChar == '%') {
+		// 	AppendNext(worker);
+		// 	if (worker->nextChar == '=') {
+		// 		AppendNext(worker);
+		// 		worker->token.type = TOKEN_MOD_EQUALS;
+		// 	} else {
+		// 		worker->token.type = TOKEN_MOD;
+		// 	}
+		// }
 
 		else if (worker->nextChar == '.') {
 			AppendNext(worker);
