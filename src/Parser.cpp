@@ -8,6 +8,7 @@
 
 void PushWork (const std::string& filename);
 
+void EatLine(Worker* worker);
 void NextToken(Worker* worker);
 internal int GetTokenPrecedence(const Token& token);
 
@@ -43,13 +44,15 @@ void ReportError(Worker* worker, const std::string& msg) {
 }
 
 ASTNode* ParseImport(Worker* worker) {
-	NextToken(worker); //Eat the import statement
-	if (worker->token.type != TOKEN_STRING)
+	NextToken(worker); // Eat the import statement
+	if (worker->token.type != TOKEN_STRING) {
 		ReportError(worker, worker->token.site, "Import keyword requires a string to follow it");
+		EatLine(worker);	//TODO this is a minor hack ...
+	}
 	else {
 		PushWork(worker->token.string);
 	}
-	NextToken(worker);	 //Eat the import string
+	NextToken(worker);	 // Eat the import string
 	return ParseStatement(worker);
 }
 
@@ -86,10 +89,12 @@ ASTCall* ParseCall(Worker* worker, const Token& identToken) {
 		ASTExpression* expr = ParseExpr(worker);
 		if (expr == nullptr) {
 			ReportError(worker, worker->token.site, " Could not resolve expression for argument at index:XXX in call to function named" + identToken.string);
+
 		} else {
 			args.push_back(expr);
 		}
-	} NextToken(worker);		// Eat the close paren
+	}
+	NextToken(worker);		// Eat the close paren
 
 	ASTCall* call = CreateCall(&worker->arena, &args[0], args.size(), identToken.string.c_str());
 	return call;
@@ -109,16 +114,29 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 			NextToken(worker);	//Eat the deref token
 		}
 
-		LOG_VERBOSE("Parsing an identifier expression! for identifier: " << worker->token.string);
 		auto ident = FindIdentifier(worker->currentScope, worker->token.string);
-		if (!ident) {
-			ReportError(worker, worker->token.site, "Identifier " + worker->token.string + " does not exist!");
-			NextToken(worker);
-			return nullptr;
-		}
+
 
 		Token identToken = worker->token;
 		NextToken(worker); // Eat the identifier
+		//TODO more robust error checking when receving statement tokens in an expression
+		switch(worker->token.type) {
+			case TOKEN_TYPE_DECLARE:
+			case TOKEN_TYPE_DEFINE:
+			case TOKEN_TYPE_INFER:
+			case TOKEN_TYPE_RETURN:
+				ReportError(worker, worker->token.site, "Unexpected token when parsing expression.  Token '" + worker->token.string + "' cannot be used in an expression");
+				NextToken(worker);	// eat whatever that token was... hopefuly this will ha
+				break;
+			default:
+				if (!ident) {
+					ReportError(worker, worker->token.site, "Identifier " + worker->token.string + " does not exist!");
+					NextToken(worker);
+					return nullptr;
+				}
+				break;
+		}
+
 		if (worker->token.type == TOKEN_PAREN_OPEN) {
 			auto call = ParseCall(worker, identToken);
 			return (ASTExpression*)call;
@@ -135,7 +153,7 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 				NextToken(worker); // eat the member access
 				auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
 				if (memberIndex == -1) {
-					ReportError(worker, worker->token.site, "Identifier: " + worker->token.string + " does not name a member in struct");
+					ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->identifier->name + "'");
 				} else {
 					indices.push_back(memberIndex);
 					auto memberType = currentStruct->memberTypes[memberIndex];
@@ -301,7 +319,7 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 		if (ident == nullptr) {
 			ident = CreateIdentifier(worker->currentScope, identToken.string);
 			auto var = CreateVariable(&worker->arena, worker->token.site, worker->currentScope, identToken.string.c_str(), expr);
-      ident->node = var;
+			ident->node = var;
 			return var;
 		} else {
 			ReportError(worker, identToken.site, "Redefinition of identifier: " + identToken.string);
@@ -507,7 +525,7 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 
 		Operation operation;
 		switch (worker->token.type) {
-		case TOKEN_EQUALS:		operation = OPERATION_ASSIGN; 	break;
+		case TOKEN_EQUALS:			operation = OPERATION_ASSIGN; 	break;
 		case TOKEN_ADD_EQUALS:	operation = OPERATION_ADD;		break;
 		case TOKEN_SUB_EQUALS:	operation = OPERATION_SUB;		break;
 		case TOKEN_MUL_EQUALS:	operation = OPERATION_MUL;		break;
@@ -525,7 +543,15 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 	case TOKEN_SUB_EQUALS:
 	case TOKEN_MUL_EQUALS:
 	case TOKEN_DIV_EQUALS:
-		NextToken(worker);	// Eat the mutation
+		Operation operation;
+		switch (worker->token.type) {
+		case TOKEN_EQUALS:			operation = OPERATION_ASSIGN; break;
+		case TOKEN_ADD_EQUALS:	operation = OPERATION_ADD;		break;
+		case TOKEN_SUB_EQUALS:	operation = OPERATION_SUB;		break;
+		case TOKEN_MUL_EQUALS:	operation = OPERATION_MUL;		break;
+		case TOKEN_DIV_EQUALS:	operation = OPERATION_DIV;		break;
+		default: ReportError(worker, worker->token.site, "Unkown operator: " + worker->token.string);
+		} NextToken(worker);	// Eat the operator
 
 		ASTVariable* var = nullptr;
 		if (ident == nullptr) {
@@ -538,8 +564,7 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 		if (expr == nullptr) {
 			return nullptr;
 		} else {
-			// NOTE typechecking used to go down here
-			return CreateVariableOperation(&worker->arena, var, expr);
+			return CreateVariableOperation(&worker->arena, var, operation, expr);
 		}
 
 		// if (expr == nullptr) {
@@ -672,5 +697,6 @@ void ParseFile(Worker* worker, const std::string& rootDir, const std::string& fi
 		ParseStatement(worker);
 	}
 
+	LOG_INFO("Parsed " << filename);
 	fclose(worker->file);
 }

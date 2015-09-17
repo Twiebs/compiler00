@@ -152,12 +152,20 @@ int Build(BuildContext& context, BuildSettings& settings) {
 			auto& thread = threads[i];
 			thread.join();
 		}
-		// Now we resolve the dependices of our workers
+	}
+
+	LOG_INFO("Parsing complete");
+
+
+	// Now we resolve the dependices of our workers
+	if (workerCount > 1) {
 		for(auto i = workerCount - 2; i >= 0; i--) {
 			threads[i] = std::thread(AnalyzeAST, &workers[i + 1]);
 		}
 	}
 
+
+	LOG_INFO("Analyzing Package");
 	AnalyzeAST(&workers[0]);	// The main thread resolves its tree
 
 	// The main thread has finsihed execution of AST resolution
@@ -169,6 +177,7 @@ int Build(BuildContext& context, BuildSettings& settings) {
 			thread.join();
 		}
 	}
+	LOG_INFO("Analysis Complete");
   // That's what i will do!
   // TODO we need a more robust way of doing this resolve dependencies work
   // Perhaps the best way to acomplish this is to do absoutly no working during the parsing phase of the AST
@@ -189,6 +198,7 @@ int Build(BuildContext& context, BuildSettings& settings) {
     return -1;
   }
 
+  LOG_INFO("Generating Package");
   CodegenPackage(package, context, &settings);
   free(workerMemory);
   return 0;

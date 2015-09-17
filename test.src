@@ -1,10 +1,5 @@
-
-DoStuff :: ()
-  x : S32 = 2
-  x = x + 1
-
+IMPORT "IO.bang"
 
 Main :: () :> S32
-  inferedType := 5
-  inferedType = inferedType + 6
-  RETURN 0
+	Println("Woof")
+	RETURN 0

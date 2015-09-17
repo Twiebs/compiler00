@@ -106,6 +106,27 @@ ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name) {
 	return result;
 }
 
+ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* var, Operation op, ASTExpression* expr) {
+	auto result = (ASTVariableOperation*)Allocate(arena, sizeof(ASTVariableOperation));
+	result->nodeType = AST_VARIABLE_OPERATION;
+	result->variable = var;
+  result->operation = op;
+	result->expr = expr;
+	return result;
+}
+
+ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, U32* indices, U32 indexCount) {
+	auto result = (ASTMemberOperation*)Allocate(arena, sizeof(ASTMemberOperation) + (sizeof(U32) * indexCount));
+	result->nodeType = AST_MEMBER_OPERATION;
+	result->structVar = structVar;
+	result->operation = operation;
+  result->expr = expr;
+  result->indexCount = indexCount;
+  auto indexptr = (U32*)(result + 1);
+  memcpy(indexptr, indices, sizeof(U32) * indexCount);
+	return result;
+}
+
 ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, TokenType binop, ASTExpression* lhs, ASTExpression* rhs) {
 	auto result = (ASTBinaryOperation*)Allocate(arena, sizeof(ASTBinaryOperation));
 	result->nodeType = AST_BINOP;
@@ -122,17 +143,6 @@ ASTStruct* CreateStruct() {
 	return result;
 }
 
-ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, U32* indices, U32 indexCount) {
-	auto result = (ASTMemberOperation*)Allocate(arena, sizeof(ASTMemberOperation) + (sizeof(U32) * indexCount));
-	result->nodeType = AST_MEMBER_OPERATION;
-	result->structVar = structVar;
-	result->operation = operation;
-  result->expr = expr;
-  result->indexCount = indexCount;
-  auto indexptr = (U32*)(result + 1);
-  memcpy(indexptr, indices, sizeof(U32) * indexCount);
-	return result;
-}
 
 ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, AccessModifer accessMod, U32* indices, U32 indexCount) {
 	auto result = (ASTMemberExpr*)Allocate(arena, (sizeof(ASTMemberExpr) + (sizeof(U32*)*indexCount)));
@@ -305,15 +315,7 @@ ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, ASTBlock*
 	return result;
 }
 
-// This is just analogous for a store
-// Why do we need to use this notation / jargon
-ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* var, ASTExpression* expr) {
-	auto result = (ASTVariableOperation*)Allocate(arena, sizeof(ASTVariableOperation));
-	result->nodeType = AST_VARIABLE_OPERATION;
-	result->variable = var;
-	result->value = expr;
-	return result;
-}
+
 
 // Control flow
 ASTIfStatement* CreateIfStatement(ASTExpression* expr) {

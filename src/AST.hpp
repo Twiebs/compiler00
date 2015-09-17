@@ -229,6 +229,11 @@ struct ASTMemberOperation : public ASTNode {
 	U32 indexCount;
 };
 
+struct ASTVariableOperation : public ASTNode {
+	ASTVariable* variable;
+	Operation operation;
+	ASTExpression* expr;
+};
 
 // REFACTOR this could use a better name
 // An identifier will point to a function set which will have various functions that corespond to that identifier stored
@@ -257,10 +262,7 @@ struct ASTReturn : public ASTExpression {
 // If a variable mutation is being parsed
 // TODO consider renaming varop->value to expr because it does not really refer to a value
 // it refers to a expresion of arbitary granulatiry
-struct ASTVariableOperation : public ASTNode {
-	ASTVariable* variable;
-	ASTExpression* value;
-};
+
 
 // ASTCall stores its arguments after the struct itself
 // The procede directly after the arg count and are just pointers to
@@ -335,9 +337,9 @@ S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, ASTBlock* block, const char* name, ASTExpression* initalExpr = nullptr);
 
 // Operations
-ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* variable, ASTExpression* expr);
+ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* variable, Operation op, ASTExpression* expr);
+ASTMemberOperation*   CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation op, ASTExpression* expr, U32* indices, U32 indexCount);
 ASTBinaryOperation*   CreateBinaryOperation(MemoryArena* arena, TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
-ASTMemberOperation*   CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation mode, ASTExpression* expr, U32* indices, U32 indexCount);
 
 // Control Flow
 ASTIfStatement* CreateIfStatement(ASTExpression* expr);	// TODO Why are ifstatements created without a body? also the body should probably be emitted into a stack thingyyy and then coppied into the if statement???

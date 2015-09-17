@@ -95,35 +95,47 @@ internal void AnalyzeStatement(Worker* worker, ASTNode* node) {
 		break;
 
 	case AST_VARIABLE: {
-		auto var = static_cast<ASTVariable*>(node);
+		auto var = (ASTVariable*)node;
 		if (var->initalExpression != nullptr) {
 			AnalyzeExpr(worker, var->initalExpression);
 		}
 
+		// Variables type will be null if variables type is being infered
 		if (var->type == nullptr) {
 			var->type = var->initalExpression->type;
-		} else if (var->initalExpression != nullptr){
-			if(!TypeCheck(var->initalExpression, var->type)) {
+			if (var->initalExpression->nodeType == AST_VAR_EXPR) {
+				auto varExpr = (ASTVarExpr*)var->initalExpression;
+				var->isPointer = varExpr->accessMod == ACCESS_ADDRESS;
+			} else if (var->initalExpression->nodeType == AST_MEMBER_EXPR) {
+				auto memberExpr = (ASTMemberExpr*)var->initalExpression;
+				var->isPointer = memberExpr->accessMod == ACCESS_ADDRESS;
+			}
+		}
+
+		else if (var->initalExpression != nullptr){
+			if (!TypeCheck(var->initalExpression, var->type)) {
 				ReportError(worker, "Type mismatch...: (insert clever and useful error here)");
 			}
-		} else {
+		}
+
+		else {
 			// Nothing to do here this is just a declaration without an expression which has a type and is auto initialized
 		}
 	} break;
 	case AST_VARIABLE_OPERATION: {
-		auto varop = (ASTVariableOperation*)node;
-		AnalyzeExpr(worker, varop->value);
+		auto varOp = (ASTVariableOperation*)node;
+		AnalyzeExpr(worker, varOp->expr);
 	} break;
 
-  case AST_RETURN: {
-    auto retval = (ASTReturn*)node;
-    AnalyzeExpr(worker, retval->value);
-    auto function = (ASTFunction*)worker->currentScope;
-    if (!TypeCheck(retval->value, function->returnType)) {
-      ReportError(worker, "Return type does not match function return type in function: " + function->ident->name);
-    }
+	case AST_RETURN: {
+		auto retval = (ASTReturn*)node;
+		AnalyzeExpr(worker, retval->value);
+		auto function = (ASTFunction*)worker->currentScope;
+		if (!TypeCheck(retval->value, function->returnType)) {
+			ReportError(worker, "Return type does not match function return type in function: " + function->ident->name);
+		}
 
-  } break;
+	} break;
 
 	default:
 		assert(false && "Unhandled statement resolution!!!!");
@@ -150,8 +162,10 @@ void AnalyzeAST (Worker* worker) {
 		auto node = worker->currentScope->members[i];
 		if (node->nodeType == AST_FUNCTION) {
 			auto function = (ASTFunction*)node;
-      worker->currentScope = function;
+			auto previousBlock = worker->currentScope;
+			worker->currentScope = function;
 			AnalyzeBlock(worker, function);
+			worker->currentScope = previousBlock;
 		}
 	}
 }

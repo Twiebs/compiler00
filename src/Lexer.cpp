@@ -26,6 +26,12 @@ internal void AppendNext (Worker* worker) {
 	}
 }
 
+void EatLine(Worker* worker) {
+	while(worker->lastChar != '\n' || worker->lastChar != '\r') {
+		EatNext(worker);
+	}
+}
+
 void NextToken (Worker* worker) {
 	#ifdef USE_INDENT_BLOCK
 		if (worker->nextChar == '\n' || worker->nextChar == '\r') {
