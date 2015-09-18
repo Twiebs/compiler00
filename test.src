@@ -1,5 +1,6 @@
 IMPORT "IO.bang"
 
 Main :: () :> S32
-	Println("Woof")
+	Println("Hello World")
+	Println("How the fuck is the actualy real")	
 	RETURN 0

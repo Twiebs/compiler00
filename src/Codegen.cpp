@@ -70,14 +70,14 @@ void Codegen(ASTIter* iter);
 void Codegen(ASTReturn* retVal);
 
 // Expressions
-llvm::Value* CodegenExpr(ASTNode* expr);
-llvm::Value* Codegen(ASTIntegerLiteral* intLiteral);
-llvm::Value* Codegen(ASTFloatLiteral* floatLiteral);
-llvm::Value* Codegen(ASTBinaryOperation* binop);
-llvm::Value* Codegen(ASTMemberExpr* expr);
-llvm::Value* Codegen(ASTVarExpr* expr);
-llvm::Value* Codegen(ASTStringLiteral* str);
-llvm::Value* Codegen(ASTCall* call);
+llvm::Value* CodegenExpr (ASTNode* expr);
+llvm::Value* Codegen (ASTIntegerLiteral* intLiteral);
+llvm::Value* Codegen (ASTFloatLiteral* floatLiteral);
+llvm::Value* Codegen (ASTBinaryOperation* binop);
+llvm::Value* Codegen (ASTMemberExpr* expr);
+llvm::Value* Codegen (ASTVarExpr* expr);
+llvm::Value* Codegen (ASTStringLiteral* str);
+llvm::Value* Codegen (ASTCall* call);
 
 internal void CodegenPrimitiveTypes() {
 	global_voidType->llvmType = llvm::Type::getVoidTy(llvm::getGlobalContext());

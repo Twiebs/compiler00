@@ -15,25 +15,25 @@ internal void EatNext (Worker* worker) {
 }
 
 internal void AppendNext (Worker* worker) {
-	worker->lastChar =  worker->nextChar;
+	worker->lastChar =	worker->nextChar;
 	worker->nextChar = getc(worker->file);
 	worker->colNumber++;
 	if (worker->lastChar == '\n') {
 		worker->lineNumber++;
 		worker->colNumber = 1;
-	} else if (worker->lastChar != ' ') {
+	} else {
 		worker->token.string += worker->lastChar;
 	}
 }
 
-void EatLine(Worker* worker) {
+void EatLine (Worker* worker) {
 	while(worker->lastChar != '\n' || worker->lastChar != '\r') {
 		EatNext(worker);
 	}
 }
 
 void NextToken (Worker* worker) {
-	#ifdef USE_INDENT_BLOCK
+#ifdef USE_INDENT_BLOCK
 		if (worker->nextChar == '\n' || worker->nextChar == '\r') {
 			EatNext(worker);
 			if (worker->nextChar == '\n' || worker->nextChar == '\r') {
@@ -74,7 +74,7 @@ void NextToken (Worker* worker) {
 				return;
 			}
 		}
-	#endif
+#endif
 
 		worker->token.string = "";
 		worker->token.type = TOKEN_UNKOWN;
@@ -84,11 +84,11 @@ void NextToken (Worker* worker) {
 
 		if (isalpha(worker->nextChar) || worker->nextChar == '_') {
 			while ((isalnum(worker->nextChar) || worker->nextChar == '_') && worker->nextChar != '.') AppendNext(worker);
-			if 		  (worker->token.string == "IMPORT") 	  worker->token.type = TOKEN_IMPORT;
+			if 			(worker->token.string == "IMPORT") 		worker->token.type = TOKEN_IMPORT;
 			else if (worker->token.string == "FOREIGN")	 	worker->token.type = TOKEN_FOREIGN;
 			else if (worker->token.string == "STRUCT")		worker->token.type = TOKEN_STRUCT;
 			else if (worker->token.string == "IF")				worker->token.type = TOKEN_IF;
-			else if (worker->token.string == "ELSE") 		  worker->token.type = TOKEN_ELSE;
+			else if (worker->token.string == "ELSE") 			worker->token.type = TOKEN_ELSE;
 			else if (worker->token.string == "ITER")			worker->token.type = TOKEN_ITER;
 			else if (worker->token.string == "TO")				worker->token.type = TOKEN_TO;
 			else if (worker->token.string == "RETURN")		worker->token.type = TOKEN_RETURN;
@@ -125,7 +125,7 @@ void NextToken (Worker* worker) {
 			EatNext(worker);	//Eat the '# 'char
 			while (worker->nextChar != EOF && worker->nextChar != '\n' && worker->nextChar != '\r')
 				EatNext(worker);	//Now we eat the comment body itself
-			//We have reached the end of the comment.  If is not the end of the file get the next worker->token
+			//We have reached the end of the comment.	If is not the end of the file get the next worker->token
 			if (worker->nextChar != EOF) {
 					NextToken(worker);
 					return;
