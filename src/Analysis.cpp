@@ -143,11 +143,13 @@ internal void AnalyzeStatement(Worker* worker, ASTNode* node) {
 	}
 }
 
-internal void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement) {
-	assert(ifStatement->expr != nullptr);
+static void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement) {
+	assert (ifStatement->expr != nullptr);
 	AnalyzeExpr(worker, ifStatement->expr);
 	AnalyzeStatement(worker, ifStatement->ifBody);
-	AnalyzeStatement(worker, ifStatement->elseBody);
+	if (ifStatement->elseBody != nullptr) {
+		AnalyzeStatement(worker, ifStatement->elseBody);
+	}
 }
 
 // NOTE / TODO / WOOF

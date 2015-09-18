@@ -1,6 +1,10 @@
 IMPORT "IO.bang"
 
 Main :: () :> S32
-	Println("Hello World")
-	Println("How the fuck is the actualy real")	
+	foo := 1
+
+	IF foo Println("True")
+	ELSE Println("False")
+
+
 	RETURN 0

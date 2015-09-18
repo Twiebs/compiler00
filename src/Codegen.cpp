@@ -65,8 +65,8 @@ void CodegenStatement(ASTNode* node);
 void Codegen(ASTVariable* var);
 void Codegen(ASTVariableOperation* varOp);
 void Codegen(ASTMemberOperation* memberOp);
-void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
-void Codegen(ASTIter* iter);
+static inline void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
+static inline void Codegen(ASTIter* iter);
 void Codegen(ASTReturn* retVal);
 
 // Expressions
@@ -390,19 +390,25 @@ llvm::Value* Codegen(ASTCall* call) {
 	}
 }
 
-void Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
-	auto condV = CodegenExpr(ifStatement->expr);
-	if (condV == nullptr) {
-		LOG_ERROR("Could not emit code for if statement expression");
-		return;
-	}
-	auto compare = builder->CreateICmpEQ(condV, llvm::ConstantInt::getTrue(llvm::getGlobalContext()), "ifcond");
+static inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
 	auto ifBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "if", function);
 	auto elseBlock = mergeBlock;
-	if(ifStatement->elseBody != nullptr) {
+	if (ifStatement->elseBody != nullptr) {
 		elseBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "else", function);
 	}
-	builder->CreateCondBr(compare, ifBlock, elseBlock);
+
+	auto exprValue = CodegenExpr(ifStatement->expr);
+	assert(exprValue != nullptr);
+
+	if (ifStatement->expr->nodeType != AST_BINOP) {
+		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 0);
+		auto trueValue = llvm::ConstantInt::getTrue(llvm::getGlobalContext());
+//		auto compare = builder->CreateICmpEQ(exprValue, trueValue, "ifcond");
+		auto cmp = builder->CreateICmpNE(exprValue, zeroValue, "ifcmp");
+		builder->CreateCondBr(cmp, ifBlock, elseBlock);
+	}
+
+
 	builder->SetInsertPoint(ifBlock);
 
 	if (ifStatement->ifBody->nodeType == AST_BLOCK) {
@@ -454,7 +460,7 @@ void Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Fu
 	}
 }
 
- void Codegen(ASTIter* iter) {
+ static inline void Codegen (ASTIter* iter) {
 	auto var = (ASTVariable*)iter->varIdent->node;
 
 	// Set the inital expr of the variable to the start node of the iter
