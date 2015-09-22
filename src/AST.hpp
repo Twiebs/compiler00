@@ -28,6 +28,15 @@ enum TokenType {
 	TOKEN_MUL,
 	TOKEN_DIV,
 
+	TOKEN_LOGIC_NOT,
+	TOKEN_LOGIC_OR,
+	TOKEN_LOGIC_AND,
+	TOKEN_BOOLEAN_EQUAL,
+	TOKEN_BOOLEAN_GREATER,
+	TOKEN_BOOLEAN_LESS,
+	TOKEN_BOOLEAN_GREATER_EQAUL,
+	TOKEN_BOOLEAN_LESS_EQUAL,
+
 	TOKEN_EQUALS,
 	TOKEN_ADD_EQUALS,
 	TOKEN_SUB_EQUALS,
@@ -204,22 +213,23 @@ enum Operation {
   OPERATION_DIV
 };
 
-enum AccessModifer {
-	ACCESS_LOAD,
-	ACCESS_VALUE,
-	ACCESS_ADDRESS,
+enum UnaryOperator {
+	UNARY_LOAD,
+	UNARY_VALUE,
+	UNARY_ADDRESS,
+	UNARY_NOT
 };
 
 struct ASTMemberExpr : public ASTExpression {
 	ASTVariable* structVar;
-	AccessModifer accessMod;
+	UnaryOperator accessMod;
 	U32 indexCount;
 };
 
 struct ASTVarExpr : public ASTExpression {
 	ASTVariable* var;
 	std::vector<U32> accessIndices;
-	AccessModifer accessMod;
+	UnaryOperator accessMod;
 };
 
 struct ASTMemberOperation : public ASTNode {
@@ -349,8 +359,8 @@ ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
 //===============
 //  Expressions
 //===============
-ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var, AccessModifer accessMod);
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, AccessModifer accessMod, U32* indices, U32 indexCount);
+ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var, UnaryOperator accessMod);
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, U32* indices, U32 indexCount);
 
 ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argumentCount, const char* name);
 

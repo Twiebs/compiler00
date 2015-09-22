@@ -105,10 +105,10 @@ internal void AnalyzeStatement(Worker* worker, ASTNode* node) {
 			var->type = var->initalExpression->type;
 			if (var->initalExpression->nodeType == AST_VAR_EXPR) {
 				auto varExpr = (ASTVarExpr*)var->initalExpression;
-				var->isPointer = varExpr->accessMod == ACCESS_ADDRESS;
+				var->isPointer = varExpr->accessMod == UNARY_ADDRESS;
 			} else if (var->initalExpression->nodeType == AST_MEMBER_EXPR) {
 				auto memberExpr = (ASTMemberExpr*)var->initalExpression;
-				var->isPointer = memberExpr->accessMod == ACCESS_ADDRESS;
+				var->isPointer = memberExpr->accessMod == UNARY_ADDRESS;
 			}
 		}
 

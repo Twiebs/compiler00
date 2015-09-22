@@ -104,19 +104,21 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 	switch (worker->token.type) {
 	case TOKEN_ADDRESS:
 	case TOKEN_VALUE:
+	case TOKEN_LOGIC_NOT:
 	case TOKEN_IDENTIFIER: {
-		AccessModifer accessMod = ACCESS_LOAD;
+		UnaryOperator unary = UNARY_LOAD;
 		if (worker->token.type == TOKEN_ADDRESS) {
-			accessMod = ACCESS_ADDRESS;
+			unary = UNARY_ADDRESS;
 			NextToken(worker);	//Eat the pointer token
 		} else if (worker->token.type == TOKEN_VALUE) {
-			accessMod = ACCESS_VALUE;
+			unary = UNARY_VALUE;
 			NextToken(worker);	//Eat the deref token
+		} else if (worker->token.type == TOKEN_LOGIC_NOT) {
+			unary = UNARY_NOT;
+			NextToken(worker);
 		}
 
 		auto ident = FindIdentifier(worker->currentScope, worker->token.string);
-
-
 		Token identToken = worker->token;
 		NextToken(worker); // Eat the identifier
 		//TODO more robust error checking when receving statement tokens in an expression
@@ -164,12 +166,12 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 				NextToken(worker);	// eat the member ident
 			}
 
-			auto expr = CreateMemberExpr(&worker->arena, structVar, accessMod, &indices[0], indices.size());
+			auto expr = CreateMemberExpr(&worker->arena, structVar, unary, &indices[0], indices.size());
 			expr->type = exprType;
 			return expr;
 		} else {
 			auto var = (ASTVariable*)ident->node;
-			auto expr = CreateVarExpr(&worker->arena, var, accessMod);
+			auto expr = CreateVarExpr(&worker->arena, var, unary);
 			return expr;
 		}
 

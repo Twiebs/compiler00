@@ -402,8 +402,6 @@ static inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* merge
 
 	if (ifStatement->expr->nodeType != AST_BINOP) {
 		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 0);
-		auto trueValue = llvm::ConstantInt::getTrue(llvm::getGlobalContext());
-//		auto compare = builder->CreateICmpEQ(exprValue, trueValue, "ifcond");
 		auto cmp = builder->CreateICmpNE(exprValue, zeroValue, "ifcmp");
 		builder->CreateCondBr(cmp, ifBlock, elseBlock);
 	}
@@ -542,7 +540,7 @@ llvm::Value* Codegen(ASTMemberExpr* expr) {
 	llvm::Value* value_ptr = structAlloca;
 	if(expr->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
 	auto gep = llvm::GetElementPtrInst::Create(value_ptr, indices, "access", builder->GetInsertBlock());
-	if (expr->accessMod == ACCESS_ADDRESS) {
+	if (expr->accessMod == UNARY_ADDRESS) {
 		return gep;
 	} else {
 		auto load = builder->CreateLoad(gep);
@@ -556,14 +554,20 @@ llvm::Value* Codegen (ASTVarExpr* expr) {
 
 	llvm::Value* value = nullptr;
 	switch(expr->accessMod) {
-	case ACCESS_LOAD:
+	case UNARY_LOAD:
 		value = builder->CreateLoad(varAlloca);
 		break;
-	case ACCESS_ADDRESS:
+	case UNARY_ADDRESS:
 		value = varAlloca;
 		break;
-	case ACCESS_VALUE:
+	case UNARY_VALUE:
 		value = builder->CreateLoad(varAlloca);
+		break;
+	case UNARY_NOT:
+		auto load = builder->CreateLoad(varAlloca);
+		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 0);
+		auto cmp = value = builder->CreateICmpEQ(load, zeroValue);
+		value = builder->CreateZExt(cmp, llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()));
 		break;
 	}
 	return value;

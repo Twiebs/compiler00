@@ -144,7 +144,7 @@ ASTStruct* CreateStruct() {
 }
 
 
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, AccessModifer accessMod, U32* indices, U32 indexCount) {
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, U32* indices, U32 indexCount) {
 	auto result = (ASTMemberExpr*)Allocate(arena, (sizeof(ASTMemberExpr) + (sizeof(U32*)*indexCount)));
 	result->nodeType = AST_MEMBER_EXPR;
 	result->structVar = structVar;
@@ -155,7 +155,7 @@ ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, Acce
 	return result;
 }
 
-ASTVarExpr* CreateVarExpr (MemoryArena* arena, ASTVariable* var, AccessModifer accessMod) {
+ASTVarExpr* CreateVarExpr (MemoryArena* arena, ASTVariable* var, UnaryOperator accessMod) {
 	auto result = (ASTVarExpr*)Allocate(arena, sizeof(ASTVarExpr));
 	result->nodeType = AST_VAR_EXPR;
 	result->var = var;

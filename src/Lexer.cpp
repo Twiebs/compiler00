@@ -159,10 +159,14 @@ void NextToken (Worker* worker) {
 			worker->token.type = TOKEN_VALUE;
 		}
 
-		// BIN OPS
 		else if (worker->nextChar == '=') {
 			AppendNext(worker);
-			worker->token.type = TOKEN_EQUALS;
+			if (worker->nextChar == '=') {
+				AppendNext(worker);
+				worker->token.type == TOKEN_BOOLEAN_EQUAL;
+			} else {
+					worker->token.type = TOKEN_EQUALS;
+			}
 		}
 
 		else if (worker->nextChar == '+') {
@@ -205,6 +209,13 @@ void NextToken (Worker* worker) {
 				worker->token.type = TOKEN_DIV;
 			}
 		}
+
+		// LOGICAL
+		else if (worker->nextChar == '~') {
+			AppendNext(worker);
+			worker->token.type = TOKEN_LOGIC_NOT;
+		}
+
 
 		// REMOVE NEED FOR MODULUS BECAUSE FUCK THAT
 		// Mod(5, 2) would be better!

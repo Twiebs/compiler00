@@ -1,10 +1,8 @@
 IMPORT "IO.bang"
 
 Main :: () :> S32
-	foo := 1
-
-	IF foo Println("True")
-	ELSE Println("False")
-
+	foo := 0
+	IF ~foo Println("False")
+	ELSE Println("True")
 
 	RETURN 0
