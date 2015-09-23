@@ -59,14 +59,23 @@ ASTNode* ParseImport(Worker* worker) {
 // TODO seperate ASTNode into two differently treated branches of the AST
 // A statement either begins with an identifier, a keyword, or a new block
 
+// Do we allow binops to be defined ???
+// Do we actualy treat overloads as a function?
+// Does it mater for now?  Nope.
+
 ASTNode* ParseStatement (Worker* worker) {
 	switch (worker->token.type) {
+	case TOKEN_ADD:
+	case TOKEN_SUB:
+	case TOKEN_MUL:
+	case TOKEN_DIV:
+
 	case TOKEN_IDENTIFIER:	return ParseIdentifier(worker);
-	case TOKEN_IF: 			return ParseIF(worker);
-	case TOKEN_ITER:		return ParseIter(worker);
-	case TOKEN_RETURN: 		return ParseReturn(worker);
+	case TOKEN_IF: 					return ParseIF(worker);
+	case TOKEN_ITER:				return ParseIter(worker);
+	case TOKEN_RETURN: 			return ParseReturn(worker);
 	case TOKEN_SCOPE_OPEN:	return ParseBlock(worker);
-	case TOKEN_IMPORT:		return ParseImport(worker);
+	case TOKEN_IMPORT:			return ParseImport(worker);
 	default:
 		ReportError(worker, worker->token.site, "Could not parse statement: unkown Token");
 		NextToken(worker);
@@ -102,6 +111,15 @@ ASTCall* ParseCall(Worker* worker, const Token& identToken) {
 
 ASTExpression* ParsePrimaryExpr(Worker* worker) {
 	switch (worker->token.type) {
+	case TOKEN_TRUE:
+		NextToken(worker);
+		return CreateIntegerLiteral(&worker->arena, 1);
+		break;
+	case TOKEN_FALSE:
+		NextToken(worker);
+		return CreateIntegerLiteral(&worker->arena, 0);
+		break;
+
 	case TOKEN_ADDRESS:
 	case TOKEN_VALUE:
 	case TOKEN_LOGIC_NOT:
@@ -127,7 +145,7 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 			case TOKEN_TYPE_DEFINE:
 			case TOKEN_TYPE_INFER:
 			case TOKEN_TYPE_RETURN:
-				ReportError(worker, worker->token.site, "Unexpected token when parsing expression.  Token '" + worker->token.string + "' cannot be used in an expression");
+				ReportError(worker, worker->token.site, "Unexpected token when parsing expression.	Token '" + worker->token.string + "' cannot be used in an expression");
 				NextToken(worker);	// eat whatever that token was... hopefuly this will ha
 				break;
 			default:

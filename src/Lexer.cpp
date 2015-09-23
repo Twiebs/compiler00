@@ -81,17 +81,18 @@ void NextToken (Worker* worker) {
 		worker->token.site.lineNumber = worker->lineNumber;
 		worker->token.site.columNumber = worker->colNumber;
 		while (isspace(worker->nextChar)) EatNext(worker);
-
 		if (isalpha(worker->nextChar) || worker->nextChar == '_') {
 			while ((isalnum(worker->nextChar) || worker->nextChar == '_') && worker->nextChar != '.') AppendNext(worker);
-			if 			(worker->token.string == "IMPORT") 		worker->token.type = TOKEN_IMPORT;
-			else if (worker->token.string == "FOREIGN")	 	worker->token.type = TOKEN_FOREIGN;
-			else if (worker->token.string == "STRUCT")		worker->token.type = TOKEN_STRUCT;
+			if 		(worker->token.string == "IMPORT") 			worker->token.type = TOKEN_IMPORT;
+			else if (worker->token.string == "FOREIGN")	 		worker->token.type = TOKEN_FOREIGN;
+			else if (worker->token.string == "STRUCT")			worker->token.type = TOKEN_STRUCT;
 			else if (worker->token.string == "IF")				worker->token.type = TOKEN_IF;
 			else if (worker->token.string == "ELSE") 			worker->token.type = TOKEN_ELSE;
 			else if (worker->token.string == "ITER")			worker->token.type = TOKEN_ITER;
 			else if (worker->token.string == "TO")				worker->token.type = TOKEN_TO;
-			else if (worker->token.string == "RETURN")		worker->token.type = TOKEN_RETURN;
+			else if (worker->token.string == "RETURN")			worker->token.type = TOKEN_RETURN;
+			else if (worker->token.string == "TRUE")			worker->token.type = TOKEN_TRUE;
+			else if (worker->token.string == "FALSE")			worker->token.type = TOKEN_FALSE;
 			else worker->token.type = TOKEN_IDENTIFIER;
 		}
 

@@ -65,15 +65,16 @@ void CodegenStatement(ASTNode* node);
 void Codegen(ASTVariable* var);
 void Codegen(ASTVariableOperation* varOp);
 void Codegen(ASTMemberOperation* memberOp);
-static inline void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
-static inline void Codegen(ASTIter* iter);
-void Codegen(ASTReturn* retVal);
+inline internal void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
+inline internal void Codegen(ASTIter* iter);
+
+internal void Codegen(ASTReturn* retVal);
 
 // Expressions
 llvm::Value* CodegenExpr (ASTNode* expr);
 llvm::Value* Codegen (ASTIntegerLiteral* intLiteral);
 llvm::Value* Codegen (ASTFloatLiteral* floatLiteral);
-llvm::Value* Codegen (ASTBinaryOperation* binop);
+static llvm::Value* Codegen (ASTBinaryOperation* binop);
 llvm::Value* Codegen (ASTMemberExpr* expr);
 llvm::Value* Codegen (ASTVarExpr* expr);
 llvm::Value* Codegen (ASTStringLiteral* str);
@@ -216,7 +217,7 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 	function->llvmFunction = llvmFunc;
 }
 
-void CodegenStatement(ASTNode* node) {
+void CodegenStatement (ASTNode* node) {
 	switch(node->nodeType) {
 		case AST_VARIABLE: Codegen((ASTVariable*)node); break;
 		case AST_MEMBER_OPERATION: Codegen((ASTMemberOperation*)node); break;
@@ -320,37 +321,26 @@ llvm::Value* CodegenExpr(ASTNode* node) {
 	}
 }
 
-llvm::Value* Codegen(ASTBinaryOperation* binop)	{
+static llvm::Value* Codegen (ASTBinaryOperation* binop)	{
 	llvm::Value* lhs = CodegenExpr(binop->lhs);
 	llvm::Value* rhs = CodegenExpr(binop->rhs);
+	assert(lhs && rhs );
 
-	if(lhs == nullptr || rhs == nullptr) {
-		LOG_ERROR("Failed to emit code for binary operation!");
-		return nullptr;
-	}
-
-	// NOTE DIV instructions are more complex then expected
-	// Checking types is important when doing this
-	// Perhaps to simplifiy the language no implict casts will be allowed
-	switch(binop->binop) {
+	switch (binop->binop) {
 		case TOKEN_ADD: return builder->CreateAdd(lhs, rhs, "addtmp");
 		case TOKEN_SUB: return builder->CreateSub(lhs, rhs, "subtmp");
 		case TOKEN_MUL: return builder->CreateMul(lhs, rhs, "multmp");
 		case TOKEN_DIV: return builder->CreateSDiv(lhs, rhs, "divtmp");
-
 		default:
 			LOG_ERROR("Invalid binary operator");
 			return nullptr;
 	}
 }
 
-void Codegen(ASTReturn* retVal) {
+static void Codegen (ASTReturn* retVal) {
 	auto value = CodegenExpr(retVal->value);
-	if (value != nullptr) {
-		builder->CreateRet(value);
-	} else {
-		LOG_ERROR("Failed to emmit code for return value");
-	}
+	assert(value != nullptr);
+	builder->CreateRet(value);
 }
 
 llvm::Value* Codegen(ASTCall* call) {
