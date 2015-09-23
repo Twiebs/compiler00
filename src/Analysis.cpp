@@ -1,3 +1,9 @@
+// TODO Analysis cares to much aboout the stucture of the AST here
+// but it shouldn't.  We can store the nodes of the tree better and traverse them
+// linearly here.  The tree can be optimized inorder to try and do as much work as posible
+// linearly here rather than be dependant on the structure of the tree.  In theory it should be possibe
+// to only care about it during Codegen (and parsing naturaly)
+
 void ReportError (Worker* worker, FileSite& site, const std::string& msg);
 void ReportError (Worker* worker, const std::string& msg);
 
@@ -62,26 +68,33 @@ internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
 
 // This is where we can implement implict castinging between ints / floats / whatever
 // TODO implement implicit casting
-internal inline bool TypeCompare(ASTExpression* exprA, ASTExpression* exprB) {
+internal inline bool TypeCompare (ASTExpression* exprA, ASTExpression* exprB) {
 	if (exprA->type != exprB->type)
 		return false;
 	return true;
 }
 
-internal inline bool TypeCheck(ASTExpression* expr, ASTDefinition* typedefn) {
+internal inline bool TypeCheck (ASTExpression* expr, ASTDefinition* typedefn) {
 	if (expr->type != typedefn)
 		return false;
 	return true;
 }
 
-internal inline void AnalyzeBlock(Worker* worker, ASTBlock* block) {
+// NOTE
+// Analyzing blocks is really stupid.  There is no reason to include them in the analysis
+// phase.  There should be a linearized version of the AST that does not care about the
+// structure of the tree and just hits the nodes independently rather than reaching through
+// its pointer stored in the block.  In theory the blocks should only really mater for codegeneration and
+// parsing.  Otherwise we can hit the nodes in any order whatsoever during the anayalsis because it doesnt
+// mater and will be faster to traverse them linearly rather then this tree structure
+internal inline void AnalyzeBlock (Worker* worker, ASTBlock* block) {
 	for(auto i = 0; i < block->members.size(); i++) {
 		auto node = block->members[i];
 		AnalyzeStatement(worker, node);
 	}
 }
 
-internal void AnalyzeStatement(Worker* worker, ASTNode* node) {
+internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 	switch(node->nodeType) {
 	case AST_BLOCK:
 		AnalyzeBlock(worker, (ASTBlock*)node);
@@ -90,6 +103,22 @@ internal void AnalyzeStatement(Worker* worker, ASTNode* node) {
 	case AST_IF:
 		AnalyzeIfStatement(worker, (ASTIfStatement*)node);
 		break;
+	case AST_ITER: {
+		auto iter = (ASTIter*)node;
+		assert(iter->var);
+		assert(iter->start);
+		AnalyzeExpr(worker, iter->var);
+		AnalyzeExpr(worker, iter->start);
+		if (iter->end != nullptr) {
+			AnalyzeExpr(worker, iter->end);
+			if (!TypeCompare(iter->start, iter->end)) {
+				ReportError(worker, "Cannot iterate between two different types");
+			}
+		}
+
+		AnalyzeBlock(worker, iter->body);
+	} break;
+
 	case AST_CALL:
 		AnalyzeCall(worker, (ASTCall*)node);
 		break;

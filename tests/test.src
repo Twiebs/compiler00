@@ -1,21 +1,12 @@
 IMPORT "IO.bang"
 
+CreateWindow :: () FOREIGN
+NewFrame :: () FOREIGN
+
 Main :: () :> S32
-	foo := FALSE
-	IF ~foo Println("False")
-	ELSE Println("True")
+	CreateWindow()
+	i : ITER 0 TO 10
+		NewFrame()
+		i -= 1
+	
 	RETURN 0
-
-+ :: (a : @Vector3 b : @Vector3) :> Vector3
-	vector : Vector3
-	vector.x = a.x + b.x
-	vector.y = a.y + b.y
-	vector.Z = a.z + b.z
-	RETURN vector
-
-- :: (a : @Vector3 b : @Vector3) :> Vector3
-	vector : Vector3
-	vector.x = a.x - b.x
-	vector.y = a.y + b.y
-	vector.z = a.z + b.z
-	RETURN vector

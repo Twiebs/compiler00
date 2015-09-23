@@ -231,11 +231,9 @@ void CodegenStatement (ASTNode* node) {
 
 void Codegen(ASTVariable* var) {
 	assert(var->allocaInst == nullptr);	// Variable codegens are variable decl statements
-	assert(var->type != nullptr);			// The variable must have already have its type resolved in alaysis
+	assert(var->type != nullptr && "Variable must have type resolved during anaysis");
 	auto llvmType = (llvm::Type*)var->type->llvmType;
-	if(var->isPointer)
-		llvmType = llvm::PointerType::get(llvmType, 0);
-
+	if (var->isPointer) llvmType = llvm::PointerType::get(llvmType, 0);
 	auto name = (const char*)(var + 1);
 	var->allocaInst = builder->CreateAlloca(llvmType, 0, name);
 
@@ -449,7 +447,7 @@ static inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* merge
 }
 
  static inline void Codegen (ASTIter* iter) {
-	auto var = (ASTVariable*)iter->varIdent->node;
+	auto var = iter->var;
 
 	// Set the inital expr of the variable to the start node of the iter
 	// This should have allready been done inthe parsing phase but we will allow it for now

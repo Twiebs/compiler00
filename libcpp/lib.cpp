@@ -27,20 +27,21 @@ extern "C" void SetPixel(U32 x, U32 y, U8 r, U8 g, U8 b) {
 
 }
 
+#define global_variable static
+global_variable SDL_Surface* global_surface;
 extern "C" int CreateWindow() {
   if (SDL_Init(SDL_INIT_VIDEO) != 0) {
     std::cout << "SDL Could not init!" << "\n";
     return -1;
   }
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-  SDL_Surface* screen;
-  screen = SDL_SetVideoMode(1280, 720, 0, SDL_OPENGL);
-	if (!screen) {
+  global_surface = SDL_SetVideoMode(1280, 720, 0, SDL_OPENGL);
+	if (!global_surface) {
 		return -1;
 	}
 }
 
-void NewFrame() {
+extern "C" void NewFrame() {
   SDL_GL_SwapBuffers();
   glClearColor(1.0f, 0.1f, 0.1f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);

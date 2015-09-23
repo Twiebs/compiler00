@@ -41,23 +41,23 @@ void NextToken (Worker* worker) {
 				return;
 			}
 
-			int indentLevel = 0;
-			if (worker->nextChar == '\t') {
-				EatNext(worker);
-				indentLevel++;
-			} else if (worker->nextChar == ' ') {
-				int spaceCount = 1;
-				EatNext(worker);
-				while (worker->nextChar == ' ') {
+			int indentCount = 0;
+			while (worker->nextChar == '\t' || worker->nextChar == ' ') {
+				int spaceCount = 0;
+				if (worker->nextChar == ' ') {
 					spaceCount++;
 					EatNext(worker);
-					if (spaceCount >= INDENT_SPACE_COUNT) {
-						indentLevel++;
+					if (spaceCount > INDENT_SPACE_COUNT) {
+						indentCount++;
 						spaceCount = 0;
 					}
+				} else {
+					EatNext(worker);
+					indentCount++;
 				}
 			}
 
+			auto indentLevel = indentCount;	// @Cleanup
 			if (indentLevel > worker->currentIndentLevel) {
 				worker->token.string = "";
 				worker->token.type = TOKEN_SCOPE_OPEN;;

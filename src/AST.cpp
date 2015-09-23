@@ -303,7 +303,6 @@ ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& st
 ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, ASTBlock* block, const char* name, ASTExpression* initalExpr) {
 	auto result = (ASTVariable*)Allocate(arena, sizeof(ASTVariable) + strlen(name) + 1);
 	result->nodeType = AST_VARIABLE;
-	//result->site = site;
 	result->initalExpression = initalExpr;
 	result->block = block;
 	result->allocaInst = nullptr;
@@ -312,10 +311,9 @@ ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, ASTBlock*
   memcpy(strptr, name, strlen(name));
   strptr += strlen(name);
   *strptr = '\0';
+  result->name = (char*)strptr;
 	return result;
 }
-
-
 
 // Control flow
 ASTIfStatement* CreateIfStatement(ASTExpression* expr) {
@@ -327,10 +325,10 @@ ASTIfStatement* CreateIfStatement(ASTExpression* expr) {
 	return result;
 }
 
-ASTIter* CreateIter(ASTIdentifier* ident, ASTExpression* start, ASTExpression* end, ASTExpression* step, ASTBlock* body) {
+ASTIter* CreateIter(ASTVariable* var, ASTExpression* start, ASTExpression* end, ASTExpression* step, ASTBlock* body) {
 	auto result = new ASTIter;
 	result->nodeType = AST_ITER;
-	result->varIdent = ident;
+	result->var = var;
 	result->start = start;
 	result->end = end;
 	result->step = step;
@@ -341,6 +339,6 @@ ASTIter* CreateIter(ASTIdentifier* ident, ASTExpression* start, ASTExpression* e
 std::string ToString(ASTNodeType nodeType) {
 	switch(nodeType) {
 	case AST_IDENTIFIER: return "Identifier";
-	default: return "Too Lazy to implement ToString for this identifier";
+	default: return "Too Lazy to implement ToString for this nodeType";
 	}
 }

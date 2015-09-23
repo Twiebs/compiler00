@@ -171,27 +171,22 @@ struct ASTIfStatement : public ASTNode {
 	ASTNode* elseBody;
 };
 
-struct ASTIter : public ASTNode {
-	ASTIdentifier* varIdent;
-	ASTExpression* start;
-	ASTExpression* end;
-	ASTExpression* step;
-	ASTBlock* body;
-};
 
-// Identifiers are described with this variable as a
-// pointer to an identifier which is just a way of saying
-// it points to a string that contains its name....
-// unfourtantly this is rather silly because were just reaching through the pointer for
-// no reason at all... instead of having this ident type we can use somthing like FindNodeForIdentifier()
-// which would grab the node that is stored in some hash map and points to these stringgg dodaddsss
-// Its much more sane because we are no longer reaching through this pointer and doing this wierd lookup stuff
 struct ASTVariable : public ASTExpression {
 	FileSite site;	// This is where this variable was declared.
 	ASTBlock* block;	// also why would we ever need to store this???
 	ASTExpression* initalExpression = nullptr;
 	void* allocaInst;
 	bool isPointer = false;
+	char* name;
+};
+
+struct ASTIter : public ASTNode {
+	ASTExpression* start;
+	ASTExpression* end;
+	ASTExpression* step;
+	ASTVariable* var;
+	ASTBlock* body;
 };
 
 struct ASTFunction : public ASTBlock {
@@ -358,7 +353,7 @@ ASTBinaryOperation*   CreateBinaryOperation(MemoryArena* arena, TokenType binop,
 
 // Control Flow
 ASTIfStatement* CreateIfStatement(ASTExpression* expr);	// TODO Why are ifstatements created without a body? also the body should probably be emitted into a stack thingyyy and then coppied into the if statement???
-ASTIter* CreateIter(ASTIdentifier* ident, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
+ASTIter* CreateIter(ASTVariable* var, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
 ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
 
 //===============
@@ -372,6 +367,5 @@ ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argume
 ASTIntegerLiteral* CreateIntegerLiteral(MemoryArena* arena, S64 value);
 ASTFloatLiteral* CreateFloatLiteral(MemoryArena* arena, F64 value);
 ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& string);
-
 
 std::string ToString(ASTNodeType nodeType);

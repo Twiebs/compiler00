@@ -14,13 +14,32 @@ Print :: (vector : @Vector3)
   Print(vector.z)
   Print("]")
 
-Main :: () :> S32
+VectorTest :: ()
   position : Vector3
+  position.x = 1
+  position.y = 2
+  position.z = 3
   Print("position: ")
   Print(@position)
 
+
+Main :: () :> S32
   bar := 7
   foo := (1 + 3 + 1) * (bar + (3*2))
+  Print("foo: ")
   Println(foo)
+
+  IF ~foo Println("False")
+  ELSE Println("True")
+
+  i : ITER 0 TO 100
+    Println(i)
+
+  start := 0
+  end := 100
+  i : ITER start TO end
+    Println(i)
+
+  VectorTest()
 
   RETURN 0

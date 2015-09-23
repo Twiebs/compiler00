@@ -618,12 +618,12 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 		// }
 		// Why do variables need anyt ype of mutation whatsofever?
 		// That doesnt even make any sense whatso ever
-
 	}
 
 	// We have gotten past all our routines
 	// THIS SHOULD NEVER HAPPEN!
 	INTERNAL_ERROR(worker->token.site << "Something REALLY Terrible has happened!	ITS IMPOSSIBLE TO GET HERE! The worker->token that caused this was [" << worker->token.string << "]");
+	assert(NULL);
 	return nullptr;
 }
 
@@ -646,16 +646,15 @@ ASTNode* ParseIF(Worker* worker) {
 	return ifStatement;
 }
 
-ASTNode* ParseIter(Worker* worker, const std::string& identName) {
+ASTNode* ParseIter (Worker* worker, const std::string& identName) {
 	LOG_VERBOSE(worker->token.site << "Parsing a iter statement");
 	NextToken(worker); // Eat the iter
 
 	auto expr = ParseExpr(worker);
-	if (!expr)
-		LOG_ERROR(worker->token.site << "Could not parse expression to the right of iter");
+	if (!expr) LOG_ERROR(worker->token.site << "Could not parse expression to the right of iter");
 
 	if (worker->token.type == TOKEN_TO) {
-		 NextToken(worker); 	//Eat the to
+		 NextToken(worker); 	// Eat the to
 		 if (identName != "") {
 			auto block = CreateBlock(worker->currentScope);
 			auto ident = CreateIdentifier(block, identName);
@@ -667,7 +666,7 @@ ASTNode* ParseIter(Worker* worker, const std::string& identName) {
 			auto endExpr = ParseExpr(worker);
 			if (!endExpr) LOG_ERROR(worker->token.site << "Could not parse Expression after TO keyword");
 			ParseBlock(worker, block);
-			auto iter = CreateIter(ident, expr, endExpr, nullptr, block);
+			auto iter = CreateIter(var, expr, endExpr, nullptr, block);
 			return iter;
 
 		} else {

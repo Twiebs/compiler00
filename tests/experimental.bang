@@ -1,4 +1,5 @@
 
+# Operator Overloads
 + :: (a : @Vector3 b : @Vector3) :> Vector3
 	vector : Vector3
 	vector.x = a.x + b.x
