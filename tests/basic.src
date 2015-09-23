@@ -1,0 +1,26 @@
+IMPORT "IO.bang"
+
+Vector3 :: STRUCT
+  x : F32
+  y : F32
+  z : F32
+
+Print :: (vector : @Vector3)
+  Print("[")
+  Print(vector.x)
+  Print(", ")
+  Print(vector.y)
+  Print(", ")
+  Print(vector.z)
+  Print("]")
+
+Main :: () :> S32
+  position : Vector3
+  Print("position: ")
+  Print(@position)
+
+  bar := 7
+  foo := (1 + 3 + 1) * (bar + (3*2))
+  Println(foo)
+
+  RETURN 0

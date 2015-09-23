@@ -17,10 +17,6 @@ void ParseFile (Worker* worker, const std::string& rootDir, const std::string& f
 void CodegenPackage(Package* package, const BuildContext& context, BuildSettings* settings);
 void AnalyzeAST (Worker* worker);  // TODO consider ResolvePacakgeDeps or somthing
 
-// ParsePackage()
-// ResolvePackage()
-// CodegenPackage()
-
 int PreBuild(const BuildContext& context, const BuildSettings& settings) {
 	return 0;
 }
@@ -30,7 +26,7 @@ struct WorkQueue {
   std::condition_variable cond;
 	std::atomic<int> activeWorkers;
 	std::atomic<int> workCount;
-  std::vector<std::string> workList;
+  std::vector<std::string> workList;	// TODO remove this std::vector<std::string> insanity
 };
 
 global_variable WorkQueue global_workQueue;
@@ -100,8 +96,13 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID,  B
 #define FORCE_SINGLE_THREADED 1
 #define ARENA_BLOCK_SIZE 4096
 #define TEMP_BLOCK_SIZE 1 << 8
-int Build(BuildContext& context, BuildSettings& settings) {
-  auto package = new Package;	// ok... this stuff really needs to go
+// BuildContext is very irrelevant
+// Build should take a package which is given an inital file / name / whatever
+int Build (BuildContext& context, BuildSettings& settings) {
+  // HACK to keep working with current build system
+	Package thePackage;
+	auto package = &thePackage;
+
   InitalizeLanguagePrimitives(&package->globalScope);
   context.packages.push_back(package);
   context.currentPackage = package;
@@ -210,7 +211,7 @@ int PostBuild(const BuildContext& context, const BuildSettings& settings) {
 
 int main (int argc, char** argv) {
 	BuildSettings settings;
-	settings.libDirs.push_back("build/libcpp");
+	settings.libDirs.push_back("../build/libcpp");
 	settings.libNames.push_back("std");
 	settings.libNames.push_back("SDL");
 	settings.libNames.push_back("GL");

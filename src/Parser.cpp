@@ -61,7 +61,7 @@ ASTNode* ParseImport(Worker* worker) {
 
 // Do we allow binops to be defined ???
 // Do we actualy treat overloads as a function?
-// Does it mater for now?  Nope.
+// Does it mater for now?	Nope.
 
 ASTNode* ParseStatement (Worker* worker) {
 	switch (worker->token.type) {
@@ -151,14 +151,14 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 			default:
 				if (!ident) {
 					ReportError(worker, worker->token.site, "Identifier " + worker->token.string + " does not exist!");
-					NextToken(worker);
+					NextToken (worker);
 					return nullptr;
 				}
 				break;
 		}
 
 		if (worker->token.type == TOKEN_PAREN_OPEN) {
-			auto call = ParseCall(worker, identToken);
+			auto call = ParseCall (worker, identToken);
 			return (ASTExpression*)call;
 		} else if (worker->token.type == TOKEN_ACCESS) {
 			auto structVar = (ASTVariable*)ident->node;
@@ -196,6 +196,16 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 		LOG_ERROR("SOMTHING TERRIBLE HAS HAPPENED!");
 	} break;
 
+	case TOKEN_PAREN_OPEN: {
+		NextToken(worker); // Eat the open paren
+		auto expr = ParseExpr(worker);
+		if (worker->token.type != TOKEN_PAREN_CLOSE) {
+			ReportError(worker, worker->token.site, "Expected close paren in expression");
+		}
+		NextToken(worker); // Eat the close paren
+		return expr;
+	} break;
+
 		case TOKEN_NUMBER: {
 				LOG_VERBOSE("Parsing a numberExpression!");
 				auto dotPos = worker->token.string.find(".");
@@ -219,7 +229,6 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 
 		case TOKEN_STRING: {
 			LOG_VERBOSE("Parsing a string expression...");
-			LOG_VERBOSE("WOOF WOOF WOOF! WORK SILLY DEBUGER WORKK!!! STOP HAVING BUGGSS ITS YOUR JOB TO BE THE OPPOSITEOF THAT!!!!!!");
 			auto str = CreateStringLiteral (&worker->arena, worker->token.string);
 			NextToken(worker); // Eat the string token
 			return str;
@@ -234,30 +243,31 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 }
 
 ASTExpression* ParseExprRHS(int exprPrec, ASTExpression* lhs, Worker* worker) {
-	while(true) {
-				//If the token prec is less than 0 that means that this is not a binary opperator
-				//And we dont have to do anything aside from returning the allready parsed expression
+	assert(lhs != nullptr);
+	while (true) {
+				// If the token prec is less than 0 that means that this is not a binary opperator
+				// And we dont have to do anything aside from returning the allready parsed expression
 				auto tokenPrec = GetTokenPrecedence(worker->token);
-				if(tokenPrec < 0) {
+				if (tokenPrec < 0) {
 					return lhs;
 				}
 
-				//We know that the currentToken is a binop
-				//Possibly?	Yes!
+				// We know that the currentToken is a binop
+				// Possibly?	Yes!
 				auto binopToken = worker->token;
-				NextToken(worker);		//Eat the binop
+				NextToken(worker);		// Eat the binop
 
-				//We have a binop lets see what is on the other side!
+				// We have a binop lets see what is on the other side!
 				ASTExpression* rhs = ParsePrimaryExpr(worker);
-				if(rhs == nullptr) {
+				if (rhs == nullptr) {
 					ReportError(worker, binopToken.site, "Could not parse primary expression to the right of binary opperator '" + binopToken.string	+ "'");
 					return nullptr;
 				}
 
-				auto nextPrec = GetTokenPrecedence(worker->token);
-				if(tokenPrec < nextPrec) {
+				auto nextPrec = GetTokenPrecedence (worker->token);
+				if (tokenPrec < nextPrec) {
 					rhs = ParseExprRHS(tokenPrec + 1, rhs, worker);
-					if(rhs == nullptr){
+					if (rhs == nullptr) {
 						LOG_ERROR("Could not parse recursive rhsParsing!");
 						return nullptr;
 					}
@@ -269,10 +279,10 @@ ASTExpression* ParseExprRHS(int exprPrec, ASTExpression* lhs, Worker* worker) {
 
 ASTExpression* ParseExpr(Worker* worker) {
 		auto lhs = ParsePrimaryExpr(worker);
-		if(lhs == nullptr){
+		if (lhs == nullptr){
 				return nullptr;
 		}
-		return ParseExprRHS(0, lhs, worker);
+		return ParseExprRHS (0, lhs, worker);
 }
 
 internal ASTNode* ParseIdentifier(Worker* worker) {

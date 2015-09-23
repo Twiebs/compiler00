@@ -1,1 +1,14 @@
 
++ :: (a : @Vector3 b : @Vector3) :> Vector3
+	vector : Vector3
+	vector.x = a.x + b.x
+	vector.y = a.y + b.y
+	vector.Z = a.z + b.z
+	RETURN vector
+
+- :: (a : @Vector3 b : @Vector3) :> Vector3
+	vector : Vector3
+	vector.x = a.x - b.x
+	vector.y = a.y + b.y
+	vector.z = a.z + b.z
+	RETURN vector

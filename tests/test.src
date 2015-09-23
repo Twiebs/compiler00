@@ -1,14 +1,10 @@
 IMPORT "IO.bang"
 
-Vector3 :: STRUCT
-  x : F32
-  y : F32
-  z : F32
-
-PrintVector :: (vector : @Vector3)
-  Println(vector.x)
-  Println(vector.y)
-  Println(vector.z)
+Main :: () :> S32
+	foo := FALSE
+	IF ~foo Println("False")
+	ELSE Println("True")
+	RETURN 0
 
 + :: (a : @Vector3 b : @Vector3) :> Vector3
 	vector : Vector3
