@@ -2,8 +2,6 @@
 #include <fstream>
 #include "AST.hpp"
 
-// Serious question why the fuck do we care about the llvmModule
-// here??? we have not even created it yet!!!!
 struct Package {
 	ASTBlock globalScope;
 	U64 flags;
@@ -15,11 +13,9 @@ struct Worker {
 	U32 lineNumber = 0, colNumber = 0;
 	int currentIndentLevel = 0;
 	Token token;
-
-  ASTBlock* currentScope = nullptr;
-  U32 errorCount = 0;
-  MemoryArena arena;
-  std::vector<std::string> workQueue;
+    ASTBlock* currentScope = nullptr;
+    U32 errorCount = 0;
+    MemoryArena arena;
 };
 
 enum PackageFlags {
@@ -53,6 +49,6 @@ struct BuildContext {
 	U32 errorCount;
 };
 
-extern "C" int PreBuild(const BuildContext& context, const BuildSettings& settings);
-extern "C" int Build(BuildContext& context, BuildSettings& settings);
-extern "C" int PostBuild(const BuildContext& context, const BuildSettings& settings);
+//extern "C" int PreBuild (const BuildContext& context, const BuildSettings& settings);
+extern "C" void Build ();
+//extern "C" int PostBuild (const BuildContext& context, const BuildSettings& settings);

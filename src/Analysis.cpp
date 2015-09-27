@@ -17,8 +17,38 @@ internal void AnalyzeCall(Worker* worker, ASTCall* call);
 internal inline bool TypeCompare(ASTExpression* exprA, ASTExpression* exprB);
 internal inline bool TypeCheck(ASTExpression* expr, ASTDefinition* typedefn);
 
-// TODO these resolve call functions should not be required to take a worker
-// except mabye they do?
+ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc) {
+    for (auto i = 0; i < funcSet->functions.size(); i++) {
+        auto func = funcSet->functions[i];
+        if (func->args.size() == argc) {
+            if (argc > 0) {
+                bool functionMatches = true;
+                for (auto i = 0; i < argc; i++) {
+                    auto arg = args[i];
+                    if (func->args[i]->type != arg->type) {
+                        functionMatches = false;
+                    }
+                }
+                if (functionMatches)
+                    return func;
+            } else {
+                return func;
+            }
+        } else if (func->isVarArgs) {
+            bool funcMatches = true;
+            for(auto i = 0; i < func->args.size(); i++) {
+                auto arg = args[i];
+                if (!TypeCompare(func->args[i], arg)) {
+                    funcMatches = false;
+                }
+            }
+            if (funcMatches)
+                return func;
+        }
+    }
+    return nullptr;
+}
+
 internal void AnalyzeCall(Worker* worker, ASTCall* call) {
 	assert(call->nodeType == AST_CALL);
 	auto name = (const char*)(((U8*)(call + 1)) + ((sizeof(ASTExpression*) * call->argCount)));
@@ -68,6 +98,10 @@ internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
 
 // This is where we can implement implict castinging between ints / floats / whatever
 // TODO implement implicit casting
+// TODO create a diffrent function for comparing temporary expressions in compound
+// expersions rather than using this function which should be soley for top level expressions
+// THis way the expresions can have implicit casting between temporary values and very strict
+// casting rules when talking about statements.
 internal inline bool TypeCompare (ASTExpression* exprA, ASTExpression* exprB) {
 	if (exprA->type != exprB->type)
 		return false;
@@ -143,7 +177,7 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 
 		else if (var->initalExpression != nullptr){
 			if (!TypeCheck(var->initalExpression, var->type)) {
-				ReportError(worker, "Type mismatch...: (insert clever and useful error here)");
+				ReportError(worker, "Type mismatch!  Variable type does not match inital expression");
 			}
 		}
 
@@ -155,6 +189,11 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 		auto varOp = (ASTVariableOperation*)node;
 		AnalyzeExpr(worker, varOp->expr);
 	} break;
+
+    case AST_MEMBER_OPERATION: {
+        auto memberOp = (ASTMemberOperation*)node;
+        AnalyzeExpr(worker, memberOp->expr);
+    } break;
 
 	case AST_RETURN: {
 		auto retval = (ASTReturn*)node;

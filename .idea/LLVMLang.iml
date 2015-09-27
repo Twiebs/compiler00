@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="CPP_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/CMakeLists.txt" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libcpp/CMakeLists.txt" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libcpp/lib.cpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/AST.cpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/AST.hpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/Build.cpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/Build.hpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/CMakeLists.txt" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/Codegen.cpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/Interpreter.cpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/Lexer.cpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/Parser.cpp" isTestSource="false" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module-library">
+      <library name="Header Search Paths">
+        <CLASSES>
+          <root url="file:///usr/include" />
+          <root url="file:///usr/lib/gcc/x86_64-unknown-linux-gnu/5.2.0/include" />
+          <root url="file:///usr/lib/gcc/x86_64-unknown-linux-gnu/5.2.0/include-fixed" />
+          <root url="file:///usr/lib/gcc/x86_64-unknown-linux-gnu/5.2.0/include/cilk" />
+          <root url="file:///usr/lib/gcc/x86_64-unknown-linux-gnu/5.2.0/include/sanitizer" />
+          <root url="file:///usr/local/include" />
+        </CLASSES>
+        <SOURCES>
+          <root url="file:///usr/include" />
+          <root url="file:///usr/lib/gcc/x86_64-unknown-linux-gnu/5.2.0/include" />
+          <root url="file:///usr/lib/gcc/x86_64-unknown-linux-gnu/5.2.0/include-fixed" />
+          <root url="file:///usr/lib/gcc/x86_64-unknown-linux-gnu/5.2.0/include/cilk" />
+          <root url="file:///usr/lib/gcc/x86_64-unknown-linux-gnu/5.2.0/include/sanitizer" />
+          <root url="file:///usr/local/include" />
+        </SOURCES>
+      </library>
+    </orderEntry>
+  </component>
+</module>

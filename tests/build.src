@@ -1,0 +1,5 @@
+Build :: () FOREIGN
+
+Main :: () :> S32
+	Build()
+	RETURN 0

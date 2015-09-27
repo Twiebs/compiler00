@@ -4,32 +4,39 @@
 #include "Common.hpp"
 #include "Build.hpp"
 
-internal void EatNext (Worker* worker) {
-	worker->lastChar = worker->nextChar;
-	worker->nextChar = getc(worker->file);
-	worker->colNumber++;
-	if (worker->lastChar == '\n') {
-		 worker->lineNumber++;
-		 worker->colNumber = 1;
-	}
+typedef struct {
+	char lastChar, nextChar;
+	U32 colNum, rowNum;
+    U32 indentLevel;
+	char str[1024];
+} lex_state;
+
+internal void EatNext(Worker *worker) {
+    worker->lastChar = worker->nextChar;
+    worker->nextChar = getc(worker->file);
+    worker->colNumber++;
+    if (worker->lastChar == '\n') {
+        worker->lineNumber++;
+        worker->colNumber = 1;
+    }
 }
 
-internal void AppendNext (Worker* worker) {
-	worker->lastChar =	worker->nextChar;
-	worker->nextChar = getc(worker->file);
-	worker->colNumber++;
-	if (worker->lastChar == '\n') {
-		worker->lineNumber++;
-		worker->colNumber = 1;
-	} else {
-		worker->token.string += worker->lastChar;
-	}
+internal void AppendNext(Worker *worker) {
+    worker->lastChar = worker->nextChar;
+    worker->nextChar = getc(worker->file);
+    worker->colNumber++;
+    if (worker->lastChar == '\n') {
+        worker->lineNumber++;
+        worker->colNumber = 1;
+    } else {
+        worker->token.string += worker->lastChar;
+    }
 }
 
-void EatLine (Worker* worker) {
-	while(worker->lastChar != '\n' || worker->lastChar != '\r') {
-		EatNext(worker);
-	}
+void EatLine(Worker *worker) {
+    while (worker->lastChar != '\n' || worker->lastChar != '\r') {
+        EatNext(worker);
+    }
 }
 
 void NextToken (Worker* worker) {
@@ -83,7 +90,7 @@ void NextToken (Worker* worker) {
 		while (isspace(worker->nextChar)) EatNext(worker);
 		if (isalpha(worker->nextChar) || worker->nextChar == '_') {
 			while ((isalnum(worker->nextChar) || worker->nextChar == '_') && worker->nextChar != '.') AppendNext(worker);
-			if 		(worker->token.string == "IMPORT") 			worker->token.type = TOKEN_IMPORT;
+			if (worker->token.string == "IMPORT") 			    worker->token.type = TOKEN_IMPORT;
 			else if (worker->token.string == "FOREIGN")	 		worker->token.type = TOKEN_FOREIGN;
 			else if (worker->token.string == "STRUCT")			worker->token.type = TOKEN_STRUCT;
 			else if (worker->token.string == "IF")				worker->token.type = TOKEN_IF;
@@ -232,7 +239,15 @@ void NextToken (Worker* worker) {
 
 		else if (worker->nextChar == '.') {
 			AppendNext(worker);
-			worker->token.type = TOKEN_ACCESS;
+            if (worker->nextChar == '.') {
+                AppendNext(worker);
+                if (worker->nextChar == '.') {
+                    AppendNext(worker);
+                    worker->token.type = TOKEN_DOTDOT;
+                }
+            } else {
+                worker->token.type = TOKEN_ACCESS;
+            }
 		}
 
 		//BRACES, BRACKETS, SUBSCRIPTS

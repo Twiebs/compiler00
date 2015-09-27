@@ -13,13 +13,16 @@
 
 #include "Analysis.cpp"
 
+void RunInterp();
 void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename);
-void CodegenPackage(Package* package, const BuildContext& context, BuildSettings* settings);
+void CodegenPackage(Package* package, BuildSettings* settings);
 void AnalyzeAST (Worker* worker);	// TODO consider ResolvePacakgeDeps or somthing
 
 int PreBuild(const BuildContext& context, const BuildSettings& settings) {
 	return 0;
 }
+
+global_variable BuildSettings global_settings;
 
 struct WorkQueue {
 	std::mutex mutex;
@@ -39,7 +42,7 @@ void PushWork (const std::string& filename) {
 	LOG_DEBUG("Added filename: " << filename << " to the global work queue");
 }
 
-internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID,	BuildSettings* settings) {
+internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, BuildSettings* settings) {
 	bool working = true;
 
 	auto getWork = [&]() -> const std::string {
@@ -93,31 +96,36 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID,	Bu
 	}
 }
 
-#define FORCE_SINGLE_THREADED 1
-#define ARENA_BLOCK_SIZE 4096
-#define TEMP_BLOCK_SIZE 1 << 8
 // BuildContext is very irrelevant
 // Build should take a package which is given an inital file / name / whatever
-int Build (BuildContext& context, BuildSettings& settings) {
-	// HACK to keep working with current build system
-	Package thePackage;
-	auto package = &thePackage;
+// HACK Quick hacks to test the interpereter and how it will function
+global_variable std::vector<std::string> global_filenames;
+extern "C" void AddPackage(const char* filename) {
+    global_filenames.push_back(std::string(filename));
+}
 
-	InitalizeLanguagePrimitives(&package->globalScope);
-	context.packages.push_back(package);
-	context.currentPackage = package;
-
-	// Create workers for threads
+#define FORCE_SINGLE_THREADED 1
+internal inline U32 GetWorkerCount() {
 #if FORCE_SINGLE_THREADED
-	int workerCount = 1;
+    U32 workerCount = 1;
 #else
-	int workerCount = std::thread::hardware_concurrency();
+    U32 workerCount = std::thread::hardware_concurrency();
 #endif
+    return workerCount;
+}
+
+#define ARENA_BLOCK_SIZE 4096
+#define TEMP_BLOCK_SIZE 1 << 8
+void Build () {
+    Package thePackage;
+    auto package = &thePackage;
+
+    auto workerCount = GetWorkerCount();
 	U32 arenaMemorySize = ARENA_BLOCK_SIZE * workerCount;
 	U32 tempMemorySize = workerCount * TEMP_BLOCK_SIZE;
-	U32 memorySize = (sizeof(Worker) * workerCount) + arenaMemorySize + tempMemorySize;
+	size_t memorySize = (sizeof(Worker) * workerCount) + arenaMemorySize + tempMemorySize;
 	void* workerMemory = malloc(memorySize);
-	LOG_INFO("Created " << workerCount << " workers! and allocated inital memory sized: " << memorySize);
+	LOG_INFO("Created " << workerCount << " workers! Allocated inital memory: " << memorySize << " bytes");
 
 	Worker* workers = (Worker*)workerMemory;
 	U8* arenaMemory = (U8*)(workers + workerCount);
@@ -129,8 +137,14 @@ int Build (BuildContext& context, BuildSettings& settings) {
 		worker->arena.capacity = ARENA_BLOCK_SIZE;
 	}
 
-	// TODO consider pushing these theads on to the transient state of the main thread or somthing
-	// like that
+    // HACK to keep working with current build system
+    auto& settings = global_settings;
+
+
+    InitalizeLanguagePrimitives(&package->globalScope);
+
+
+	// TODO consider pushing these threads on to the transient state of the main thread or something
 	std::vector<std::thread> threads(workerCount - 1);
 	if (workerCount > 1) {
 		for (auto i = workerCount - 2; i >= 0; i--) { // if 4 workers then start at index 2 end at 0
@@ -196,13 +210,12 @@ int Build (BuildContext& context, BuildSettings& settings) {
 
 	if (errorCount != 0) {
 		LOG_ERROR("There were " << errorCount << " errors building the package");
-		return -1;
+		return;
 	}
 
 	LOG_INFO("Generating Package");
-	CodegenPackage(package, context, &settings);
+	CodegenPackage(package, &global_settings);
 	free(workerMemory);
-	return 0;
 }
 
 int PostBuild(const BuildContext& context, const BuildSettings& settings) {
@@ -210,7 +223,7 @@ int PostBuild(const BuildContext& context, const BuildSettings& settings) {
 }
 
 int main (int argc, char** argv) {
-	BuildSettings settings;
+	auto& settings = global_settings;
 	settings.libDirs.push_back("../build/libcpp");
 	settings.libNames.push_back("std");
 	settings.libNames.push_back("SDL");
@@ -220,12 +233,12 @@ int main (int argc, char** argv) {
 	settings.emitNativeOBJ = true;
 	settings.emitExecutable = true;
 
-	BuildContext context;
-
 	// Get the input filename
 	if (argc < 2) {
-		LOG_ERROR("You must specify the filename of the program to be compiled.	Use --help to see the options.");
-		return -1;
+        settings.inputFile = "test.src";
+		LOG_INFO("Running Interpreter...");
+		RunInterp();
+		return 0;
 	}
 
 	const char* inputFilename = argv[1];
@@ -243,9 +256,7 @@ int main (int argc, char** argv) {
 	settings.packageName = packageName;
 	settings.inputFile = input;
 
-	PreBuild(context, settings);
-	Build(context, settings);
-	PostBuild(context, settings);
+	Build();
 
 	return 0;
 }

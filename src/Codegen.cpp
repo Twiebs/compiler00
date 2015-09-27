@@ -53,10 +53,10 @@ void Codegen(ASTStruct* structDefn);
 void Codegen(ASTFunction* function, llvm::Module* module);
 
 // TODO
-// I think that this and a mutation are essentialy the exact same thing
-// Member access just needs to hold some indicies to how deep its reaching into is constituaint members
-// With an extra U32 inside of the struct we can keep track of the indicies of the acces and just combine
-// the member access with a variable mutation... or we could just rename this to somthing better like
+// I think that this and a mutation are essentially the exact same thing
+// Member access just needs to hold some indices to how deep its reaching into is constituent members
+// With an extra U32 inside of the struct we can keep track of the indices of the access and just combine
+// the member access with a variable mutation... or we could just rename this to something better like
 // ASTMemberOperation and ASTVariableOperation which i think may be a much better alternative
 // These two things would be statements and would not require any return values
 
@@ -99,7 +99,7 @@ internal void CodegenPrimitiveTypes() {
 	global_F128Type->llvmType = llvm::Type::getFP128Ty(llvm::getGlobalContext());
 }
 
-void CodegenPackage (Package* package, const BuildContext& context, BuildSettings* settings) {
+void CodegenPackage (Package* package, BuildSettings* settings) {
 	CodegenPrimitiveTypes();
 	global_module = new llvm::Module("BangCompiler", llvm::getGlobalContext());
 
@@ -163,7 +163,7 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 	}
 
 	// Create the llvm function
-	llvm::FunctionType* funcType = llvm::FunctionType::get((llvm::Type*)function->returnType->llvmType, args, false);
+	llvm::FunctionType* funcType = llvm::FunctionType::get((llvm::Type*)function->returnType->llvmType, args, function->isVarArgs);
 	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
 	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, global_module);
 
@@ -353,22 +353,11 @@ llvm::Value* Codegen(ASTCall* call) {
 
 	std::vector<llvm::Value*> argsV;
 	auto argList = (ASTExpression**)(call + 1);
-	for (auto i = 0; i < call->function->args.size(); i++) {
+	for (auto i = 0; i < call->argCount; i++) {
 		auto arg = argList[i];
 		auto arg_value = CodegenExpr(arg);
 		assert(arg_value != nullptr);
-		if (arg->nodeType == AST_STRING_LITERAL) {
-			// This doesnt make anysense of course we would just pass the pointer to the
-			// function????
-			auto zeroVal = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
-			std::vector<llvm::Value*> indices;
-			indices.push_back(zeroVal);
-			indices.push_back(zeroVal); // This is insane there has to be a better way
-			// arg_value = builder->CreateGEP(arg_value, indices, "strgep");
-			argsV.push_back(arg_value);
-		} else {
-			argsV.push_back(arg_value);
-		}
+        argsV.push_back(arg_value);
 	}
 
 	if(call->function->returnType != global_voidType) {

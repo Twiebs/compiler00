@@ -193,27 +193,7 @@ ASTFunction* CreateFunction (ASTFunctionSet* funcSet) {
 	return function;
 }
 
-ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc) {
-  for (auto i = 0; i < funcSet->functions.size(); i++) {
-    auto func = funcSet->functions[i];
-    if (func->args.size() == argc) {
-    	if (argc > 0) {
-		  bool functionMatches = true;
-		  for (auto i = 0; i < argc; i++) {
-			  auto arg = args[i];
-			  if (func->args[i]->type != arg->type) {
-				  functionMatches = false;
-			  }
-		  }
-		  if (functionMatches)
-			  return func;
-    	} else {
-    		return func;
-    	}
-    }
-  }
-  return nullptr;
-}
+
 
 ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function) {
 	auto funcSet = (ASTFunctionSet*)ident->node;

@@ -53,11 +53,14 @@ enum TokenType {
 	// Literals
 	TOKEN_TRUE,
 	TOKEN_FALSE,
+
 	// TODO we check if the token has a dot in it during the lex phase
 	// then we check if it has a dot again in the parExpr phase.
 	// Just return a different token it will be cheaper
 	TOKEN_NUMBER,
 	TOKEN_STRING,
+
+    TOKEN_DOTDOT,
 
 	TOKEN_PAREN_OPEN,
 	TOKEN_PAREN_CLOSE,
@@ -192,15 +195,24 @@ struct ASTIter : public ASTNode {
 struct ASTFunction : public ASTBlock {
 	ASTIdentifier* ident;
 	ASTDefinition* returnType;
+    bool isVarArgs = false;
 	std::vector<ASTVariable*> args;
 	void* llvmFunction;
 };
 
-// I dont like the idea of storing identifiers
-// Inside of  ASTNodes
-// Why is it relevant at all?
+// Structs should be stored seperately from the functions because they dont depend
+// on anything except other structs, therefore it is more efficant to codegen them
+// linearly
+struct ASTStructMember {
+    char* name;
+    bool isPointer = false;
+    ASTExpression* initalExpr;
+    ASTDefinition* type;
+};
+
 struct ASTStruct : public ASTDefinition {
-	std::vector<std::string> memberNames;
+
+    std::vector<std::string> memberNames;
 	std::vector<ASTDefinition*> memberTypes;
 	std::vector<bool> memberIsPointer;
 };
@@ -289,6 +301,14 @@ struct ASTReturn : public ASTExpression {
 struct ASTCall : public ASTNode {
 	ASTFunction* function;
 	U32 argCount;
+};
+
+struct ASTLiteral : public ASTExpression {
+    union {
+        S64 intVal;
+        F64 floatVal;
+        U8* stringVal;
+    };
 };
 
 struct ASTIntegerLiteral : public ASTExpression {

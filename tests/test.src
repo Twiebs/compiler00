@@ -1,12 +1,18 @@
 IMPORT "IO.bang"
 
-CreateWindow :: () FOREIGN
-NewFrame :: () FOREIGN
+Vector3 :: STRUCT
+	x : S32
+	y : S32
+	z : S32
+
+Print :: (vector : @Vector3)
+	printf("[%d, %d, %d]" vector.x vector.y vector.z)
+
+Print :: (name : @U8 vector : @Vector3)
+	printf("%s[%d, %d, %d]" name vector.x vector.y vector.z)
 
 Main :: () :> S32
-	CreateWindow()
-	i : ITER 0 TO 10
-		NewFrame()
-		i -= 1
-	
+	position : Vector3
+	Print("position" @position)
+
 	RETURN 0

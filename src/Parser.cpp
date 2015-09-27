@@ -2,9 +2,6 @@
 #include "AST.hpp"
 #include "Build.hpp"
 
-// TODO a better way would be to store the precedences in a array
-// and directly lookup the value without branching... especialy if the
-// of opperators begins to increase For now 'if' hax FTW!
 
 void PushWork (const std::string& filename);
 
@@ -22,7 +19,7 @@ internal ASTNode* ParseIter(Worker* worker, const std::string& identName = "");
 internal ASTNode* ParseBlock(Worker* worker, ASTBlock* block = nullptr);
 
 // Determines the precedence level of the provided token
-internal int GetTokenPrecedence(const Token& token) {
+internal int GetTokenPrecedence (const Token& token) {
 	if (token.type == TOKEN_ADD) return 20;
 	if (token.type == TOKEN_SUB) return 20;
 	if (token.type == TOKEN_MUL) return 40;
@@ -242,7 +239,7 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 		// This is dead code it will never happen.
 }
 
-ASTExpression* ParseExprRHS(int exprPrec, ASTExpression* lhs, Worker* worker) {
+ASTExpression* ParseExprRHS (int exprPrec, ASTExpression* lhs, Worker* worker) {
 	assert(lhs != nullptr);
 	while (true) {
 				// If the token prec is less than 0 that means that this is not a binary opperator
@@ -358,11 +355,10 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 	} break;
 
 	case TOKEN_TYPE_DEFINE: {
-		LOG_DEBUG("Parsing TypeDefine");
 		NextToken(worker); // Eat the typedef
-		if (worker->token.type == TOKEN_PAREN_OPEN) {
-			LOG_DEBUG("Parsing FunctionDefinition");
 
+        // @FUNCTION
+		if (worker->token.type == TOKEN_PAREN_OPEN) {
 			ASTFunctionSet* funcSet;
 			if (ident == nullptr) {	// The identifier is null so the function set for this ident has not been created
 				if (identToken.string == "Main") identToken.string = "main";
@@ -378,8 +374,20 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 			worker->currentScope = function;
 			NextToken(worker); // Eat the open paren
 
+
+
 			while (worker->token.type != TOKEN_PAREN_CLOSE) {
-				ASTNode* node = ParseStatement(worker);
+				if (worker->token.type == TOKEN_DOTDOT) {
+                    function->isVarArgs = true;
+                    NextToken(worker);
+                    if (worker->token.type != TOKEN_PAREN_CLOSE) {
+                        ReportError(worker, "VarArgs must appear at the end of the argument list");
+                    } else {
+                        break;
+                    }
+                }
+
+                ASTNode* node = ParseStatement(worker);
 				if (node == nullptr) {
 					ReportError(worker, worker->token.site, "Could not parse arguments for function definition " + identToken.string);
 				} else if (node->nodeType != AST_VARIABLE) {
