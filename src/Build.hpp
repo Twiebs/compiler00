@@ -16,6 +16,8 @@ struct Worker {
     ASTBlock* currentScope = nullptr;
     U32 errorCount = 0;
     MemoryArena arena;
+    U8* tempMemory;
+    U8* currentTempLocation;
 };
 
 enum PackageFlags {

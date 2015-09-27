@@ -16,7 +16,7 @@
 void RunInterp();
 void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename);
 void CodegenPackage(Package* package, BuildSettings* settings);
-void AnalyzeAST (Worker* worker);	// TODO consider ResolvePacakgeDeps or somthing
+void AnalyzeAST (Worker* worker);
 
 int PreBuild(const BuildContext& context, const BuildSettings& settings) {
 	return 0;
@@ -29,17 +29,29 @@ struct WorkQueue {
 	std::condition_variable cond;
 	std::atomic<int> activeWorkers;
 	std::atomic<int> workCount;
+    std::vector<std::string> importedFiles;
 	std::vector<std::string> workList;	// TODO remove this std::vector<std::string> insanity
 };
 
 global_variable WorkQueue global_workQueue;
 void PushWork (const std::string& filename) {
 	global_workQueue.mutex.lock();
-	global_workQueue.workList.push_back(filename);
-	global_workQueue.workCount++;
-	global_workQueue.mutex.unlock();
-	global_workQueue.cond.notify_one();
-	LOG_DEBUG("Added filename: " << filename << " to the global work queue");
+    bool containsFilename = false;
+    for (auto& str : global_workQueue.importedFiles) {
+        if (!str.compare(filename)) {
+            containsFilename = true;
+        }
+    }
+
+    if (!containsFilename) {
+        global_workQueue.importedFiles.push_back(filename);
+        global_workQueue.workList.push_back(filename);
+        global_workQueue.workCount++;
+        global_workQueue.cond.notify_one();
+        LOG_DEBUG("Added filename: " << filename << " to the global work queue");
+    }
+
+    global_workQueue.mutex.unlock();
 }
 
 internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, BuildSettings* settings) {
@@ -104,7 +116,7 @@ extern "C" void AddPackage(const char* filename) {
     global_filenames.push_back(std::string(filename));
 }
 
-#define FORCE_SINGLE_THREADED 1
+#define FORCE_SINGLE_THREADED 0
 internal inline U32 GetWorkerCount() {
 #if FORCE_SINGLE_THREADED
     U32 workerCount = 1;
@@ -144,7 +156,6 @@ void Build () {
     InitalizeLanguagePrimitives(&package->globalScope);
 
 
-	// TODO consider pushing these threads on to the transient state of the main thread or something
 	std::vector<std::thread> threads(workerCount - 1);
 	if (workerCount > 1) {
 		for (auto i = workerCount - 2; i >= 0; i--) { // if 4 workers then start at index 2 end at 0
@@ -193,15 +204,6 @@ void Build () {
 		}
 	}
 	LOG_INFO("Analysis Complete");
-	// That's what i will do!
-	// TODO we need a more robust way of doing this resolve dependencies work
-	// Perhaps the best way to acomplish this is to do absoutly no working during the parsing phase of the AST
-	// and then allways typecheck and resolve deps for every statement /expr in the tree after all files within a
-	// package have been parsed
-
-	// During the parsing phase the compiler will only check to make sure that you are not overwriting somthing that has allreayd been declared
-	// ResolveDependencies(worker);
-	// ResolveAbstractSyntaxTree(worker);
 
 	U32 errorCount = 0;
 	for (auto i = 0; i < workerCount; i++) {

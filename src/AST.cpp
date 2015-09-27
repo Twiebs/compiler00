@@ -54,6 +54,8 @@ void InitalizeLanguagePrimitives(ASTBlock* scope) {
 	global_F128Type  = CreatePrimitiveType(scope, "F128");
 }
 
+// TODO why doesnt this stuff completly fuck the threads up
+// oh... i was running signle threaded....
 global_variable std::unordered_map<std::string, ASTIdentifier*> global_identifierLookupMap;
 global_variable ASTIdentifier global_identifiers[1024];
 global_variable U32 global_identifierCount = 0;
@@ -110,7 +112,7 @@ ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* v
 	auto result = (ASTVariableOperation*)Allocate(arena, sizeof(ASTVariableOperation));
 	result->nodeType = AST_VARIABLE_OPERATION;
 	result->variable = var;
-  result->operation = op;
+    result->operation = op;
 	result->expr = expr;
 	return result;
 }
@@ -120,10 +122,10 @@ ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* struc
 	result->nodeType = AST_MEMBER_OPERATION;
 	result->structVar = structVar;
 	result->operation = operation;
-  result->expr = expr;
-  result->indexCount = indexCount;
-  auto indexptr = (U32*)(result + 1);
-  memcpy(indexptr, indices, sizeof(U32) * indexCount);
+    result->expr = expr;
+    result->indexCount = indexCount;
+    auto indexptr = (U32*)(result + 1);
+    memcpy(indexptr, indices, sizeof(U32) * indexCount);
 	return result;
 }
 
@@ -133,13 +135,15 @@ ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, TokenType binop, A
 	result->binop = binop;
 	result->lhs = lhs;
 	result->rhs = rhs;
-	return result;
+    return result;
 }
 
-//TODO move structs to new allocator system
-ASTStruct* CreateStruct() {
-	auto result = new ASTStruct;
+ASTStruct* CreateStruct(MemoryArena* arena, ASTStructMember* members, U32 memberCount) {
+	auto result = (ASTStruct*)Allocate(arena, sizeof(ASTStruct) + (sizeof(ASTStructMember)*memberCount));
 	result->nodeType = AST_STRUCT;
+    result->members = (ASTStructMember*)(result + 1);
+    result->memberCount = memberCount;
+    memcpy(result->members, members, memberCount * sizeof(ASTStructMember));
 	return result;
 }
 
@@ -149,7 +153,7 @@ ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, Unar
 	result->nodeType = AST_MEMBER_EXPR;
 	result->structVar = structVar;
 	result->indexCount = indexCount;
-  result->accessMod = accessMod;
+    result->accessMod = accessMod;
 	auto resultIndices = (U32*)(result + 1);
 	memcpy(resultIndices, indices, indexCount * sizeof(U32));
 	return result;
@@ -165,15 +169,17 @@ ASTVarExpr* CreateVarExpr (MemoryArena* arena, ASTVariable* var, UnaryOperator a
 }
 
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
-	for (auto i = 0; i < structDefn->memberNames.size(); i++) {
-		auto& structMemberName = structDefn->memberNames[i];
-		if (!structMemberName.compare(memberName)) {
+	for (auto i = 0; i < structDefn->memberCount; i++) {
+        auto structMember = structDefn->members[i];
+		if (!memberName.compare(structMember.name)) {
 			return i;
 		}
 	}
 	return -1;
 }
 
+// Perhaps a identifier can point to a FunctionResolver()
+// Which determines the correct call for the function to use
 ASTFunctionSet* CreateFunctionSet (ASTIdentifier* ident, ASTBlock* block) {
 	ASTFunctionSet* funcSet = new ASTFunctionSet;
 	funcSet->nodeType = AST_FUNCTION;
@@ -182,18 +188,15 @@ ASTFunctionSet* CreateFunctionSet (ASTIdentifier* ident, ASTBlock* block) {
 	return funcSet;
 }
 
-// Perhaps in the future a CreateFunction / could take a package instead of a block
 ASTFunction* CreateFunction (ASTFunctionSet* funcSet) {
 	ASTFunction* function = new ASTFunction;
 	function->nodeType = AST_FUNCTION;
 	function->parent = funcSet->parent;
-  function->llvmFunction = nullptr;
+    function->llvmFunction = nullptr;
 	funcSet->functions.push_back(function);
 	funcSet->parent->members.push_back(function);	// HACK the hacks are real!
 	return function;
 }
-
-
 
 ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function) {
 	auto funcSet = (ASTFunctionSet*)ident->node;
@@ -227,10 +230,10 @@ ASTCall* CreateCall (MemoryArena* arena, ASTExpression** argList, U32 argCount, 
 	call->nodeType = AST_CALL;
 	call->argCount = argCount;
 	call->function = nullptr;
-  auto argptr = (U8*)(call + 1);
-  auto argsize = sizeof(ASTExpression*) * argCount;
-  memcpy(argptr, argList, argsize);
-  memcpy((argptr + argsize), name, strlen(name) + 1);
+     auto argptr = (U8*)(call + 1);
+    auto argsize = sizeof(ASTExpression*) * argCount;
+    memcpy(argptr, argList, argsize);
+    memcpy((argptr + argsize), name, strlen(name) + 1);
 	return call;
 }
 
@@ -287,11 +290,11 @@ ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, ASTBlock*
 	result->block = block;
 	result->allocaInst = nullptr;
 	result->isPointer = false;
-  auto strptr = (U8*)(result + 1);
-  memcpy(strptr, name, strlen(name));
-  strptr += strlen(name);
-  *strptr = '\0';
-  result->name = (char*)strptr;
+    auto strptr = (U8*)(result + 1);
+    memcpy(strptr, name, strlen(name));
+    strptr += strlen(name);
+    *strptr = '\0';
+    result->name = (char*)strptr;
 	return result;
 }
 

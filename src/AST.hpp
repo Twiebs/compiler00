@@ -17,12 +17,12 @@ enum TokenType {
 	TOKEN_TYPE_RETURN,
 
 	TOKEN_STRUCT,
-	TOKEN_ACCESS,	// MemberAcess to be clearer?
+	TOKEN_ACCESS,	// MemberAccess to be clearer?
 
 	TOKEN_ADDRESS,
 	TOKEN_VALUE,
 
-	//Binops
+	// Binops
 	TOKEN_ADD,
 	TOKEN_SUB,
 	TOKEN_MUL,
@@ -43,7 +43,7 @@ enum TokenType {
 	TOKEN_MUL_EQUALS,
 	TOKEN_DIV_EQUALS,
 
-	//Keywords
+	// Keywords
 	TOKEN_IF,
 	TOKEN_ELSE,
 	TOKEN_ITER,
@@ -87,10 +87,15 @@ struct Token {
 	std::string string;
 };
 
-struct IdentMap {
-	U64* keys;
-	void** values;
+// TODO add dynamic array
+template<typename T>
+class Array {
+    size_t capacity;
+    U32 count;
+    T* data;
 };
+
+
 
 #define ARENA_BLOCK_SIZE 4096
 struct MemoryArena {
@@ -98,6 +103,7 @@ struct MemoryArena {
   size_t capacity = 0;
   void* memory = nullptr;
 };
+
 void* Allocate (MemoryArena* arena, size_t size);
 
 enum ASTNodeType {
@@ -108,19 +114,17 @@ enum ASTNodeType {
 	AST_FUNCTION,
 	AST_STRUCT,
 
+    AST_VARIABLE,
+
 	AST_MEMBER_OPERATION,
 	AST_VARIABLE_OPERATION,
 
 	AST_MEMBER_EXPR,
-
-	AST_VARIABLE,
-	AST_VAR_EXPR,
-	AST_MUTATION,
+    AST_VAR_EXPR,
+    AST_CALL,
 
 	AST_IF,
 	AST_ITER,
-
-	AST_CALL,
 	AST_RETURN,
 
 	AST_INTEGER_LITERAL,
@@ -160,7 +164,7 @@ struct ASTExpression : public ASTNode {
 	ASTDefinition* type;
 };
 
-// It is now time to have somesort of notion of scope!
+// It is now time to have some sort of notion of scope!
 struct ASTBlock : public ASTNode {
 	U8 depth = 0;
 	ASTBlock* parent = nullptr;	//null if the global scope
@@ -211,10 +215,8 @@ struct ASTStructMember {
 };
 
 struct ASTStruct : public ASTDefinition {
-
-    std::vector<std::string> memberNames;
-	std::vector<ASTDefinition*> memberTypes;
-	std::vector<bool> memberIsPointer;
+    ASTStructMember* members;
+    U32 memberCount;
 };
 
 enum Operation {
@@ -244,6 +246,13 @@ struct ASTVarExpr : public ASTExpression {
 	UnaryOperator accessMod;
 };
 
+// TODO
+// I think that this and a mutation are essentially the exact same thing
+// Member access just needs to hold some indices to how deep its reaching into is constituent members
+// With an extra U32 inside of the struct we can keep track of the indices of the access and just combine
+// the member access with a variable mutation... or we could just rename this to something better like
+// ASTMemberOperation and ASTVariableOperation which i think may be a much better alternative
+// These two things would be statements and would not require any return values
 struct ASTMemberOperation : public ASTNode {
 	ASTVariable* structVar;
 	ASTExpression* expr;
@@ -279,12 +288,6 @@ struct ASTBinaryOperation : public ASTExpression {
 struct ASTReturn : public ASTExpression {
 	ASTExpression* value;
 };
-
-// This is the fullstatement that the parse ident should return
-// If a variable mutation is being parsed
-// TODO consider renaming varop->value to expr because it does not really refer to a value
-// it refers to a expresion of arbitary granulatiry
-
 
 // ASTCall stores its arguments after the struct itself
 // The procede directly after the arg count and are just pointers to
@@ -340,7 +343,7 @@ extern ASTDefinition* global_F32Type;
 extern ASTDefinition* global_F64Type;
 extern ASTDefinition* global_F128Type;
 
-//Identifiers
+// Identifiers
 ASTIdentifier* CreateIdentifier(ASTBlock* scope, const Token& token);
 ASTIdentifier* CreateIdentifier(ASTBlock* scope, const std::string& name);
 ASTIdentifier* CreateIdentifier(const std::string& name);
@@ -348,18 +351,15 @@ ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name);
 ASTIdentifier* FindIdentifier(ASTBlock* block, const char* name);
 ASTIdentifier* FindIdentifier(ASTBlock* block, const Token& token);
 ASTIdentifier* FindIdentifier(const std::string& name);
-void ResolveIdentifier(ASTBlock* block, const std::string& name);	// WTF
 
 // Statements
 ASTFunctionSet* CreateFunctionSet(ASTIdentifier* ident, ASTBlock* block);		// This is where identifiers are resolved into
 ASTFunction* CreateFunction(ASTFunctionSet* funcSet);	// Functions now must be created within a function set
 ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function);
-ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc);
 
 ASTBlock* CreateBlock(ASTBlock* block);
 
-ASTStruct* CreateStruct (ASTBlock* block);
-ASTStruct* CreateStruct();
+ASTStruct* CreateStruct (MemoryArena* arena, ASTStructMember* members, U32 memberCount);
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);

@@ -52,13 +52,7 @@ internal void CodegenPrimitiveTypes();
 void Codegen(ASTStruct* structDefn);
 void Codegen(ASTFunction* function, llvm::Module* module);
 
-// TODO
-// I think that this and a mutation are essentially the exact same thing
-// Member access just needs to hold some indices to how deep its reaching into is constituent members
-// With an extra U32 inside of the struct we can keep track of the indices of the access and just combine
-// the member access with a variable mutation... or we could just rename this to something better like
-// ASTMemberOperation and ASTVariableOperation which i think may be a much better alternative
-// These two things would be statements and would not require any return values
+
 
 // Statements
 void CodegenStatement(ASTNode* node);
@@ -141,9 +135,9 @@ void CodegenPackage (Package* package, BuildSettings* settings) {
 
 void Codegen(ASTStruct* structDefn) {
 	std::vector<llvm::Type*> memberTypes;
-	for (auto i = 0; i < structDefn->memberTypes.size(); i++) {
-		auto& type = structDefn->memberTypes[i];
-		auto llvmType = structDefn->memberIsPointer[i] ? llvm::PointerType::get((llvm::Type*)type->llvmType, 0) : (llvm::Type*)type->llvmType;
+	for (auto i = 0; i < structDefn->memberCount; i++) {
+		auto& type = structDefn->members[i].type;
+		auto llvmType = structDefn->members[i].isPointer ? llvm::PointerType::get((llvm::Type*)type->llvmType, 0) : (llvm::Type*)type->llvmType;
 		memberTypes.push_back(llvmType);
 	}
 	auto& structName = structDefn->identifier->name;
@@ -151,8 +145,8 @@ void Codegen(ASTStruct* structDefn) {
 }
 
 void Codegen(ASTFunction* function, llvm::Module* module) {
-	//HACK to skip function codegen if the function has allready been resolved
-	if (function->llvmFunction != nullptr) return; // We never should have to return anything with these statements
+	// HACK to skip function codegen if the function has allready been resolved
+	if (function->llvmFunction != nullptr) return;
 
 	std::vector<llvm::Type*> args(function->args.size());
 	for (auto i = 0; i < args.size(); i++) {
@@ -168,14 +162,14 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, global_module);
 
 	// TODO arguments are created even if the function has no members!
-	if(function->members.size() > 0) {
+	if (function->members.size() > 0) {
 		llvm::BasicBlock* block = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", llvmFunc);
 		builder->SetInsertPoint(block);
 	}
 
 	// Create the allocas for our arguments!
 	U32 i = 0;
-	for(auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++){
+	for (auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++) {
 		auto name = (const char*)(function->args[i] + 1);
 		iter->setName(name);
 		if(function->members.size() > 0) {
@@ -187,16 +181,16 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 	//The function must always do something...
 	bool returnInstructionSeen = false;
 	if (function->members.size() > 0) {
-		for(U32 i = 0; i < function->members.size(); i++) {
+		for (U32 i = 0; i < function->members.size(); i++) {
 			auto node = function->members[i];
-			if(node->nodeType == AST_IF) {
+			if (node->nodeType == AST_IF) {
 				auto mergeBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", llvmFunc);
 				Codegen((ASTIfStatement*)node, mergeBlock, llvmFunc);
 				builder->SetInsertPoint(mergeBlock);
 				continue;
 			}
 
-			if(node->nodeType == AST_RETURN) {
+			if (node->nodeType == AST_RETURN) {
 				returnInstructionSeen = true;
 			}
 			CodegenStatement(node);
@@ -211,8 +205,8 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 		}
 	}
 
-	//TODO sanity check to make sure this function was foreign if it did not have a body
-	//Also do a sainy check to make sure that it has created return values for all flow paths
+	// TODO sanity check to make sure this function was foreign if it did not have a body
+	// Also do a sainy check to make sure that it has created return values for all flow paths
 
 	function->llvmFunction = llvmFunc;
 }
@@ -322,16 +316,14 @@ llvm::Value* CodegenExpr(ASTNode* node) {
 static llvm::Value* Codegen (ASTBinaryOperation* binop)	{
 	llvm::Value* lhs = CodegenExpr(binop->lhs);
 	llvm::Value* rhs = CodegenExpr(binop->rhs);
-	assert(lhs && rhs );
+	assert(lhs && rhs);
 
 	switch (binop->binop) {
 		case TOKEN_ADD: return builder->CreateAdd(lhs, rhs, "addtmp");
 		case TOKEN_SUB: return builder->CreateSub(lhs, rhs, "subtmp");
 		case TOKEN_MUL: return builder->CreateMul(lhs, rhs, "multmp");
 		case TOKEN_DIV: return builder->CreateSDiv(lhs, rhs, "divtmp");
-		default:
-			LOG_ERROR("Invalid binary operator");
-			return nullptr;
+		default: assert(false); return nullptr;
 	}
 }
 

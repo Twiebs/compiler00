@@ -1,0 +1,22 @@
+IMPORT "IO.bang"
+
+Vector3 :: STRUCT
+	x : S32
+	y : S32
+	z : S32
+
+Transform3D :: STRUCT
+	position : Vector3
+	rotation : Vector3
+	scale 	 : Vector3
+
+Print :: (transform : @Transform3D)
+	Print("position" @transform.position)
+	Print("\nrotation" @transform.rotation)
+	Print("\nscale" @transform.scale)
+
+Print :: (vector : @Vector3)
+	printf("[%d, %d, %d]" vector.x vector.y vector.z)
+
+Print :: (name : @U8 vector : @Vector3)
+	printf("%s[%d, %d, %d]" name vector.x vector.y vector.z)

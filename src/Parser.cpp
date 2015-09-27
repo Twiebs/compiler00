@@ -1,3 +1,4 @@
+#include <string.h>
 #include "Common.hpp"
 #include "AST.hpp"
 #include "Build.hpp"
@@ -173,7 +174,7 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 					ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->identifier->name + "'");
 				} else {
 					indices.push_back(memberIndex);
-					auto memberType = currentStruct->memberTypes[memberIndex];
+					auto memberType = currentStruct->members[memberIndex].type;
 					if(memberType->nodeType == AST_STRUCT)
 						currentStruct = (ASTStruct*)memberType;
 					exprType = memberType;
@@ -463,22 +464,16 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 
 	// NOTE @STRUCT
 	else if (worker->token.type == TOKEN_STRUCT) {
-		LOG_DEBUG("Parsing a struct definition!");
 		NextToken(worker); // Eat the struct keyword
-
 		if (ident != nullptr) {
 			ReportError(worker, identToken.site, "Struct Redefinition");
 		}
 
 		ident = CreateIdentifier(worker->currentScope, identToken);
-
 		if (worker->token.type == TOKEN_SCOPE_OPEN) {
 			NextToken(worker); // Eat the open scope
 
-			auto structDefn = CreateStruct();
-			structDefn->identifier = ident;
-			ident->node = structDefn;
-
+            std::vector<ASTStructMember> members;
 			while (worker->token.type != TOKEN_SCOPE_CLOSE) {
 				if (worker->token.type != TOKEN_IDENTIFIER) {
 					ReportError(worker, worker->token.site, "All statements inside structDefns must be identifier decls");
@@ -504,16 +499,23 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 				}
 
 				auto typedefn = (ASTDefinition*)typeIdent->node;
-				structDefn->memberNames.push_back(memberToken.string);
-				structDefn->memberTypes.push_back(typedefn);
-				structDefn->memberIsPointer.push_back(isPointer); //This is utterly hilarious!
+				members.push_back(ASTStructMember());
+                auto& structMember = members[members.size() - 1];
+                // HACK
+                structMember.name = (char*)Allocate(&worker->arena, memberToken.string.length() + 1);
+                memcpy(structMember.name, memberToken.string.c_str(), memberToken.string.length() + 1);
+				structMember.isPointer = isPointer;
+				structMember.type = typedefn;
+
 				NextToken(worker); // eat the type ident
 			}
 
-			assert(structDefn->memberNames.size() == structDefn->memberTypes.size());
-				NextToken(worker); //Eat the close scope
+            NextToken(worker); //Eat the close scope
 
-			if (structDefn->memberTypes.size() > 0) {
+			if (members.size() > 0) {
+                auto structDefn = CreateStruct(&worker->arena, &members[0], members.size());
+                structDefn->identifier = ident;
+                ident->node = structDefn;
 				worker->currentScope->members.push_back(structDefn);
 			} else {
 				ReportError(worker, identToken.site, "Structs must contain at least one member");
@@ -556,7 +558,7 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 			if (memberIndex == -1) ReportError(worker, worker->token.site, "Struct " + ident->name + "does not contain any member named " + worker->token.string);
 			memberIndices.push_back(memberIndex);
 
-			auto memberType = currentStruct->memberTypes[memberIndex];
+			auto memberType = currentStruct->members[memberIndex].type;
 			if(memberType->nodeType == AST_STRUCT) currentStruct = (ASTStruct*)memberType;
 			NextToken(worker);	// Eat the member identifier
 		}

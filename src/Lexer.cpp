@@ -48,23 +48,22 @@ void NextToken (Worker* worker) {
 				return;
 			}
 
-			int indentCount = 0;
+			int indentLevel = 0;
 			while (worker->nextChar == '\t' || worker->nextChar == ' ') {
 				int spaceCount = 0;
 				if (worker->nextChar == ' ') {
 					spaceCount++;
 					EatNext(worker);
 					if (spaceCount > INDENT_SPACE_COUNT) {
-						indentCount++;
+                        indentLevel++;
 						spaceCount = 0;
 					}
 				} else {
 					EatNext(worker);
-					indentCount++;
+                    indentLevel++;
 				}
 			}
 
-			auto indentLevel = indentCount;	// @Cleanup
 			if (indentLevel > worker->currentIndentLevel) {
 				worker->token.string = "";
 				worker->token.type = TOKEN_SCOPE_OPEN;;
