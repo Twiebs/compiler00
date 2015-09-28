@@ -42,7 +42,7 @@ typedef double 	  F64;
 
 #if LOG_LEVEL > 1
 #ifdef ENABLE_COLOR_OUTPUT
-#define LOG_INFO(msg) std::cout << "[INFO] \x1b[33m" << msg << "\033[39m\n"
+#define LOG_INFO(msg) std::cout << "[INFO]\033[33m" << msg << "[39m\n"
 #else
 #define LOG_INFO(x) std::cout << "[INFO] " << x << "\n"
 #endif	//COLOR_OUTPUT

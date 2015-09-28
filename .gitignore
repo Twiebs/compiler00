@@ -1,6 +1,8 @@
 build/
 eclipse/
 *.o
+*.ll
 app
 .tags
 .tags1
+.idea

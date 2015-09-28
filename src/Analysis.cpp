@@ -14,8 +14,9 @@ internal inline void AnalyzeBlock(Worker* worker, ASTBlock* block);
 internal void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement);
 internal void AnalyzeCall(Worker* worker, ASTCall* call);
 
-internal inline bool TypeCompare(ASTExpression* exprA, ASTExpression* exprB);
 internal inline bool TypeCheck(ASTExpression* expr, ASTDefinition* typedefn);
+internal inline bool TypeCompareExplicit(ASTExpression* exprA, ASTExpression* exprB);
+internal inline bool TypeCompareImplicit(ASTExpression* exprA, ASTExpression* exprB);
 
 ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc) {
     for (auto i = 0; i < funcSet->functions.size(); i++) {
@@ -38,7 +39,7 @@ ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 ar
             bool funcMatches = true;
             for(auto i = 0; i < func->args.size(); i++) {
                 auto arg = args[i];
-                if (!TypeCompare(func->args[i], arg)) {
+                if (!TypeCompareExplicit(func->args[i], arg)) {
                     funcMatches = false;
                 }
             }
@@ -87,7 +88,7 @@ internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
 		auto binop = (ASTBinaryOperation*)expr;
 		AnalyzeExpr(worker, binop->lhs);
 		AnalyzeExpr(worker, binop->rhs);
-		if (TypeCompare(binop->lhs, binop->rhs)) {
+		if (TypeCompareImplicit(binop->lhs, binop->rhs)) {
 			binop->type = binop->lhs->type;
 		} else {
 			ReportError(worker, "Type mismatch in binary operation: " + binop->lhs->type->identifier->name + ", " + binop->rhs->type->identifier->name);
@@ -96,16 +97,19 @@ internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
 	}
 }
 
-// This is where we can implement implict castinging between ints / floats / whatever
-// TODO implement implicit casting
-// TODO create a diffrent function for comparing temporary expressions in compound
-// expersions rather than using this function which should be soley for top level expressions
-// THis way the expresions can have implicit casting between temporary values and very strict
-// casting rules when talking about statements.
-internal inline bool TypeCompare (ASTExpression* exprA, ASTExpression* exprB) {
+
+
+internal inline bool TypeCompareExplicit (ASTExpression* exprA, ASTExpression* exprB) {
 	if (exprA->type != exprB->type)
 		return false;
 	return true;
+}
+
+// TODO implement implicit casting only for temporary constants in expressions
+internal inline bool TypeCompareImplicit (ASTExpression* exprA, ASTExpression* exprB) {
+    if (exprA->type != exprB->type)
+        return false;
+    return true;
 }
 
 internal inline bool TypeCheck (ASTExpression* expr, ASTDefinition* typedefn) {
@@ -145,7 +149,7 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 		AnalyzeExpr(worker, iter->start);
 		if (iter->end != nullptr) {
 			AnalyzeExpr(worker, iter->end);
-			if (!TypeCompare(iter->start, iter->end)) {
+			if (!TypeCompareExplicit(iter->start, iter->end)) {
 				ReportError(worker, "Cannot iterate between two different types");
 			}
 		}
@@ -212,7 +216,7 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 }
 
 static void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement) {
-	assert (ifStatement->expr != nullptr);
+	assert(ifStatement->expr != nullptr);
 	AnalyzeExpr(worker, ifStatement->expr);
 	AnalyzeStatement(worker, ifStatement->ifBody);
 	if (ifStatement->elseBody != nullptr) {
@@ -220,13 +224,9 @@ static void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement) {
 	}
 }
 
-// NOTE / TODO / WOOF
-// Should we maintain some list of epxressions for each worker
-// this list of expressions can be used to do things followed by stuff
-// except this become much more complicated than expected because you need to consider
-// mutliple compound expressions and how they related to their coresponding statements!
-// Bollocks!
-
+// In here we would be hitting structDefns as well as functions
+// Since we know all the structs take care of themselves it might make sense
+// To keep these seperatly but for now i will keep them the same
 void AnalyzeAST (Worker* worker) {
 	for (auto i = 0; i < worker->currentScope->members.size(); i++) {
 		auto node = worker->currentScope->members[i];

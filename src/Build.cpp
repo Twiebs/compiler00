@@ -158,7 +158,7 @@ void Build () {
 
 	std::vector<std::thread> threads(workerCount - 1);
 	if (workerCount > 1) {
-		for (auto i = workerCount - 2; i >= 0; i--) { // if 4 workers then start at index 2 end at 0
+		for (int i = workerCount - 2; i >= 0; i--) { // if 4 workers then start at index 2 end at 0
 				Worker* worker = &workers[i + 1]; // add a 1 because there are workerCount workers
 				threads[i] = std::thread(ThreadProc, worker, &global_workQueue, i + 1, &settings); // add one again because 0 is the main thread
 		}
@@ -174,7 +174,7 @@ void Build () {
 	// The main thread has fallen out of its work loop, insure all other threads have also finished
 	// execution and block untill they do so.
 	if (workerCount > 1) {
-		for (auto i = workerCount - 2; i >= 0; i--) {
+		for (int i = workerCount - 2; i >= 0; i--) {
 			auto& thread = threads[i];
 			thread.join();
 		}
@@ -185,7 +185,7 @@ void Build () {
 
 	// Now we resolve the dependices of our workers
 	if (workerCount > 1) {
-		for(auto i = workerCount - 2; i >= 0; i--) {
+		for(S32 i = workerCount - 2; i >= 0; i--) {
 			threads[i] = std::thread(AnalyzeAST, &workers[i + 1]);
 		}
 	}
@@ -198,7 +198,7 @@ void Build () {
 	// we have no idea how much work is left for the other threads so
 	// we block until they are all finished
 	if (workerCount > 1) {
-		for (auto i = workerCount - 2; i >= 0; i--) {
+		for (S32 i = workerCount - 2; i >= 0; i--) {
 			auto& thread = threads[i];
 			thread.join();
 		}
@@ -206,7 +206,7 @@ void Build () {
 	LOG_INFO("Analysis Complete");
 
 	U32 errorCount = 0;
-	for (auto i = 0; i < workerCount; i++) {
+	for (S32 i = 0; i < workerCount; i++) {
 		errorCount += workers[i].errorCount;
 	}
 

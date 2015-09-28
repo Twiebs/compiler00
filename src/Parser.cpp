@@ -1,4 +1,6 @@
 #include <string.h>
+#include <stdarg.h>
+
 #include "Common.hpp"
 #include "AST.hpp"
 #include "Build.hpp"
@@ -28,6 +30,7 @@ internal int GetTokenPrecedence (const Token& token) {
 	return -1;
 }
 
+void ReportError (Worker* worker, FileSite* site, const std::string& msg, ...);
 void ReportError (Worker* worker, FileSite& site, const std::string& msg);
 void ReportError (Worker* worker, const std::string& msg);
 
@@ -39,6 +42,14 @@ void ReportError(Worker* worker, FileSite& site, const std::string& msg) {
 void ReportError(Worker* worker, const std::string& msg) {
 	worker->errorCount++;
 	std::cout << "[ERROR] \x1b[31m" << msg	<< "\033[39m\n";
+}
+
+void ReportError(Worker* worker, FileSite* site, const std::string& msg, ...) {
+    va_list args;
+    va_start(args, msg);
+    printf(msg.c_str(), args);
+    va_end(args);
+    printf("\n");
 }
 
 ASTNode* ParseImport(Worker* worker) {
@@ -96,7 +107,8 @@ ASTCall* ParseCall(Worker* worker, const Token& identToken) {
 		ASTExpression* expr = ParseExpr(worker);
 		if (expr == nullptr) {
 			ReportError(worker, worker->token.site, " Could not resolve expression for argument at index:XXX in call to function named" + identToken.string);
-
+            printf("Could not resolve expression for argument at index %d in call to function named: %s", args.size(), identToken.string.c_str());
+            ReportError(worker, &worker->token.site, "Could not resolve expression for argument at index %d in call to function named: %s", args.size(), identToken.string.c_str());
 		} else {
 			args.push_back(expr);
 		}
