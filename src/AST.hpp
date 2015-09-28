@@ -253,11 +253,13 @@ struct ASTVarExpr : public ASTExpression {
 // the member access with a variable mutation... or we could just rename this to something better like
 // ASTMemberOperation and ASTVariableOperation which i think may be a much better alternative
 // These two things would be statements and would not require any return values
+
 struct ASTMemberOperation : public ASTNode {
 	ASTVariable* structVar;
 	ASTExpression* expr;
 	Operation operation;
 	U32 indexCount;
+    U32* indices;
 };
 
 struct ASTVariableOperation : public ASTNode {

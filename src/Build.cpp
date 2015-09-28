@@ -22,8 +22,8 @@ int PreBuild(const BuildContext& context, const BuildSettings& settings) {
 	return 0;
 }
 
+// HACK
 global_variable BuildSettings global_settings;
-
 struct WorkQueue {
 	std::mutex mutex;
 	std::condition_variable cond;
@@ -50,7 +50,6 @@ void PushWork (const std::string& filename) {
         global_workQueue.cond.notify_one();
         LOG_DEBUG("Added filename: " << filename << " to the global work queue");
     }
-
     global_workQueue.mutex.unlock();
 }
 
@@ -108,14 +107,6 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, Bu
 	}
 }
 
-// BuildContext is very irrelevant
-// Build should take a package which is given an inital file / name / whatever
-// HACK Quick hacks to test the interpereter and how it will function
-global_variable std::vector<std::string> global_filenames;
-extern "C" void AddPackage(const char* filename) {
-    global_filenames.push_back(std::string(filename));
-}
-
 #define FORCE_SINGLE_THREADED 0
 internal inline U32 GetWorkerCount() {
 #if FORCE_SINGLE_THREADED
@@ -137,17 +128,20 @@ void Build () {
 	U32 tempMemorySize = workerCount * TEMP_BLOCK_SIZE;
 	size_t memorySize = (sizeof(Worker) * workerCount) + arenaMemorySize + tempMemorySize;
 	void* workerMemory = malloc(memorySize);
-	LOG_INFO("Created " << workerCount << " workers! Allocated inital memory: " << memorySize << " bytes");
 
 	Worker* workers = (Worker*)workerMemory;
 	U8* arenaMemory = (U8*)(workers + workerCount);
-	for (auto i = 0; i < workerCount; i++) {
+    U8* tempMemory = (U8*)(arenaMemory + arenaMemorySize);
+	for (U32 i = 0; i < workerCount; i++) {
 		Worker* worker = &workers[i];
 		worker = new (worker) Worker;
 		worker->currentScope = &package->globalScope;
+        worker->tempMemory = tempMemory + (i * TEMP_BLOCK_SIZE);
 		worker->arena.memory = arenaMemory + (i * ARENA_BLOCK_SIZE);
 		worker->arena.capacity = ARENA_BLOCK_SIZE;
 	}
+
+    LOG_INFO("Created " << workerCount << " workers! Allocated inital memory: " << memorySize << " bytes");
 
     // HACK to keep working with current build system
     auto& settings = global_settings;

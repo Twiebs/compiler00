@@ -2,5 +2,4 @@ IMPORT "IO.bang"
 
 Main :: () :> S32
 	printf("Literal Test: %d" 5)
-	Print(sdfdsfsdf)
 	RETURN 0

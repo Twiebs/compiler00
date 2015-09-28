@@ -10,29 +10,28 @@ void PushWork (const std::string& filename);
 
 void EatLine(Worker* worker);
 void NextToken(Worker* worker);
-internal int GetTokenPrecedence(const Token& token);
+internal inline int GetTokenPrecedence(const Token& token);
 
 internal ASTNode* ParseStatement(Worker* worker);
 internal ASTExpression* ParseExpr(Worker* worker);
 internal ASTNode* ParseReturn(Worker* worker);
 
-internal ASTNode* ParseIdentifier(Worker* worker);
-internal ASTNode* ParseIF(Worker* worker);
-internal ASTNode* ParseIter(Worker* worker, const std::string& identName = "");
-internal ASTNode* ParseBlock(Worker* worker, ASTBlock* block = nullptr);
+internal inline ASTNode* ParseIdentifier(Worker* worker);
+internal inline ASTNode* ParseIF(Worker* worker);
+internal inline ASTNode* ParseIter(Worker* worker, const std::string& identName = "");
+internal inline ASTNode* ParseBlock(Worker* worker, ASTBlock* block = nullptr);
 
-// Determines the precedence level of the provided token
-internal int GetTokenPrecedence (const Token& token) {
+void ReportError (Worker* worker, FileSite* site, const char* msg, ...);
+void ReportError (Worker* worker, FileSite& site, const std::string& msg);
+void ReportError (Worker* worker, const std::string& msg);
+
+internal inline int GetTokenPrecedence (const Token& token) {
 	if (token.type == TOKEN_ADD) return 20;
 	if (token.type == TOKEN_SUB) return 20;
 	if (token.type == TOKEN_MUL) return 40;
 	if (token.type == TOKEN_DIV) return 40;
 	return -1;
 }
-
-void ReportError (Worker* worker, FileSite* site, const std::string& msg, ...);
-void ReportError (Worker* worker, FileSite& site, const std::string& msg);
-void ReportError (Worker* worker, const std::string& msg);
 
 void ReportError(Worker* worker, FileSite& site, const std::string& msg) {
 	worker->errorCount++;
@@ -44,10 +43,10 @@ void ReportError(Worker* worker, const std::string& msg) {
 	std::cout << "[ERROR] \x1b[31m" << msg	<< "\033[39m\n";
 }
 
-void ReportError(Worker* worker, FileSite* site, const std::string& msg, ...) {
+void ReportError(Worker* worker, FileSite* site, const char* msg, ...) {
     va_list args;
     va_start(args, msg);
-    printf(msg.c_str(), args);
+    printf(msg, args);
     va_end(args);
     printf("\n");
 }
@@ -106,8 +105,6 @@ ASTCall* ParseCall(Worker* worker, const Token& identToken) {
 	while (worker->token.type != TOKEN_PAREN_CLOSE) {
 		ASTExpression* expr = ParseExpr(worker);
 		if (expr == nullptr) {
-			ReportError(worker, worker->token.site, " Could not resolve expression for argument at index:XXX in call to function named" + identToken.string);
-            printf("Could not resolve expression for argument at index %d in call to function named: %s", args.size(), identToken.string.c_str());
             ReportError(worker, &worker->token.site, "Could not resolve expression for argument at index %d in call to function named: %s", args.size(), identToken.string.c_str());
 		} else {
 			args.push_back(expr);
@@ -295,7 +292,7 @@ ASTExpression* ParseExpr(Worker* worker) {
 		return ParseExprRHS (0, lhs, worker);
 }
 
-internal ASTNode* ParseIdentifier(Worker* worker) {
+internal inline ASTNode* ParseIdentifier(Worker* worker) {
 	auto identToken = worker->token;	// save the token for now
 	auto ident = FindIdentifier(worker->currentScope, worker->token.string);
 	NextToken(worker);	// Eat the identifier
@@ -649,7 +646,7 @@ internal ASTNode* ParseIdentifier(Worker* worker) {
 	return nullptr;
 }
 
-ASTNode* ParseIF(Worker* worker) {
+internal inline ASTNode* ParseIF(Worker* worker) {
 	NextToken(worker);	// Eat the IF token
 	auto expr = ParseExpr(worker);
 	if (!expr) {
@@ -668,7 +665,7 @@ ASTNode* ParseIF(Worker* worker) {
 	return ifStatement;
 }
 
-ASTNode* ParseIter (Worker* worker, const std::string& identName) {
+internal inline ASTNode* ParseIter (Worker* worker, const std::string& identName) {
 	LOG_VERBOSE(worker->token.site << "Parsing a iter statement");
 	NextToken(worker); // Eat the iter
 
@@ -706,7 +703,7 @@ ASTNode* ParseIter (Worker* worker, const std::string& identName) {
 	return nullptr;
 }
 
-ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
+internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 	assert(worker->token.type == TOKEN_SCOPE_OPEN);
 	NextToken(worker);	 // Eat the SCOPE_OPEN
 	auto previousScope = worker->currentScope;

@@ -126,7 +126,8 @@ ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* struc
     result->indexCount = indexCount;
     auto indexptr = (U32*)(result + 1);
     memcpy(indexptr, indices, sizeof(U32) * indexCount);
-	return result;
+	result->indices = indexptr;
+    return result;
 }
 
 ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, TokenType binop, ASTExpression* lhs, ASTExpression* rhs) {
@@ -299,8 +300,8 @@ ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, ASTBlock*
 }
 
 // Control flow
-ASTIfStatement* CreateIfStatement(ASTExpression* expr) {
-	auto result = new ASTIfStatement;
+ASTIfStatement* CreateIfStatement(MemoryArena* arena, ASTExpression* expr) {
+    auto result = (ASTIfStatement*)(arena, sizeof(ASTIfStatement));
 	result->nodeType = AST_IF;
 	result->expr = expr;
 	result->ifBody = nullptr;
@@ -308,8 +309,8 @@ ASTIfStatement* CreateIfStatement(ASTExpression* expr) {
 	return result;
 }
 
-ASTIter* CreateIter(ASTVariable* var, ASTExpression* start, ASTExpression* end, ASTExpression* step, ASTBlock* body) {
-	auto result = new ASTIter;
+ASTIter* CreateIter(MemoryArena* arena, ASTVariable* var, ASTExpression* start, ASTExpression* end, ASTExpression* step, ASTBlock* body) {
+	auto result = (ASTIter*)Allocate(arena, sizeof(ASTIter));
 	result->nodeType = AST_ITER;
 	result->var = var;
 	result->start = start;
