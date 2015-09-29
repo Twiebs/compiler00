@@ -97,7 +97,7 @@ void CodegenPackage (Package* package, BuildSettings* settings) {
 	CodegenPrimitiveTypes();
 	global_module = new llvm::Module("BangCompiler", llvm::getGlobalContext());
 
- 	for (ASTNode* node : package->globalScope.members) {
+ 	for (ASTNode* node : package->globalBlock.members) {
 		switch (node->nodeType) {
 			case AST_FUNCTION:
 				Codegen((ASTFunction*)node, global_module);
@@ -140,7 +140,7 @@ void Codegen(ASTStruct* structDefn) {
 		auto llvmType = structDefn->members[i].isPointer ? llvm::PointerType::get((llvm::Type*)type->llvmType, 0) : (llvm::Type*)type->llvmType;
 		memberTypes.push_back(llvmType);
 	}
-	auto& structName = structDefn->identifier->name;
+	auto& structName = structDefn->name;
 	structDefn->llvmType = llvm::StructType::create(memberTypes, structName);
 }
 
@@ -159,7 +159,8 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 	// Create the llvm function
 	llvm::FunctionType* funcType = llvm::FunctionType::get((llvm::Type*)function->returnType->llvmType, args, function->isVarArgs);
 	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
-	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->ident->name, global_module);
+
+	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->name, global_module);
 
 	// TODO arguments are created even if the function has no members!
 	if (function->members.size() > 0) {

@@ -1,10 +1,6 @@
 #include "Common.hpp"
 #include "Build.hpp"
 
-#include <string>
-#include <iostream>
-#include <fstream>
-
 #include <chrono>
 #include <atomic>
 #include <thread>
@@ -13,44 +9,54 @@
 
 #include "Analysis.cpp"
 
+struct WorkQueue {
+    std::mutex mutex;
+    std::condition_variable cond;
+    std::atomic<int> activeWorkers;
+    std::atomic<int> workCount;
+    std::vector<std::string> importedFiles;
+    std::vector<std::string> workList;	// TODO remove this std::vector<std::string> insanity
+};
+
+struct Workspace {
+    U32 workerCount;
+    Worker* workers;
+    WorkQueue workQueue;
+
+    void* memory;
+};
+
 void RunInterp();
 void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename);
 void CodegenPackage(Package* package, BuildSettings* settings);
 void AnalyzeAST (Worker* worker);
 
-int PreBuild(const BuildContext& context, const BuildSettings& settings) {
-	return 0;
-}
+
+
+global_variable Workspace global_workspace;
+
 
 // HACK
 global_variable BuildSettings global_settings;
-struct WorkQueue {
-	std::mutex mutex;
-	std::condition_variable cond;
-	std::atomic<int> activeWorkers;
-	std::atomic<int> workCount;
-    std::vector<std::string> importedFiles;
-	std::vector<std::string> workList;	// TODO remove this std::vector<std::string> insanity
-};
 
-global_variable WorkQueue global_workQueue;
 void PushWork (const std::string& filename) {
-	global_workQueue.mutex.lock();
+    WorkQueue* queue = &global_workspace.workQueue;
+    queue->mutex.lock();
     bool containsFilename = false;
-    for (auto& str : global_workQueue.importedFiles) {
+    for (auto& str : queue->importedFiles) {
         if (!str.compare(filename)) {
             containsFilename = true;
         }
     }
 
     if (!containsFilename) {
-        global_workQueue.importedFiles.push_back(filename);
-        global_workQueue.workList.push_back(filename);
-        global_workQueue.workCount++;
-        global_workQueue.cond.notify_one();
+        queue->importedFiles.push_back(filename);
+        queue->workList.push_back(filename);
+        queue->workCount++;
+        queue->cond.notify_one();
         LOG_DEBUG("Added filename: " << filename << " to the global work queue");
     }
-    global_workQueue.mutex.unlock();
+    queue->mutex.unlock();
 }
 
 internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, BuildSettings* settings) {
@@ -107,54 +113,60 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, Bu
 	}
 }
 
-#define FORCE_SINGLE_THREADED 0
-internal inline U32 GetWorkerCount() {
-#if FORCE_SINGLE_THREADED
-    U32 workerCount = 1;
-#else
-    U32 workerCount = std::thread::hardware_concurrency();
-#endif
-    return workerCount;
-}
+// TODO InitWorkspace should be able to be done lazily if the interp is run instead of directly
+// calling the compiler to run on a file / package
 
+#define FORCE_SINGLE_THREADED 1
 #define ARENA_BLOCK_SIZE 4096
 #define TEMP_BLOCK_SIZE 1 << 8
-void Build () {
-    Package thePackage;
-    auto package = &thePackage;
+internal void InitWorkspace (Workspace* workspace) {
+    workspace->workerCount = FORCE_SINGLE_THREADED ?  1 : std::thread::hardware_concurrency();
+    U32 arenaMemorySize = ARENA_BLOCK_SIZE * workspace->workerCount ;
+    U32 tempMemorySize = workspace->workerCount * TEMP_BLOCK_SIZE;
+    size_t memorySize = (sizeof(Worker) * workspace->workerCount ) + arenaMemorySize + tempMemorySize;
+    workspace->memory = malloc(memorySize);
+    workspace->workers = (Worker*)workspace->memory;
 
-    auto workerCount = GetWorkerCount();
-	U32 arenaMemorySize = ARENA_BLOCK_SIZE * workerCount;
-	U32 tempMemorySize = workerCount * TEMP_BLOCK_SIZE;
-	size_t memorySize = (sizeof(Worker) * workerCount) + arenaMemorySize + tempMemorySize;
-	void* workerMemory = malloc(memorySize);
-
-	Worker* workers = (Worker*)workerMemory;
-	U8* arenaMemory = (U8*)(workers + workerCount);
-    U8* tempMemory = (U8*)(arenaMemory + arenaMemorySize);
-	for (U32 i = 0; i < workerCount; i++) {
-		Worker* worker = &workers[i];
-		worker = new (worker) Worker;
-		worker->currentScope = &package->globalScope;
+    Worker* workers = (Worker*)workspace->memory;
+    U8* arenaMemory = (U8*)(workers + workspace->workerCount );
+    U8* tempMemory = arenaMemory + arenaMemorySize;
+    for (U32 i = 0; i < workspace->workerCount ; i++) {
+        Worker* worker = &workers[i];
+        worker = new (worker) Worker;
         worker->tempMemory = tempMemory + (i * TEMP_BLOCK_SIZE);
-		worker->arena.memory = arenaMemory + (i * ARENA_BLOCK_SIZE);
-		worker->arena.capacity = ARENA_BLOCK_SIZE;
-	}
+        worker->arena.memory = arenaMemory + (i * ARENA_BLOCK_SIZE);
+        worker->arena.capacity = ARENA_BLOCK_SIZE;
+    }
+}
 
-    LOG_INFO("Created " << workerCount << " workers! Allocated inital memory: " << memorySize << " bytes");
+// TODO after subarenas are added make sure they are freed as well
+internal void ExitWorkspace (Workspace* workspace) {
+    free(workspace->memory);
+}
 
+
+void Build () {
     // HACK to keep working with current build system
+    Package thePackage;
+    Package* package = &thePackage;
     auto& settings = global_settings;
+    Workspace* workspace = &global_workspace;
+    Worker* mainWorker = &global_workspace.workers[0];
 
+    InitalizeLanguagePrimitives(&mainWorker->arena, &package->globalBlock);
+    std::string typeName = "U8";
+    auto typeDefn = (ASTDefinition*)FindNodeWithIdent(&package->globalBlock, typeName);
 
-    InitalizeLanguagePrimitives(&package->globalScope);
+    for (U32 i = 0; i < workspace->workerCount; i++) {
+        Worker* worker = &workspace->workers[i];
+        worker->currentBlock = &package->globalBlock;
+    }
 
-
-	std::vector<std::thread> threads(workerCount - 1);
-	if (workerCount > 1) {
-		for (int i = workerCount - 2; i >= 0; i--) { // if 4 workers then start at index 2 end at 0
-				Worker* worker = &workers[i + 1]; // add a 1 because there are workerCount workers
-				threads[i] = std::thread(ThreadProc, worker, &global_workQueue, i + 1, &settings); // add one again because 0 is the main thread
+	std::vector<std::thread> threads(workspace->workerCount - 1);
+	if (workspace->workerCount > 1) {
+		for (int i = workspace->workerCount - 2; i >= 0; i--) { // if 4 workers then start at index 2 end at 0
+				Worker* worker = &workspace->workers[i + 1]; // add a 1 because there are workerCount workers
+				threads[i] = std::thread(ThreadProc, worker, &workspace->workQueue, i + 1, &settings); // add one again because 0 is the main thread
 		}
 	}
 
@@ -163,12 +175,12 @@ void Build () {
 	using namespace std::literals;
 	std::this_thread::sleep_for(1ms);
 	PushWork(settings.inputFile);
-	ThreadProc(&workers[0], &global_workQueue, 0, &settings);	// Kick of the main thread
+	ThreadProc(&workspace->workers[0], &workspace->workQueue, 0, &settings);	// Kick of the main thread
 
 	// The main thread has fallen out of its work loop, insure all other threads have also finished
 	// execution and block untill they do so.
-	if (workerCount > 1) {
-		for (int i = workerCount - 2; i >= 0; i--) {
+	if (workspace->workerCount > 1) {
+		for (int i = workspace->workerCount - 2; i >= 0; i--) {
 			auto& thread = threads[i];
 			thread.join();
 		}
@@ -178,21 +190,21 @@ void Build () {
 
 
 	// Now we resolve the dependices of our workers
-	if (workerCount > 1) {
-		for(S32 i = workerCount - 2; i >= 0; i--) {
-			threads[i] = std::thread(AnalyzeAST, &workers[i + 1]);
+	if (workspace->workerCount > 1) {
+		for(S32 i = workspace->workerCount - 2; i >= 0; i--) {
+			threads[i] = std::thread(AnalyzeAST, &workspace->workers[i + 1]);
 		}
 	}
 
 
 	LOG_INFO("Analyzing Package");
-	AnalyzeAST(&workers[0]);	// The main thread resolves its tree
+	AnalyzeAST(&workspace->workers[0]);	// The main thread resolves its tree
 
 	// The main thread has finsihed execution of AST resolution
 	// we have no idea how much work is left for the other threads so
 	// we block until they are all finished
-	if (workerCount > 1) {
-		for (S32 i = workerCount - 2; i >= 0; i--) {
+	if (workspace->workerCount > 1) {
+		for (S32 i = workspace->workerCount - 2; i >= 0; i--) {
 			auto& thread = threads[i];
 			thread.join();
 		}
@@ -200,8 +212,8 @@ void Build () {
 	LOG_INFO("Analysis Complete");
 
 	U32 errorCount = 0;
-	for (S32 i = 0; i < workerCount; i++) {
-		errorCount += workers[i].errorCount;
+	for (S32 i = 0; i < workspace->workerCount; i++) {
+		errorCount += workspace->workers[i].errorCount;
 	}
 
 	if (errorCount != 0) {
@@ -211,14 +223,11 @@ void Build () {
 
 	LOG_INFO("Generating Package");
 	CodegenPackage(package, &global_settings);
-	free(workerMemory);
-}
-
-int PostBuild(const BuildContext& context, const BuildSettings& settings) {
-	return 0;
 }
 
 int main (int argc, char** argv) {
+    InitWorkspace(&global_workspace);
+
 	auto& settings = global_settings;
 	settings.libDirs.push_back("../build/libcpp");
 	settings.libNames.push_back("std");
@@ -234,6 +243,7 @@ int main (int argc, char** argv) {
         settings.inputFile = "test.src";
 		LOG_INFO("Running Interpreter...");
 		RunInterp();
+        ExitWorkspace(&global_workspace);
 		return 0;
 	}
 
@@ -254,5 +264,6 @@ int main (int argc, char** argv) {
 
 	Build();
 
+    ExitWorkspace(&global_workspace);
 	return 0;
 }

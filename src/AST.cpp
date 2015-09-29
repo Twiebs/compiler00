@@ -1,4 +1,5 @@
 #include "AST.hpp"
+#include "Build.hpp"
 #include <cstring>
 
 void* Allocate (MemoryArena* arena, size_t size) {
@@ -11,7 +12,6 @@ void* Allocate (MemoryArena* arena, size_t size) {
   }
 }
 
-ASTBlock global_defaultGlobalScope;
 ASTDefinition* global_voidType;
 ASTDefinition* global_U8Type;
 ASTDefinition* global_U16Type;
@@ -26,85 +26,62 @@ ASTDefinition* global_F32Type;
 ASTDefinition* global_F64Type;
 ASTDefinition* global_F128Type;
 
-internal ASTDefinition* CreatePrimitiveType(ASTBlock* scope, const std::string& name) {
-	auto ident = CreateIdentifier(scope, name);
-	auto typeDefn = new ASTDefinition;
-	typeDefn->nodeType = AST_DEFINITION;
-	typeDefn->identifier = ident;
-	ident->node = typeDefn;
+// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK) ^ (1 << 64)
+
+// TODO put nodeType initalization in the constructor of the ASTNodes
+
+internal inline ASTDefinition* CreatePrimitiveType(MemoryArena* arena, ASTBlock* block, const std::string& name) {
+	auto typeDefn = new (Allocate(arena, sizeof(ASTDefinition))) ASTDefinition;
+    typeDefn->nodeType = AST_DEFINITION;
+    typeDefn->name = (char*)Allocate(arena, name.size() + 1);
+    memcpy(typeDefn->name, name.c_str(), name.size() + 1);
+    typeDefn->llvmType = nullptr;
+    AssignIdent(block, typeDefn, name);
 	return typeDefn;
 }
 
-void InitalizeLanguagePrimitives(ASTBlock* scope) {
-	global_voidType = CreatePrimitiveType(scope, "Void");
+void InitalizeLanguagePrimitives(MemoryArena* arena, ASTBlock* block) {
+	global_voidType = CreatePrimitiveType(arena, block, "Void");
 
-	global_U8Type  = CreatePrimitiveType(scope, "U8");
-	global_U16Type = CreatePrimitiveType(scope, "U16");
-	global_U32Type = CreatePrimitiveType(scope, "U32");
-	global_U64Type = CreatePrimitiveType(scope, "U64");
+	global_U8Type  = CreatePrimitiveType(arena, block, "U8");
+	global_U16Type = CreatePrimitiveType(arena, block, "U16");
+	global_U32Type = CreatePrimitiveType(arena, block, "U32");
+	global_U64Type = CreatePrimitiveType(arena, block, "U64");
 
-	global_S8Type  = CreatePrimitiveType(scope, "S8");
-	global_S16Type = CreatePrimitiveType(scope, "S16");
-	global_S32Type = CreatePrimitiveType(scope, "S32");
-	global_S64Type = CreatePrimitiveType(scope, "S64");
+	global_S8Type  = CreatePrimitiveType(arena, block, "S8");
+	global_S16Type = CreatePrimitiveType(arena, block, "S16");
+	global_S32Type = CreatePrimitiveType(arena, block, "S32");
+	global_S64Type = CreatePrimitiveType(arena, block, "S64");
 
-	global_F16Type   = CreatePrimitiveType(scope, "F16");
-	global_F32Type   = CreatePrimitiveType(scope, "F32");
-	global_F64Type   = CreatePrimitiveType(scope, "F64");
-	global_F128Type  = CreatePrimitiveType(scope, "F128");
+	global_F16Type   = CreatePrimitiveType(arena, block, "F16");
+	global_F32Type   = CreatePrimitiveType(arena, block, "F32");
+	global_F64Type   = CreatePrimitiveType(arena, block, "F64");
+	global_F128Type  = CreatePrimitiveType(arena, block, "F128");
 }
 
-// TODO why doesnt this stuff completly fuck the threads up
-// oh... i was running signle threaded....
-global_variable std::unordered_map<std::string, ASTIdentifier*> global_identifierLookupMap;
-global_variable ASTIdentifier global_identifiers[1024];
-global_variable U32 global_identifierCount = 0;
-
-ASTIdentifier* CreateIdentifier (const std::string& name) {
-	auto result = &global_identifiers[global_identifierCount++];
-	global_identifierLookupMap[name] = result;
-	result->name = name;
-	return result;
+void AssignIdent (ASTBlock* block, ASTNode* node, const std::string& name) {
+    if (block->parent == nullptr) {
+#if FORCE_SINGLE_THREADED
+        assert(false && "Must implement lock on global scope with current build setup!");
+#endif
+        // if the block is null then this block belongs to the packages global scope and we need to lock it because multiple threads
+        // can try and write to it.
+    }
+    block->identmap[name] = node;
 }
 
-ASTIdentifier* CreateIdentifier(ASTBlock* scope, const Token& token) {
-	auto result = &global_identifiers[global_identifierCount++];
-	global_identifierLookupMap[token.string] = result;
-	result->site = token.site;
-	result->name = token.string;
-	scope->identifiers[token.string] = result;
-	return result;
-}
-
-ASTIdentifier* CreateIdentifier(ASTBlock* scope, const std::string& name) {
-	auto result = &global_identifiers[global_identifierCount++];
-	global_identifierLookupMap[name] = result;
-	result->name = name;
-	scope->identifiers[name] = result;
-	return result;
-}
-
-ASTIdentifier* FindIdentifier(const std::string& name) {
-	auto result = global_identifierLookupMap[name];
-	return result;
-}
-
-ASTIdentifier* FindIdentifier(ASTBlock* block, const Token& token) {
-	auto result = global_identifierLookupMap[token.string];
-	return result;
-}
-
-ASTIdentifier* FindIdentifier(ASTBlock* block, const char* name) {
-	auto result = block->identifiers[name];
+ASTNode* FindNodeWithIdent (ASTBlock* block, const std::string& name) {
+	auto result = block->identmap[name];
 	if (!result && block->parent != nullptr)
-		result = FindIdentifier(block->parent, name);
-	return result;
-}
-
-ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name) {
-	auto result = block->identifiers[name];
-	if (!result && block->parent != nullptr)
-		result = FindIdentifier(block->parent, name);
+		result = FindNodeWithIdent(block->parent, name);
 	return result;
 }
 
@@ -139,24 +116,26 @@ ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, TokenType binop, A
     return result;
 }
 
-ASTStruct* CreateStruct(MemoryArena* arena, ASTStructMember* members, U32 memberCount) {
-	auto result = (ASTStruct*)Allocate(arena, sizeof(ASTStruct) + (sizeof(ASTStructMember)*memberCount));
-	result->nodeType = AST_STRUCT;
-    result->members = (ASTStructMember*)(result + 1);
-    result->memberCount = memberCount;
-    memcpy(result->members, members, memberCount * sizeof(ASTStructMember));
-	return result;
+ASTStruct* CreateStruct(MemoryArena* arena, const std::string& name,  ASTStructMember* members, U32 memberCount) {
+	auto structDefn = new (Allocate(arena, sizeof(ASTStruct))) ASTStruct;
+    structDefn->name = (char*)Allocate(arena, name.size() + 1);
+    structDefn->members= (ASTStructMember*)Allocate(arena, sizeof(ASTStructMember) * memberCount);
+    structDefn->nodeType = AST_STRUCT;
+    structDefn ->memberCount = memberCount;
+    memcpy(structDefn ->members, members, memberCount * sizeof(ASTStructMember));
+    memcpy(structDefn->name, name.c_str(), name.size() + 1);
+	return structDefn;
 }
 
 
 ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, U32* indices, U32 indexCount) {
-	auto result = (ASTMemberExpr*)Allocate(arena, (sizeof(ASTMemberExpr) + (sizeof(U32*)*indexCount)));
+	auto result = (ASTMemberExpr*)Allocate(arena, (sizeof(ASTMemberExpr)));
 	result->nodeType = AST_MEMBER_EXPR;
 	result->structVar = structVar;
-	result->indexCount = indexCount;
     result->accessMod = accessMod;
-	auto resultIndices = (U32*)(result + 1);
-	memcpy(resultIndices, indices, indexCount * sizeof(U32));
+    result->indexCount = indexCount;
+    result->indices = (U32*)Allocate(arena, sizeof(result->indices) * indexCount);
+	memcpy(result->indices, indices, indexCount * sizeof(U32));
 	return result;
 }
 
@@ -181,26 +160,24 @@ S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
 
 // Perhaps a identifier can point to a FunctionResolver()
 // Which determines the correct call for the function to use
-ASTFunctionSet* CreateFunctionSet (ASTIdentifier* ident, ASTBlock* block) {
-	ASTFunctionSet* funcSet = new ASTFunctionSet;
+
+ASTFunctionSet* CreateFunctionSet (MemoryArena* arena) {
+	ASTFunctionSet* funcSet = (ASTFunctionSet*)Allocate(arena, sizeof(ASTFunctionSet));
 	funcSet->nodeType = AST_FUNCTION;
-	funcSet->parent = block;
-	ident->node = funcSet;
 	return funcSet;
 }
 
-ASTFunction* CreateFunction (ASTFunctionSet* funcSet) {
-	ASTFunction* function = new ASTFunction;
+ASTFunction* CreateFunction (MemoryArena* arena, ASTBlock* block, const std::string& name, ASTFunctionSet* funcSet) {
+	ASTFunction* function = new (Allocate(arena, sizeof(ASTFunction))) ASTFunction;
+    function->name = (char*)Allocate(arena, name.size() + 1);
+    function->parent = block;
 	function->nodeType = AST_FUNCTION;
-	function->parent = funcSet->parent;
     function->llvmFunction = nullptr;
-	funcSet->functions.push_back(function);
-	funcSet->parent->members.push_back(function);	// HACK the hacks are real!
+    memcpy(function->name, name.c_str(), name.size() + 1);
 	return function;
 }
 
-ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function) {
-	auto funcSet = (ASTFunctionSet*)ident->node;
+ASTFunction* FindMatchingFunction(ASTFunctionSet* funcSet, ASTFunction* function) {
 	assert(funcSet->nodeType == AST_FUNCTION);
 	for(auto func : funcSet->functions) {
 		bool functionsMatch = true;
@@ -322,7 +299,8 @@ ASTIter* CreateIter(MemoryArena* arena, ASTVariable* var, ASTExpression* start, 
 
 std::string ToString(ASTNodeType nodeType) {
 	switch(nodeType) {
-	case AST_IDENTIFIER: return "Identifier";
+	case AST_IDENTIFIER:    return "Identifier";
+    case AST_VARIABLE:      return "Variable";
 	default: return "Too Lazy to implement ToString for this nodeType";
 	}
 }

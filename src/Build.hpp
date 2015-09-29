@@ -3,8 +3,8 @@
 #include "AST.hpp"
 
 struct Package {
-	ASTBlock globalScope;
-	U64 flags;
+    std::string name;
+    ASTBlock globalBlock;
 };
 
 struct Worker {
@@ -12,12 +12,15 @@ struct Worker {
 	char lastChar = 0, nextChar = 0;
 	U32 lineNumber = 0, colNumber = 0;
 	int currentIndentLevel = 0;
+
 	Token token;
-    ASTBlock* currentScope = nullptr;
+
     U32 errorCount = 0;
     MemoryArena arena;
     U8* tempMemory;
     U8* currentTempLocation;
+
+    ASTBlock* currentBlock = nullptr;
 };
 
 enum PackageFlags {
@@ -42,15 +45,4 @@ struct BuildSettings {
 	bool emitExecutable;
 };
 
-// NOTE consider seperating errorCount into a buildState
-// We could then have a global_buildState;
-// its a hack but we dont need to tote that information around with the context!
-struct BuildContext {
-	std::vector<Package*> packages;
-	Package* currentPackage;
-	U32 errorCount;
-};
-
-//extern "C" int PreBuild (const BuildContext& context, const BuildSettings& settings);
 extern "C" void Build ();
-//extern "C" int PostBuild (const BuildContext& context, const BuildSettings& settings);

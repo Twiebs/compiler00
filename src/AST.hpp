@@ -99,9 +99,10 @@ class Array {
 
 #define ARENA_BLOCK_SIZE 4096
 struct MemoryArena {
-  size_t used = 0;
-  size_t capacity = 0;
-  void* memory = nullptr;
+    size_t used = 0;
+    size_t capacity = 0;
+    void* memory = nullptr;
+    MemoryArena* next;
 };
 
 void* Allocate (MemoryArena* arena, size_t size);
@@ -138,25 +139,10 @@ struct ASTNode {
 	ASTNodeType nodeType;
 };
 
-// Both identfieirs and FunctionSets are not really part of the AST
-// They are metadata that mark up how nodes of the ast are handled
-// An identifier is simply a handle to a node in the ast.
-// This might end up being the best way to refer to ASTNodes rather than actualy passing around pointers
-// Then FilePositions might be able to be stored within the nodes themselfes along with there name
-// and ientifiers only become these abstract constructs that sole puprose it to access the actualy data of the nodes
-// which will be stored elsewhere!
-// Actualy it might be better to start that flag system that could be implemented
-// Then we could get some very intersing behaviours on these identifiers!
-struct ASTIdentifier {
-	FileSite site;	// Where was the identifier declared
-	std::string name;				// What is the name of the identifier
-	// It might be a good idea to store information about what this identifier is actualy refering to!
-	ASTNode* node = nullptr;		// What node does this identifier point to?  If its a nullptr then this identifier has not been resolved yet!
-};
-
+// XXX name is never set
 struct ASTDefinition : public ASTNode {
-	ASTIdentifier* identifier;
-	void* llvmType;  // Wha the fuck???? this makes no sense
+    char* name;
+	void* llvmType;
 };
 
 struct ASTExpression : public ASTNode {
@@ -167,9 +153,9 @@ struct ASTExpression : public ASTNode {
 // It is now time to have some sort of notion of scope!
 struct ASTBlock : public ASTNode {
 	U8 depth = 0;
-	ASTBlock* parent = nullptr;	//null if the global scope
+	ASTBlock* parent = nullptr;	// Null if the global scope
 	std::vector<ASTNode*> members;
-	std::unordered_map<std::string, ASTIdentifier*> identifiers;
+    std::unordered_map<std::string, ASTNode*> identmap;
 };
 
 struct ASTIfStatement : public ASTNode {
@@ -196,12 +182,26 @@ struct ASTIter : public ASTNode {
 	ASTBlock* body;
 };
 
+
+
 struct ASTFunction : public ASTBlock {
-	ASTIdentifier* ident;
-	ASTDefinition* returnType;
+	char* name;
+    ASTDefinition* returnType = nullptr;
     bool isVarArgs = false;
 	std::vector<ASTVariable*> args;
-	void* llvmFunction;
+	void* llvmFunction = nullptr;
+};
+
+// REFACTOR this could use a better name
+// An identifier will point to a function set which will have various functions that corespond to that identifier stored
+// within it!  This might be a pretty large falicy but for now i will certianly allow it..
+// Mabye when namespace support is added to the language it might be possible to consider a function a namespace and it has
+// members that are the actual concrete functions that corespond to that identifier but have diffrence function signitures
+// @Refactor this is currently designated as a node even though this data structure does not particpate in the AST
+// It is simply just a container that points to overloaded functions!
+
+struct ASTFunctionSet : public ASTNode {
+    std::vector<ASTFunction*> functions;
 };
 
 // Structs should be stored seperately from the functions because they dont depend
@@ -215,6 +215,7 @@ struct ASTStructMember {
 };
 
 struct ASTStruct : public ASTDefinition {
+    char* name;
     ASTStructMember* members;
     U32 memberCount;
 };
@@ -238,6 +239,7 @@ struct ASTMemberExpr : public ASTExpression {
 	ASTVariable* structVar;
 	UnaryOperator accessMod;
 	U32 indexCount;
+    U32* indices;
 };
 
 struct ASTVarExpr : public ASTExpression {
@@ -246,13 +248,6 @@ struct ASTVarExpr : public ASTExpression {
 	UnaryOperator accessMod;
 };
 
-// TODO
-// I think that this and a mutation are essentially the exact same thing
-// Member access just needs to hold some indices to how deep its reaching into is constituent members
-// With an extra U32 inside of the struct we can keep track of the indices of the access and just combine
-// the member access with a variable mutation... or we could just rename this to something better like
-// ASTMemberOperation and ASTVariableOperation which i think may be a much better alternative
-// These two things would be statements and would not require any return values
 
 struct ASTMemberOperation : public ASTNode {
 	ASTVariable* structVar;
@@ -266,19 +261,6 @@ struct ASTVariableOperation : public ASTNode {
 	ASTVariable* variable;
 	Operation operation;
 	ASTExpression* expr;
-};
-
-// REFACTOR this could use a better name
-// An identifier will point to a function set which will have various functions that corespond to that identifier stored
-// within it!  This might be a pretty large falicy but for now i will certianly allow it..
-// Mabye when namespace support is added to the language it might be possible to consider a function a namespace and it has
-// members that are the actual concrete functions that corespond to that identifier but have diffrence function signitures
-// @Refactor this is currently designated as a node even though this data structure does not particpate in the AST
-// It is simply just a container that points to overloaded functions!
-struct ASTFunctionSet : public ASTNode {
-	ASTIdentifier* ident;
-	ASTBlock* parent;
-	std::vector<ASTFunction*> functions;
 };
 
 struct ASTBinaryOperation : public ASTExpression {
@@ -328,7 +310,7 @@ struct ASTStringLiteral : public ASTExpression {
 	U32 charCount;
 };
 
-void InitalizeLanguagePrimitives(ASTBlock* scope);
+void InitalizeLanguagePrimitives(MemoryArena* arena, ASTBlock* scope);
 
 extern ASTBlock global_defaultGlobalScope;
 extern ASTDefinition* global_voidType;
@@ -346,24 +328,17 @@ extern ASTDefinition* global_F64Type;
 extern ASTDefinition* global_F128Type;
 
 // Identifiers
-ASTIdentifier* CreateIdentifier(ASTBlock* scope, const Token& token);
-ASTIdentifier* CreateIdentifier(ASTBlock* scope, const std::string& name);
-ASTIdentifier* CreateIdentifier(const std::string& name);
-ASTIdentifier* FindIdentifier(ASTBlock* block, const std::string& name);
-ASTIdentifier* FindIdentifier(ASTBlock* block, const char* name);
-ASTIdentifier* FindIdentifier(ASTBlock* block, const Token& token);
-ASTIdentifier* FindIdentifier(const std::string& name);
+void AssignIdent (ASTBlock* block, ASTNode* node, const std::string& name);
+ASTNode* FindNodeWithIdent(ASTBlock* block, const std::string& name);
 
 // Statements
-ASTFunctionSet* CreateFunctionSet(ASTIdentifier* ident, ASTBlock* block);		// This is where identifiers are resolved into
-ASTFunction* CreateFunction(ASTFunctionSet* funcSet);	// Functions now must be created within a function set
-ASTFunction* FindMatchingFunction(ASTIdentifier* ident, ASTFunction* function);
+ASTFunctionSet* CreateFunctionSet (MemoryArena* arena);		// This is where identifiers are resolved into
+ASTFunction* CreateFunction(MemoryArena* arena, ASTBlock* block, const std::string& name, ASTFunctionSet* funcSet);	// Functions now must be created within a function set
+ASTFunction* FindMatchingFunction(ASTFunctionSet* funcSet, ASTFunction* function);
 
 ASTBlock* CreateBlock(ASTBlock* block);
 
-ASTStruct* CreateStruct (MemoryArena* arena, ASTStructMember* members, U32 memberCount);
-S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
-
+ASTStruct* CreateStruct (MemoryArena* arena, const std::string& name, ASTStructMember* members, U32 memberCount);
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 
 ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, ASTBlock* block, const char* name, ASTExpression* initalExpr = nullptr);
@@ -374,8 +349,8 @@ ASTMemberOperation*   CreateMemberOperation(MemoryArena* arena, ASTVariable* str
 ASTBinaryOperation*   CreateBinaryOperation(MemoryArena* arena, TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
 
 // Control Flow
-ASTIfStatement* CreateIfStatement(ASTExpression* expr);	// TODO Why are ifstatements created without a body? also the body should probably be emitted into a stack thingyyy and then coppied into the if statement???
-ASTIter* CreateIter(ASTVariable* var, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
+ASTIfStatement* CreateIfStatement(MemoryArena* arena, ASTExpression* expr);	// TODO Why are ifstatements created without a body? also the body should probably be emitted into a stack thingyyy and then coppied into the if statement???
+ASTIter* CreateIter(MemoryArena* arena, ASTVariable* var, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
 ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
 
 //===============

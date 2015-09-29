@@ -44,11 +44,13 @@ void ReportError(Worker* worker, const std::string& msg) {
 }
 
 void ReportError(Worker* worker, FileSite* site, const char* msg, ...) {
+    worker->errorCount++;
     va_list args;
+    printf("[ERROR]\x1b[31m");
     va_start(args, msg);
-    printf(msg, args);
+    vprintf(msg, args);
     va_end(args);
-    printf("\n");
+    printf("\033[39m\n");
 }
 
 ASTNode* ParseImport(Worker* worker) {
@@ -143,11 +145,11 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 			NextToken(worker);
 		}
 
-		auto ident = FindIdentifier(worker->currentScope, worker->token.string);
 		Token identToken = worker->token;
 		NextToken(worker); // Eat the identifier
-		//TODO more robust error checking when receving statement tokens in an expression
-		switch(worker->token.type) {
+		// TODO more robust error checking when receving statement tokens in an expression
+        ASTNode* node;
+		switch (worker->token.type) {
 			case TOKEN_TYPE_DECLARE:
 			case TOKEN_TYPE_DEFINE:
 			case TOKEN_TYPE_INFER:
@@ -156,8 +158,10 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 				NextToken(worker);	// eat whatever that token was... hopefuly this will ha
 				break;
 			default:
-				if (!ident) {
-					ReportError(worker, worker->token.site, "Identifier " + worker->token.string + " does not exist!");
+                //TODO consider removing this
+                node = FindNodeWithIdent(worker->currentBlock, identToken.string);
+				if (!node) {
+					ReportError(worker, worker->token.site, "There is no node matching identifier: " + worker->token.string );
 					NextToken (worker);
 					return nullptr;
 				}
@@ -168,10 +172,10 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 			auto call = ParseCall (worker, identToken);
 			return (ASTExpression*)call;
 		} else if (worker->token.type == TOKEN_ACCESS) {
-			auto structVar = (ASTVariable*)ident->node;
+			auto structVar = (ASTVariable*)node;
 			auto structDefn = (ASTStruct*)structVar->type;
 			if(structDefn->nodeType != AST_STRUCT)
-				ReportError(worker, worker->token.site, "Identifier: " + ident->name + " does not name a struct type");
+				ReportError(worker, worker->token.site, identToken.string + " does not name a struct type!  It is a " + ToString(node->nodeType));
 
 			auto currentStruct = structDefn;
 			ASTDefinition* exprType = nullptr;
@@ -180,7 +184,7 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 				NextToken(worker); // eat the member access
 				auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
 				if (memberIndex == -1) {
-					ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->identifier->name + "'");
+					ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
 				} else {
 					indices.push_back(memberIndex);
 					auto memberType = currentStruct->members[memberIndex].type;
@@ -195,7 +199,7 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 			expr->type = exprType;
 			return expr;
 		} else {
-			auto var = (ASTVariable*)ident->node;
+			auto var = (ASTVariable*)node;
 			auto expr = CreateVarExpr(&worker->arena, var, unary);
 			return expr;
 		}
@@ -218,19 +222,18 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 				auto dotPos = worker->token.string.find(".");
 				bool isFloat = dotPos == std::string::npos ? false : true;
 				if (isFloat) {
-						if(worker->token.string.substr(dotPos + 1).find(".") != std::string::npos) {
-								ReportError(worker, worker->token.site, "Floating Point value contains two decimal points!");
-						}
-						auto value = std::stof(worker->token.string);
-						auto result = CreateFloatLiteral(&worker->arena, value);
-						NextToken(worker); // Eat the float literal
-						return result;
+                    if(worker->token.string.substr(dotPos + 1).find(".") != std::string::npos) {
+                            ReportError(worker, worker->token.site, "Floating Point value contains two decimal points!");
+                    }
+                    auto value = std::stof(worker->token.string);
+                    auto result = CreateFloatLiteral(&worker->arena, value);
+                    NextToken(worker); // Eat the float literal
+                    return result;
 				} else {
-						auto value = std::stoi(worker->token.string);
-						auto result = CreateIntegerLiteral(&worker->arena, value);
-						result->type = (ASTDefinition*) (FindIdentifier(worker->currentScope, "S32")->node);
-						NextToken(worker); // Eat the int literal
-						return result;
+                    auto value = std::stoi(worker->token.string);
+                    auto result = CreateIntegerLiteral(&worker->arena, value);
+                    NextToken(worker); // Eat the int literal
+                    return result;
 				}
 		} break;
 
@@ -294,14 +297,14 @@ ASTExpression* ParseExpr(Worker* worker) {
 
 internal inline ASTNode* ParseIdentifier(Worker* worker) {
 	auto identToken = worker->token;	// save the token for now
-	auto ident = FindIdentifier(worker->currentScope, worker->token.string);
+	auto node = FindNodeWithIdent(worker->currentBlock, identToken.string);
 	NextToken(worker);	// Eat the identifier
 
 	// The identifier that we are parsing may exist, may exit but be unresolved, or not exist at all
 	// Depending on what we do with the identifer will determine if these factors matter
 	switch(worker->token.type) {
 	case TOKEN_TYPE_DECLARE: {
-		if (ident != nullptr) {
+		if (node != nullptr) {
 			ReportError(worker, identToken.site, " redefintion of identifier " + identToken.string + " first declared at site TODO SITE");
 		}
 
@@ -314,27 +317,27 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 		}
 
 		else {
-			ident = CreateIdentifier(worker->currentScope, identToken.string);
-			auto var = CreateVariable(&worker->arena, worker->token.site, worker->currentScope, identToken.string.c_str());
-			ident->node = var;
+			auto var = CreateVariable(&worker->arena, worker->token.site, worker->currentBlock, identToken.string.c_str());
+            AssignIdent(worker->currentBlock, var, identToken.string);
 
 			if (worker->token.type == TOKEN_ADDRESS) {
 				var->isPointer = true;
 				NextToken(worker); // Eat the pointer token
 			}
 
-			ASTIdentifier* typeIdent = nullptr;
 			if (worker->token.type != TOKEN_IDENTIFIER) {
 				ReportError(worker, worker->token.site, "type token '" + worker->token.string + "' is not an idnetifier!");
 			} else {
-				typeIdent = FindIdentifier(worker->currentScope, worker->token.string);
-				if (!typeIdent) {
-					ReportError(worker, worker->token.site, "could not resolve typde identifier '" + worker->token.string + "'!");
-				}
+                auto type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, identToken.string);
+                if (type == nullptr) {
+                    ReportError(worker, worker->token.site, worker->token.string + " does not name a type!");
+                } else if (type->nodeType != AST_DEFINITION) {
+                    ReportError(worker, &worker->token.site, "%s does not name a type!  It names a %s", worker->token.string.c_str(), ToString(type->nodeType).c_str());
+                    // ReportError(worker, worker->token.site, worker->token.string + " does not name a type!  It names a: " + ToString(type->nodeType));
+                }
+                var->type = type;
 			}
 
-
-			var->type = (ASTDefinition*) typeIdent->node;
 
 			// Now we determine if this variable will be initalzied
 			NextToken(worker); // eat type
@@ -353,15 +356,14 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 	case TOKEN_TYPE_INFER: {
 		NextToken(worker);	// Eat the inference
 		auto expr = ParseExpr(worker);
-		if (ident == nullptr) {
-			ident = CreateIdentifier(worker->currentScope, identToken.string);
-			auto var = CreateVariable(&worker->arena, worker->token.site, worker->currentScope, identToken.string.c_str(), expr);
-			ident->node = var;
-			return var;
-		} else {
-			ReportError(worker, identToken.site, "Redefinition of identifier: " + identToken.string);
-			return nullptr;
-		}
+        if (node != nullptr) {
+            ReportError(worker, identToken.site, "Redefinition of identifier: " + identToken.string);
+            return nullptr;
+        } else {
+            auto var = CreateVariable(&worker->arena, worker->token.site, worker->currentBlock, identToken.string.c_str(), expr);
+            AssignIdent(worker->currentBlock, var, identToken.string);
+            return var;
+        }
 	} break;
 
 	case TOKEN_TYPE_DEFINE: {
@@ -369,22 +371,21 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 
         // @FUNCTION
 		if (worker->token.type == TOKEN_PAREN_OPEN) {
-			ASTFunctionSet* funcSet;
-			if (ident == nullptr) {	// The identifier is null so the function set for this ident has not been created
-				if (identToken.string == "Main") identToken.string = "main";
-				ident = CreateIdentifier (worker->currentScope, identToken);
-				funcSet = CreateFunctionSet (ident, worker->currentScope);
-			} else {
-				assert(ident->node->nodeType == AST_FUNCTION);
-				funcSet = (ASTFunctionSet*)ident->node;
+			ASTFunctionSet* funcSet = (ASTFunctionSet*)node;
+			if (funcSet == nullptr) {	// The identifier is null so the function set for this ident has not been created
+                // NOTE this will go terribly wrong if the worker isnt in the global scope
+                assert(worker->currentBlock->parent == nullptr && "NOTE this will go terribly wrong if the worker isnt in the global scope");
+                funcSet = CreateFunctionSet (&worker->arena);
+                AssignIdent(worker->currentBlock, funcSet, identToken.string);
+
+
 			}
 
-			auto function = CreateFunction(funcSet);
-			function->ident = ident;
-			worker->currentScope = function;
+            // TODO We need to store somthing about the functions name here...
+            // or somthing of that nature
+			auto function = CreateFunction(&worker->arena, worker->currentBlock, identToken.string, funcSet);
+			worker->currentBlock = function;
 			NextToken(worker); // Eat the open paren
-
-
 
 			while (worker->token.type != TOKEN_PAREN_CLOSE) {
 				if (worker->token.type == TOKEN_DOTDOT) {
@@ -417,17 +418,13 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 					return nullptr;
 				}
 
-				auto returnTypeIdent = FindIdentifier(worker->currentScope, worker->token.string);
-				if (returnTypeIdent == nullptr) {
-					LOG_ERROR(worker->token.site << ": Could not resolve return type for function " << identToken.string);
-					return nullptr;
-				} else if (returnTypeIdent->node->nodeType != AST_DEFINITION && returnTypeIdent->node->nodeType != AST_STRUCT) {
+				function->returnType = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->token.string);
+				if (function->returnType == nullptr) {
+					ReportError(worker, worker->token.site, "Could not resolve return type for function " + identToken.string);
+				} else if (function->returnType->nodeType != AST_DEFINITION && function->returnType->nodeType != AST_STRUCT) {
 					ReportError(worker, worker->token.site, "Identifier " + worker->token.string + " does not name a type");
-					// No nullptrs returned when parsing ... we need to continue to increment the lexer and
-					// do better error recovery
 				}
 
-				function->returnType = (ASTDefinition*)returnTypeIdent->node;
 				NextToken(worker);
 			}
 
@@ -439,7 +436,7 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 				ReportError(worker, worker->token.site, "Expected new block or statemnt after function defininition");
 			}
 
-		auto func = FindMatchingFunction(ident, function);
+		auto func = FindMatchingFunction(funcSet, function);
 		if (func != nullptr && func != function) {
 			ReportError(worker, identToken.site, "Function re-definition!	Overloaded function " + identToken.string + "was already defined!");
 		} else if (worker->token.type == TOKEN_SCOPE_OPEN) {
@@ -467,18 +464,17 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 		}
 
 		NextToken(worker);		// Eats the foreign or the end of the scope
-		worker->currentScope = function->parent;
+		worker->currentBlock = function->parent;
 		return function;
 	}
 
 	// NOTE @STRUCT
 	else if (worker->token.type == TOKEN_STRUCT) {
 		NextToken(worker); // Eat the struct keyword
-		if (ident != nullptr) {
+		if (node != nullptr) {
 			ReportError(worker, identToken.site, "Struct Redefinition");
 		}
 
-		ident = CreateIdentifier(worker->currentScope, identToken);
 		if (worker->token.type == TOKEN_SCOPE_OPEN) {
 			NextToken(worker); // Eat the open scope
 
@@ -502,12 +498,10 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 					NextToken(worker);
 				}
 
-				auto typeIdent = FindIdentifier(worker->currentScope, worker->token.string);
-				if (!typeIdent) {
-					ReportError(worker, worker->token.site, "Could not resolve type " + worker->token.string);
-				}
-
-				auto typedefn = (ASTDefinition*)typeIdent->node;
+				auto typedefn = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->token.string);
+                if (typedefn == nullptr) {
+                    ReportError(worker, worker->token.site, "Could not resolve type" + worker->token.string);
+                }
 				members.push_back(ASTStructMember());
                 auto& structMember = members[members.size() - 1];
                 // HACK
@@ -522,10 +516,9 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
             NextToken(worker); //Eat the close scope
 
 			if (members.size() > 0) {
-                auto structDefn = CreateStruct(&worker->arena, &members[0], members.size());
-                structDefn->identifier = ident;
-                ident->node = structDefn;
-				worker->currentScope->members.push_back(structDefn);
+                auto structDefn = CreateStruct(&worker->arena, identToken.string, &members[0], members.size());
+                AssignIdent(worker->currentBlock, structDefn, identToken.string);
+				worker->currentBlock->members.push_back(structDefn);
 			} else {
 				ReportError(worker, identToken.site, "Structs must contain at least one member");
 			}
@@ -549,12 +542,12 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 	} break;
 
 	case TOKEN_ACCESS: {
-		if (ident == nullptr) {
+		if (node == nullptr) {
 			ReportError(worker, identToken.site, "Could not resolve identifier " + identToken.string + " when trying to acess member");
 		}
 
 		// TODO this could also be a namespace / enum / whatever
-		auto structVar = (ASTVariable*)ident->node;
+		auto structVar = (ASTVariable*)node;
 		auto structDefn = (ASTStruct*)structVar->type;
 		if(structDefn->nodeType != AST_STRUCT) ReportError(worker, identToken.site, "Member access operator only applies to struct types!");
 
@@ -564,7 +557,10 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 			NextToken(worker);	// Eat the access token
 			if (worker->token.type != TOKEN_IDENTIFIER) ReportError(worker, worker->token.site, "Member access must reference an identifier");
 			auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
-			if (memberIndex == -1) ReportError(worker, worker->token.site, "Struct " + ident->name + "does not contain any member named " + worker->token.string);
+			if (memberIndex == -1) {
+                ReportError(worker, worker->token.site, "");    // TODO fix these stupid log messages
+                printf("%s does not contain any member named %s", structDefn->name, worker->token.string.c_str());
+            }
 			memberIndices.push_back(memberIndex);
 
 			auto memberType = currentStruct->members[memberIndex].type;
@@ -602,11 +598,9 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 		default: ReportError(worker, worker->token.site, "Unkown operator: " + worker->token.string);
 		} NextToken(worker);	// Eat the operator
 
-		ASTVariable* var = nullptr;
-		if (ident == nullptr) {
+		auto var = (ASTVariable*)node;
+		if (var == nullptr) {
 			ReportError(worker, identToken.site, "Cannot create variable operation on unknown identifier(" + identToken.string + ")");
-		} else {
-			var = (ASTVariable*)ident->node;
 		}
 
 		auto expr = ParseExpr(worker);
@@ -615,34 +609,9 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 		} else {
 			return CreateVariableOperation(&worker->arena, var, operation, expr);
 		}
-
-		// if (expr == nullptr) {
-		// 	//For now binops will auto resolve themselves based on the respective rhs and lhs expressions inthe
-		// 	//operation
-		// 	LOG_ERROR("Could not parse expression on the right of the assignment operator");
-		//
-		// 	// Which is actualy totaly cool!
-		// 	// We dont actualy care if this doesnt have a resolved type... because there is some tom foolay invloved
-		// 	//With headerless compliation.. However we can simplfy this probelm for now by simply ingoring it!
-		// 	// YEs! thats totaly the answer to everything in life.. Just Ingnore it.
-		// 	// ha no.
-		// 	return nullptr;
-		// } else if (expr->type != var->type) {
-		// 	if (expr->type == nullptr) {
-		// 		LOG_ERROR("Internal Compiler error: Expression is a nullptr");
-		// 		return nullptr;
-		// 	}
-		// 	LOG_ERROR(identToken.site << "Type mismatch between variable " << identToken.string << "(" << var->type->identifier->name << ") and RHS expression(" << expr->type->identifier->name << ")!");
-		// 	return nullptr;
-		// }
-		// Why do variables need anyt ype of mutation whatsofever?
-		// That doesnt even make any sense whatso ever
 	}
 
-	// We have gotten past all our routines
-	// THIS SHOULD NEVER HAPPEN!
-	INTERNAL_ERROR(worker->token.site << "Something REALLY Terrible has happened!	ITS IMPOSSIBLE TO GET HERE! The worker->token that caused this was [" << worker->token.string << "]");
-	assert(NULL);
+	assert(false && "THIS IS IMPOSSIBLEEE");
 	return nullptr;
 }
 
@@ -653,7 +622,7 @@ internal inline ASTNode* ParseIF(Worker* worker) {
 		ReportError(worker, worker->token.site, "Could not parse expresion for IF statement evaluation");
 	}
 
-	auto ifStatement = CreateIfStatement(expr);
+	auto ifStatement = CreateIfStatement(&worker->arena, expr);
 	auto body = ParseStatement(worker);
 	ifStatement->ifBody = body;
 
@@ -675,17 +644,16 @@ internal inline ASTNode* ParseIter (Worker* worker, const std::string& identName
 	if (worker->token.type == TOKEN_TO) {
 		 NextToken(worker); 	// Eat the to
 		 if (identName != "") {
-			auto block = CreateBlock(worker->currentScope);
-			auto ident = CreateIdentifier(block, identName);
+			auto block = CreateBlock(worker->currentBlock);
 			auto var = CreateVariable(&worker->arena, worker->token.site, block, identName.c_str());
 			var->type = global_S32Type;	// HACK
 			var->initalExpression = expr;
-			ident->node = var;
+			AssignIdent(block, var, identName);
 
 			auto endExpr = ParseExpr(worker);
 			if (!endExpr) LOG_ERROR(worker->token.site << "Could not parse Expression after TO keyword");
 			ParseBlock(worker, block);
-			auto iter = CreateIter(var, expr, endExpr, nullptr, block);
+			auto iter = CreateIter(&worker->arena, var, expr, endExpr, nullptr, block);
 			return iter;
 
 		} else {
@@ -706,13 +674,13 @@ internal inline ASTNode* ParseIter (Worker* worker, const std::string& identName
 internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 	assert(worker->token.type == TOKEN_SCOPE_OPEN);
 	NextToken(worker);	 // Eat the SCOPE_OPEN
-	auto previousScope = worker->currentScope;
+	auto previousScope = worker->currentBlock;
 
 	if (block == nullptr) {
 		block = CreateBlock(previousScope);
 	}
 
-	worker->currentScope = block;
+	worker->currentBlock = block;
 
 	while(worker->token.type != TOKEN_SCOPE_CLOSE && worker->token.type != TOKEN_EOF) {
 		auto node = ParseStatement (worker);
@@ -724,7 +692,7 @@ internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 	}
 
 	NextToken(worker);	// Eat the close scope
-	worker->currentScope = previousScope;
+	worker->currentBlock = previousScope;
 	return block;
 }
 
@@ -735,6 +703,7 @@ void ParseFile(Worker* worker, const std::string& rootDir, const std::string& fi
 		return;
 	}
 
+    auto currentErrorCount = worker->errorCount;
 	worker->nextChar = getc(worker->file);
 	worker->token.site.filename = filename;
 	worker->lineNumber = 1;
@@ -745,6 +714,7 @@ void ParseFile(Worker* worker, const std::string& rootDir, const std::string& fi
 		ParseStatement(worker);
 	}
 
-	LOG_INFO("Parsed " << filename);
+    auto errorCount = worker->errorCount - currentErrorCount;
+	LOG_INFO("Parsed " << filename << (errorCount ? ("There were" + std::to_string(errorCount) + "errors") : ""));
 	fclose(worker->file);
 }

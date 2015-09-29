@@ -53,21 +53,24 @@ ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 ar
 internal void AnalyzeCall(Worker* worker, ASTCall* call) {
 	assert(call->nodeType == AST_CALL);
 	auto name = (const char*)(((U8*)(call + 1)) + ((sizeof(ASTExpression*) * call->argCount)));
-	auto ident = FindIdentifier(worker->currentScope, name);
-	if (!ident) {
+    auto funcSet = (ASTFunctionSet*)FindNodeWithIdent(worker->currentBlock, name);
+	if (funcSet == nullptr) {
 		ReportError(worker, "Could not find any function matching the identifier" + std::string(name));
 		return;
-	}
+	} else if (funcSet->nodeType != AST_FUNCTION) {
+        ReportError(worker, "Call to xxx does not name a type");
+        return;
+    }
+
 	auto args = (ASTExpression**)(call + 1);
 	for (auto i = 0; i < call->argCount; i++) {
 		AnalyzeExpr(worker, args[i]);
 	}
-	auto funcSet = (ASTFunctionSet*)ident->node;
-	assert(funcSet->nodeType = AST_FUNCTION);
+
 	call->function = FindFunction(funcSet, args, call->argCount);
 	if (!call->function) {
 		ReportError(worker, "Could not match argument types to any function named: " + std::string(name) +
-				"types given: " + args[0]->type->identifier->name);
+				"types given: " + args[0]->type->name);
 	} else {
 		LOG_DEBUG("Resolved call to function " + std::string(name));
 	}
@@ -91,7 +94,7 @@ internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
 		if (TypeCompareImplicit(binop->lhs, binop->rhs)) {
 			binop->type = binop->lhs->type;
 		} else {
-			ReportError(worker, "Type mismatch in binary operation: " + binop->lhs->type->identifier->name + ", " + binop->rhs->type->identifier->name);
+			ReportError(worker, "Type mismatch in binary operation: ");
 		}
 	} break;
 	}
@@ -202,9 +205,9 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 	case AST_RETURN: {
 		auto retval = (ASTReturn*)node;
 		AnalyzeExpr(worker, retval->value);
-		auto function = (ASTFunction*)worker->currentScope;
+		auto function = (ASTFunction*)worker->currentBlock;
 		if (!TypeCheck(retval->value, function->returnType)) {
-			ReportError(worker, "Return type does not match function return type in function: " + function->ident->name);
+			ReportError(worker, "Return type does not match function return type in function: ");
 		}
 
 	} break;
@@ -215,7 +218,7 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 	}
 }
 
-static void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement) {
+internal void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement) {
 	assert(ifStatement->expr != nullptr);
 	AnalyzeExpr(worker, ifStatement->expr);
 	AnalyzeStatement(worker, ifStatement->ifBody);
@@ -228,14 +231,14 @@ static void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement) {
 // Since we know all the structs take care of themselves it might make sense
 // To keep these seperatly but for now i will keep them the same
 void AnalyzeAST (Worker* worker) {
-	for (auto i = 0; i < worker->currentScope->members.size(); i++) {
-		auto node = worker->currentScope->members[i];
+	for (auto i = 0; i < worker->currentBlock->members.size(); i++) {
+		auto node = worker->currentBlock->members[i];
 		if (node->nodeType == AST_FUNCTION) {
 			auto function = (ASTFunction*)node;
-			auto previousBlock = worker->currentScope;
-			worker->currentScope = function;
+			auto previousBlock = worker->currentBlock;
+			worker->currentBlock = function;
 			AnalyzeBlock(worker, function);
-			worker->currentScope = previousBlock;
+			worker->currentBlock = previousBlock;
 		}
 	}
 }
