@@ -1,5 +1,6 @@
-IMPORT "IO.bang"
+printf :: (fmt : @U8 ...) FOREIGN
 
 Main :: () :> S32
-	printf("Literal Test: %d" 5)
+	x := 5
+	printf("Look! Its the number five: %d" x)
 	RETURN 0

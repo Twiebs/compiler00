@@ -52,25 +52,23 @@ ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 ar
 
 internal void AnalyzeCall(Worker* worker, ASTCall* call) {
 	assert(call->nodeType == AST_CALL);
-	auto name = (const char*)(((U8*)(call + 1)) + ((sizeof(ASTExpression*) * call->argCount)));
-    auto funcSet = (ASTFunctionSet*)FindNodeWithIdent(worker->currentBlock, name);
+    auto funcSet = (ASTFunctionSet*)FindNodeWithIdent(worker->currentBlock, call->name);
 	if (funcSet == nullptr) {
-		ReportError(worker, "Could not find any function matching the identifier" + std::string(name));
+		ReportError(worker, "Could not find any function matching the identifier" + std::string(call->name));
 		return;
 	} else if (funcSet->nodeType != AST_FUNCTION) {
-        ReportError(worker, "Call to xxx does not name a type");
+        ReportError(worker, "Call to xxx does not name a function");
         return;
     }
 
-	auto args = (ASTExpression**)(call + 1);
 	for (auto i = 0; i < call->argCount; i++) {
-		AnalyzeExpr(worker, args[i]);
+		AnalyzeExpr(worker, call->args[i]);
 	}
 
-	call->function = FindFunction(funcSet, args, call->argCount);
+	call->function = FindFunction(funcSet, call->args, call->argCount);
 	if (!call->function) {
-		ReportError(worker, "Could not match argument types to any function named: " + std::string(name) +
-				"types given: " + args[0]->type->name);
+		ReportError(worker, "Could not match provided arguments to any function named " + std::string(call->name) +
+				" types given: " + call->args[0]->type->name);
 	} else {
 		LOG_DEBUG("Resolved call to function " + std::string(name));
 	}

@@ -152,10 +152,10 @@ struct ASTExpression : public ASTNode {
 
 // It is now time to have some sort of notion of scope!
 struct ASTBlock : public ASTNode {
-	U8 depth = 0;
 	ASTBlock* parent = nullptr;	// Null if the global scope
 	std::vector<ASTNode*> members;
     std::unordered_map<std::string, ASTNode*> identmap;
+    ASTBlock() { nodeType = AST_BLOCK; }
 };
 
 struct ASTIfStatement : public ASTNode {
@@ -273,21 +273,12 @@ struct ASTReturn : public ASTExpression {
 	ASTExpression* value;
 };
 
-// ASTCall stores its arguments after the struct itself
-// The procede directly after the arg count and are just pointers to
-// other nodes in the AST... for now... perhaps these should be concrete structs
-// stored here and we do some crazyness to pack them at the end
 
-// We could create a call with a name here instead and store some bytes for the name of the functions
-// it would take a small amount of extra memory and it would be silly to do resoltuion like that for everysingle function...
-// or would it??? it seams to be the best option rather than doing craziness with jumping around with a dependcy graph
-// because we need to hit all these nodes again to typecheck them anyway
-// it also allows the complier to be more flexiable and provide things like syntax highlighting without having to do more complex things like resolving the type of stuff
-// for now we can pack this name on the back of the node... it may turn out that we dont even need to store stuff like the function that this call points to since that is
-// only neseccary for compile time to be fair this is a serious amount of data that would do things... however; it may be a good idea for now... at least for the purposes of experimentation
 struct ASTCall : public ASTNode {
+    char* name;
+    U32 argCount;
+    ASTExpression** args;
 	ASTFunction* function;
-	U32 argCount;
 };
 
 struct ASTLiteral : public ASTExpression {
@@ -336,7 +327,7 @@ ASTFunctionSet* CreateFunctionSet (MemoryArena* arena);		// This is where identi
 ASTFunction* CreateFunction(MemoryArena* arena, ASTBlock* block, const std::string& name, ASTFunctionSet* funcSet);	// Functions now must be created within a function set
 ASTFunction* FindMatchingFunction(ASTFunctionSet* funcSet, ASTFunction* function);
 
-ASTBlock* CreateBlock(ASTBlock* block);
+ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* block);
 
 ASTStruct* CreateStruct (MemoryArena* arena, const std::string& name, ASTStructMember* members, U32 memberCount);
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
@@ -359,7 +350,7 @@ ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
 ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var, UnaryOperator accessMod);
 ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, U32* indices, U32 indexCount);
 
-ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argumentCount, const char* name);
+ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argumentCount, const std::string& name);
 
 ASTIntegerLiteral* CreateIntegerLiteral(MemoryArena* arena, S64 value);
 ASTFloatLiteral* CreateFloatLiteral(MemoryArena* arena, F64 value);

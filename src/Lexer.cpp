@@ -4,13 +4,6 @@
 #include "Common.hpp"
 #include "Build.hpp"
 
-typedef struct {
-	char lastChar, nextChar;
-	U32 colNum, rowNum;
-    U32 indentLevel;
-	char str[1024];
-} lex_state;
-
 internal void EatNext(Worker *worker) {
     worker->lastChar = worker->nextChar;
     worker->nextChar = getc(worker->file);

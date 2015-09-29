@@ -144,7 +144,7 @@ ASTVarExpr* CreateVarExpr (MemoryArena* arena, ASTVariable* var, UnaryOperator a
 	result->nodeType = AST_VAR_EXPR;
 	result->var = var;
 	result->type = var->type;
-  result->accessMod = accessMod;
+    result->accessMod = accessMod;
 	return result;
 }
 
@@ -203,24 +203,23 @@ ASTFunction* FindMatchingFunction(ASTFunctionSet* funcSet, ASTFunction* function
 // Im not sure if we need to bother with the pointer since we know they will procede the argument count
 // but for now it keeps it simple so i will leave it it will be intresting to see if it actualy works.  Eventualy this will
 // use an allocator to create nodes for each package.
-ASTCall* CreateCall (MemoryArena* arena, ASTExpression** argList, U32 argCount, const char* name) {
-	ASTCall* call = (ASTCall*)Allocate(arena, sizeof(ASTCall) + ((sizeof(ASTExpression*) * argCount)) + (strlen(name) + 1));
+ASTCall* CreateCall (MemoryArena* arena, ASTExpression** argList, U32 argCount, const std::string& name) {
+	auto call = new (Allocate(arena, sizeof(ASTCall))) ASTCall;
+    call->name = (char*)Allocate(arena, name.size() + 1);
+    call->args = (ASTExpression**)Allocate(arena, sizeof(ASTExpression*) * argCount);
+    call->argCount = argCount;
 	call->nodeType = AST_CALL;
 	call->argCount = argCount;
 	call->function = nullptr;
-     auto argptr = (U8*)(call + 1);
-    auto argsize = sizeof(ASTExpression*) * argCount;
-    memcpy(argptr, argList, argsize);
-    memcpy((argptr + argsize), name, strlen(name) + 1);
+    memcpy(call->name, name.c_str(), name.size() + 1);
+    memcpy(call->args, argList, sizeof(ASTExpression*)*argCount);
 	return call;
 }
 
-ASTBlock* CreateBlock(ASTBlock* block) {
-	auto result = new ASTBlock();
-	result->depth = (block == nullptr) ? 0 : block->depth + 1;
-	result->parent = block;
-	result->nodeType = AST_BLOCK;
-	return result;
+ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* parent) {
+	auto block = new (Allocate(arena, sizeof(ASTBlock))) ASTBlock;
+    block->parent = parent;
+	return block;
 }
 
 // This is a statement the value in its name might be confusing.

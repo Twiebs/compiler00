@@ -114,7 +114,7 @@ ASTCall* ParseCall(Worker* worker, const Token& identToken) {
 	}
 	NextToken(worker);		// Eat the close paren
 
-	ASTCall* call = CreateCall(&worker->arena, &args[0], args.size(), identToken.string.c_str());
+	ASTCall* call = CreateCall(&worker->arena, &args[0], args.size(), identToken.string);
 	return call;
 }
 
@@ -328,7 +328,7 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 			if (worker->token.type != TOKEN_IDENTIFIER) {
 				ReportError(worker, worker->token.site, "type token '" + worker->token.string + "' is not an idnetifier!");
 			} else {
-                auto type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, identToken.string);
+                auto type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->token.string);
                 if (type == nullptr) {
                     ReportError(worker, worker->token.site, worker->token.string + " does not name a type!");
                 } else if (type->nodeType != AST_DEFINITION) {
@@ -383,7 +383,9 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 
             // TODO We need to store somthing about the functions name here...
             // or somthing of that nature
-			auto function = CreateFunction(&worker->arena, worker->currentBlock, identToken.string, funcSet);
+
+            auto function = CreateFunction(&worker->arena, worker->currentBlock, identToken.string, funcSet);
+            worker->currentBlock->members.push_back(function);
 			worker->currentBlock = function;
 			NextToken(worker); // Eat the open paren
 
@@ -644,7 +646,7 @@ internal inline ASTNode* ParseIter (Worker* worker, const std::string& identName
 	if (worker->token.type == TOKEN_TO) {
 		 NextToken(worker); 	// Eat the to
 		 if (identName != "") {
-			auto block = CreateBlock(worker->currentBlock);
+			auto block = CreateBlock(&worker->arena, worker->currentBlock);
 			auto var = CreateVariable(&worker->arena, worker->token.site, block, identName.c_str());
 			var->type = global_S32Type;	// HACK
 			var->initalExpression = expr;
@@ -677,7 +679,7 @@ internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 	auto previousScope = worker->currentBlock;
 
 	if (block == nullptr) {
-		block = CreateBlock(previousScope);
+		block = CreateBlock(&worker->arena, previousScope);
 	}
 
 	worker->currentBlock = block;

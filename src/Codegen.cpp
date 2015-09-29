@@ -157,10 +157,11 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 	}
 
 	// Create the llvm function
-	llvm::FunctionType* funcType = llvm::FunctionType::get((llvm::Type*)function->returnType->llvmType, args, function->isVarArgs);
-	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
 
-	llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, function->name, global_module);
+    // TODO Better handling of uppercase main function! We should be able to call it whatever
+    llvm::FunctionType* funcType = llvm::FunctionType::get((llvm::Type*)function->returnType->llvmType, args, function->isVarArgs);
+	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
+    llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, strcmp(function->name, "Main") ? function->name : std::string("main"), global_module);
 
 	// TODO arguments are created even if the function has no members!
 	if (function->members.size() > 0) {

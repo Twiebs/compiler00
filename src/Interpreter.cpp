@@ -13,7 +13,7 @@
 
 extern "C" void InterpTest() {
 	printf("Interpreter Test was sucuessfull\n");
-	printf("Hell yeah!!!  Calling code dynamicly at runtime!\n");
+	printf("Hell yeah!!!  Calling a native function in bitcode!\n");
 }
 
 // The interpreter must be run within a worker
