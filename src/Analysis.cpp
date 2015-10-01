@@ -14,9 +14,9 @@ internal inline void AnalyzeBlock(Worker* worker, ASTBlock* block);
 internal void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement);
 internal void AnalyzeCall(Worker* worker, ASTCall* call);
 
-internal inline bool TypeCheck(ASTExpression* expr, ASTDefinition* typedefn);
-internal inline bool TypeCompareExplicit(ASTExpression* exprA, ASTExpression* exprB);
-internal inline bool TypeCompareImplicit(ASTExpression* exprA, ASTExpression* exprB);
+internal inline bool TypeCheck (ASTExpression* expr, ASTDefinition* typedefn);
+internal inline bool TypeCompareExplicit (ASTExpression* exprA, ASTExpression* exprB);
+internal inline bool TypeCompareImplicit (ASTExpression* exprA, ASTExpression* exprB);
 
 ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc) {
     for (auto i = 0; i < funcSet->functions.size(); i++) {

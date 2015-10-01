@@ -93,15 +93,15 @@ ASTNode* ParseStatement (Worker* worker) {
 	}
 }
 
-ASTNode* ParseReturn(Worker* worker) {
-		LOG_VERBOSE(worker->token.site << ": Parsing a return statement");
-		NextToken(worker);
-		auto expr = ParseExpr(worker);
-		auto returnVal = CreateReturnValue(&worker->arena, expr);
-		return returnVal;
+ASTNode* ParseReturn (Worker* worker) {
+    LOG_VERBOSE(worker->token.site << ": Parsing a return statement");
+    NextToken(worker);
+    auto expr = ParseExpr(worker);
+    auto returnVal = CreateReturnValue(&worker->arena, expr);
+    return returnVal;
 }
 
-ASTCall* ParseCall(Worker* worker, const Token& identToken) {
+ASTCall* ParseCall (Worker* worker, const Token& identToken) {
 	std::vector<ASTExpression*> args;
 	NextToken(worker); // Eat the open paren
 	while (worker->token.type != TOKEN_PAREN_CLOSE) {
@@ -377,8 +377,6 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
                 assert(worker->currentBlock->parent == nullptr && "NOTE this will go terribly wrong if the worker isnt in the global scope");
                 funcSet = CreateFunctionSet (&worker->arena);
                 AssignIdent(worker->currentBlock, funcSet, identToken.string);
-
-
 			}
 
             // TODO We need to store somthing about the functions name here...
@@ -698,7 +696,7 @@ internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 	return block;
 }
 
-void ParseFile(Worker* worker, const std::string& rootDir, const std::string& filename) {
+void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename) {
 	worker->file = fopen((rootDir + filename).c_str(), "r");
 	if (!worker->file) {
 		ReportError(worker, "Could not open file: " + filename);

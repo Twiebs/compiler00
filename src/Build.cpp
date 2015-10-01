@@ -26,7 +26,7 @@ struct Workspace {
     void* memory;
 };
 
-void RunInterp();
+void RunInterp (Package* package);
 void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename);
 void CodegenPackage(Package* package, BuildSettings* settings);
 void AnalyzeAST (Worker* worker);
@@ -223,6 +223,9 @@ void Build () {
 
 	LOG_INFO("Generating Package");
 	CodegenPackage(package, &global_settings);
+
+    // Test code to see how the interp works
+    RunInterp(package);
 }
 
 int main (int argc, char** argv) {
@@ -241,8 +244,8 @@ int main (int argc, char** argv) {
 	// Get the input filename
 	if (argc < 2) {
         settings.inputFile = "test.src";
-		LOG_INFO("Running Interpreter...");
-		RunInterp();
+		LOG_INFO("Running Interpreter... Not now...");
+		// RunInterp();
         ExitWorkspace(&global_workspace);
 		return 0;
 	}

@@ -174,7 +174,8 @@ ASTFunction* CreateFunction (MemoryArena* arena, ASTBlock* block, const std::str
 	function->nodeType = AST_FUNCTION;
     function->llvmFunction = nullptr;
     memcpy(function->name, name.c_str(), name.size() + 1);
-	return function;
+    funcSet->functions.push_back(function);
+    return function;
 }
 
 ASTFunction* FindMatchingFunction(ASTFunctionSet* funcSet, ASTFunction* function) {

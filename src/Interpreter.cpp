@@ -16,11 +16,17 @@ extern "C" void InterpTest() {
 	printf("Hell yeah!!!  Calling a native function in bitcode!\n");
 }
 
-// The interpreter must be run within a worker
-// No idea if this is a good idea or not but we
-// Need to allocate the ASTNodes and stuff
-// So Who knows how this will go
-void RunInterp () {
+
+// For now this takes a single package until better packaing is
+    printf("%s (", function->name);
+    for (U32 i = 0; i < function->args.size(); i++) {
+        auto arg = &function->args[i];
+        printf("%s : %s", arg->name, arg->type->name);
+    }
+    printf("insert args here)\n");
+}
+
+void RunInterp (Package* package) {
 	llvm::InitializeAllTargets();
 	llvm::InitializeAllTargetMCs();
 
@@ -39,15 +45,31 @@ void RunInterp () {
 		LOG_ERROR("Failed to create ExecutionEngine: " << errorStr);
 	}
 
+    // For now the interpreter will just tell you what things are you wont be able to call things
+    // It will do its parsing of whatever you give it and then you can determine infromation about the program
+    // by typing in the name of an identifer and it will give you static information about what it actualy is
 
-    std::string str;
     bool isRunning = true;
-	while (isRunning) {
+    std::string input;
+    while (isRunning) {
 		printf("> ");
-        std::cin >> str;
-        if (!str.compare("Build")) {
-            std::vector<llvm::GenericValue> funcargs;
-            engine->runFunction(testFunc, funcargs);
+        std::cin >> input;
+        auto node = FindNodeWithIdent(&package->globalBlock, input);
+        if (node == nullptr) {
+            printf("That doesnt name anything");
+        }
+
+        switch (node->nodeType) {
+            case AST_FUNCTION: {
+                auto funcSet = (ASTFunctionSet *) node;
+                printf("Found %d functions matching: %s\n", funcSet->functions.size(), input.c_str());
+                for (U32 i = 0; i < funcSet->functions.size(); i++) {
+                    Print((ASTFunction *) funcSet->functions[i]);
+                }
+            } break;
+
+            default:
+                printf("Dont know what that is yet but it exists!");
         }
 	}
 }

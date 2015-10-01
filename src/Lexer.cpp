@@ -4,7 +4,236 @@
 #include "Common.hpp"
 #include "Build.hpp"
 
-internal void EatNext(Worker *worker) {
+// This is probably a terrible idea the interpeter and the static compiler will
+// be vastly different from the way that they handle expresions and do stuff like that
+// If you were to type x it would be a serious comipler error but the interpreter should tell you exactly what that
+// Thing is.
+
+#if 0
+struct InterpLexer {
+    Token token;
+    void NextToken();
+    void EatNext();
+    void AppendNext();
+private:
+    std::string buffer;
+    U32 bufferPos;
+    char lastChar, nextChar;
+};
+
+void InterpLexer::EatNext() {
+    lastChar = nextChar;
+    if (bufferPos < buffer.size()) {
+        nextChar = buffer[bufferPos++];
+    } else {
+        nextChar = EOF;
+    }
+}
+
+void InterpLexer::AppendNext() {
+    EatNext();
+    token.string += lastChar;
+}
+
+void InterpLexer::NextToken() {
+    token.string = "";
+    token.type = TOKEN_UNKOWN;
+    while (isspace(nextChar)) EatNext();
+    if (isalpha(nextChar) || nextChar == '_') {
+        while ((isalnum(nextChar) || nextChar == '_') && nextChar != '.') AppendNext();
+        if (token.string == "IMPORT") 			    token.type = TOKEN_IMPORT;
+        else if (token.string == "FOREIGN")	 		token.type = TOKEN_FOREIGN;
+        else if (token.string == "STRUCT")			token.type = TOKEN_STRUCT;
+        else if (token.string == "IF")				token.type = TOKEN_IF;
+        else if (token.string == "ELSE") 			token.type = TOKEN_ELSE;
+        else if (token.string == "ITER")			token.type = TOKEN_ITER;
+        else if (token.string == "TO")				token.type = TOKEN_TO;
+        else if (token.string == "RETURN")			token.type = TOKEN_RETURN;
+        else if (token.string == "TRUE")			token.type = TOKEN_TRUE;
+        else if (token.string == "FALSE")			token.type = TOKEN_FALSE;
+        else token.type = TOKEN_IDENTIFIER;
+    }
+
+        // The Current token is a Numeric Literal
+    else if (isdigit(nextChar)) {
+        bool decimalSeen = false;
+        while (isdigit(nextChar) || nextChar == '.') {
+            if (nextChar == '.') {
+                if (!decimalSeen)
+                    decimalSeen = true;
+                else
+                    LOG_ERROR(token.site << "Two decimals found in numeric constant!");
+            }
+            AppendNext();
+        }
+        token.type = TOKEN_NUMBER;
+    }
+
+        // The Current token is a String Literal
+    else if (nextChar == '"') {
+        EatNext();
+        while (nextChar != '"') {
+            AppendNext();
+        }
+        EatNext();	// Eat the "
+        token.type = TOKEN_STRING;
+    }
+
+        // COMMENTS
+    else if (nextChar == '#') {
+        EatNext();	//Eat the '# 'char
+        while (nextChar != EOF && nextChar != '\n' && nextChar != '\r')
+            EatNext();	//Now we eat the comment body itself
+        //We have reached the end of the comment.	If is not the end of the file get the next token
+        if (nextChar != EOF) {
+            NextToken();
+            return;
+        }
+    }
+
+        // COLON TOKENS
+    else if (nextChar == ':') {
+        AppendNext();
+        if (nextChar == ':') {
+            AppendNext();
+            token.type = TOKEN_TYPE_DEFINE;
+        } else if (nextChar == '=') {
+            AppendNext();
+            token.type = TOKEN_TYPE_INFER;
+        } else if (nextChar == '>') {
+            AppendNext();
+            token.type = TOKEN_TYPE_RETURN;
+        } else {
+            token.type = TOKEN_TYPE_DECLARE;
+        }
+    }
+
+    else if (nextChar == '@') {
+        AppendNext();
+        token.type = TOKEN_ADDRESS;
+    }
+
+    else if (nextChar == '$') {
+        AppendNext();
+        token.type = TOKEN_VALUE;
+    }
+
+    else if (nextChar == '=') {
+        AppendNext();
+        if (nextChar == '=') {
+            AppendNext();
+            token.type == TOKEN_BOOLEAN_EQUAL;
+        } else {
+            token.type = TOKEN_EQUALS;
+        }
+    }
+
+    else if (nextChar == '+') {
+        AppendNext();
+        if (nextChar == '=') {
+            AppendNext();
+            token.type = TOKEN_ADD_EQUALS;
+        } else {
+            token.type = TOKEN_ADD;
+        }
+    }
+
+    else if (nextChar == '-') {
+        AppendNext();
+        if (nextChar == '=') {
+            AppendNext();
+            token.type = TOKEN_SUB_EQUALS;
+        } else {
+            token.type = TOKEN_SUB;
+        }
+    }
+
+    else if (nextChar == '*') {
+        AppendNext();
+        if (nextChar == '=') {
+            AppendNext();
+            token.type = TOKEN_MUL_EQUALS;
+        } else {
+            token.type = TOKEN_MUL;
+        }
+    }
+
+
+    else if (nextChar == '/') {
+        AppendNext();
+        if (nextChar == '=') {
+            AppendNext();
+            token.type = TOKEN_DIV_EQUALS;
+        } else {
+            token.type = TOKEN_DIV;
+        }
+    }
+
+        // LOGICAL
+    else if (nextChar == '~') {
+        AppendNext();
+        token.type = TOKEN_LOGIC_NOT;
+    }
+
+
+        // REMOVE NEED FOR MODULUS BECAUSE FUCK THAT
+        // Mod(5, 2) would be better!
+        // else if (nextChar == '%') {
+        // 	AppendNext(worker);
+        // 	if (nextChar == '=') {
+        // 		AppendNext(worker);
+        // 		token.type = TOKEN_MOD_EQUALS;
+        // 	} else {
+        // 		token.type = TOKEN_MOD;
+        // 	}
+        // }
+
+    else if (nextChar == '.') {
+        AppendNext();
+        if (nextChar == '.') {
+            AppendNext();
+            if (nextChar == '.') {
+                AppendNext();
+                token.type = TOKEN_DOTDOT;
+            }
+        } else {
+            token.type = TOKEN_ACCESS;
+        }
+    }
+
+        //BRACES, BRACKETS, SUBSCRIPTS
+    else if (nextChar == '(') {
+        AppendNext();
+        token.type = TOKEN_PAREN_OPEN;
+    } else if (nextChar == ')') {
+        AppendNext();
+        token.type = TOKEN_PAREN_CLOSE;
+    }	else if (nextChar == '[') {
+        AppendNext();
+        token.type = TOKEN_ARRAY_OPEN;
+    } else if (nextChar == ']') {
+        AppendNext();
+        token.type = TOKEN_ARRAY_CLOSE;
+    } else if (nextChar == '{') {
+        AppendNext();
+        token.type = TOKEN_SCOPE_OPEN;
+        // currentIndentLevel++;
+    } else if (nextChar == '}') {
+        AppendNext();
+        token.type = TOKEN_SCOPE_CLOSE;
+        // currentIndentLevel++;
+    } else if (nextChar == EOF) {
+        //Dont append or ead the EOF
+        token.type = TOKEN_EOF;
+    } else {
+        AppendNext();
+        token.type = TOKEN_UNKOWN;
+    }
+}
+#endif
+
+
+internal void EatNext (Worker* worker) {
     worker->lastChar = worker->nextChar;
     worker->nextChar = getc(worker->file);
     worker->colNumber++;
@@ -14,7 +243,7 @@ internal void EatNext(Worker *worker) {
     }
 }
 
-internal void AppendNext(Worker *worker) {
+internal void AppendNext (Worker* worker) {
     worker->lastChar = worker->nextChar;
     worker->nextChar = getc(worker->file);
     worker->colNumber++;

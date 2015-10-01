@@ -1,6 +1,9 @@
 ; ModuleID = 'BangCompiler'
 
-declare void @printf(i8*, ...)
+define i32 @Test() {
+entry:
+  ret i32 0
+}
 
 define i32 @main() {
 entry:

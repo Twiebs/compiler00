@@ -1,6 +1,10 @@
-printf :: (fmt : @U8 ...) FOREIGN
+#printf :: (fmt : @U8 ...) FOREIGN
+
+Test :: () :> S32
+	RETURN 0
+
 
 Main :: () :> S32
 	x := 5
-	printf("Look! Its the number five: %d" x)
+	#printf("Look! Its the number five: %d" x)
 	RETURN 0
