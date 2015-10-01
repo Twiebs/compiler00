@@ -39,14 +39,15 @@ void ReportError(Worker* worker, FileSite& site, const std::string& msg) {
 }
 
 void ReportError(Worker* worker, const std::string& msg) {
-	worker->errorCount++;
-	std::cout << "[ERROR] \x1b[31m" << msg	<< "\033[39m\n";
+    worker->errorCount++;
+    std::cout << " \x1b[31m" << msg	<< "\033[39m\n";
 }
 
 void ReportError(Worker* worker, FileSite* site, const char* msg, ...) {
     worker->errorCount++;
     va_list args;
-    printf("[ERROR]\x1b[31m");
+    std::cout << *site;
+    printf(" \x1b[31m");
     va_start(args, msg);
     vprintf(msg, args);
     va_end(args);
@@ -66,13 +67,6 @@ ASTNode* ParseImport(Worker* worker) {
 	return ParseStatement(worker);
 }
 
-// TODO seperate ASTNode into two differently treated branches of the AST
-// A statement either begins with an identifier, a keyword, or a new block
-
-// Do we allow binops to be defined ???
-// Do we actualy treat overloads as a function?
-// Does it mater for now?	Nope.
-
 ASTNode* ParseStatement (Worker* worker) {
 	switch (worker->token.type) {
 	case TOKEN_ADD:
@@ -84,7 +78,7 @@ ASTNode* ParseStatement (Worker* worker) {
 	case TOKEN_IF: 					return ParseIF(worker);
 	case TOKEN_ITER:				return ParseIter(worker);
 	case TOKEN_RETURN: 			return ParseReturn(worker);
-	case TOKEN_SCOPE_OPEN:	return ParseBlock(worker);
+	case TOKEN_BLOCK_OPEN:	return ParseBlock(worker);
 	case TOKEN_IMPORT:			return ParseImport(worker);
 	default:
 		ReportError(worker, worker->token.site, "Could not parse statement: unkown Token");
@@ -93,15 +87,30 @@ ASTNode* ParseStatement (Worker* worker) {
 	}
 }
 
-ASTNode* ParseReturn (Worker* worker) {
-    LOG_VERBOSE(worker->token.site << ": Parsing a return statement");
-    NextToken(worker);
-    auto expr = ParseExpr(worker);
-    auto returnVal = CreateReturnValue(&worker->arena, expr);
-    return returnVal;
+internal void SkipEntireBlock (Worker* worker) {
+    int blockLevel = 1;
+    while (blockLevel > 0) {
+        if (worker->token.type == TOKEN_BLOCK_OPEN)
+            blockLevel++;
+        else if (worker->token.type == TOKEN_BLOCK_CLOSE)
+            blockLevel--;
+        NextToken(worker);
+    }
 }
 
-ASTCall* ParseCall (Worker* worker, const Token& identToken) {
+ASTNode* ParseReturn(Worker* worker) {
+		LOG_VERBOSE(worker->token.site << ": Parsing a return statement");
+		NextToken(worker);
+		auto expr = ParseExpr(worker);
+		auto returnVal = CreateReturnValue(&worker->arena, expr);
+		return returnVal;
+}
+
+ASTCall* ParseCall(Worker* worker, const Token& identToken) {
+    if (worker->currentBlock->parent == nullptr) {
+        ReportError(worker, worker->token.site, "Can not call functions outside a block!  Did you mean to use :: ?");
+    }
+
 	std::vector<ASTExpression*> args;
 	NextToken(worker); // Eat the open paren
 	while (worker->token.type != TOKEN_PAREN_CLOSE) {
@@ -158,7 +167,6 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 				NextToken(worker);	// eat whatever that token was... hopefuly this will ha
 				break;
 			default:
-                //TODO consider removing this
                 node = FindNodeWithIdent(worker->currentBlock, identToken.string);
 				if (!node) {
 					ReportError(worker, worker->token.site, "There is no node matching identifier: " + worker->token.string );
@@ -245,9 +253,9 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 		} break;
 
 		default:
-				LOG_ERROR(worker->token.site << "Unknown token when expecting expression");
-				//silllyyyyy // Increment the lexer to handle error recovery!
-				return nullptr;
+            ReportError(worker, &worker->token.site, "Unkown token when expecting expression");
+            NextToken(worker);
+            return nullptr;
 		}
 		// This is dead code it will never happen.
 }
@@ -316,6 +324,7 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 			return iter;
 		}
 
+        // @VARIABLE
 		else {
 			auto var = CreateVariable(&worker->arena, worker->token.site, worker->currentBlock, identToken.string.c_str());
             AssignIdent(worker->currentBlock, var, identToken.string);
@@ -326,7 +335,11 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 			}
 
 			if (worker->token.type != TOKEN_IDENTIFIER) {
-				ReportError(worker, worker->token.site, "type token '" + worker->token.string + "' is not an idnetifier!");
+                if (worker->token.type == TOKEN_STRUCT) {
+                    ReportError(worker, worker->token.site, "You accidently forgot the extra ':' when declaring a struct");
+                } else {
+                    ReportError(worker, worker->token.site, "type token '" + worker->token.string + "' is not an idnetifier!");
+                }
 			} else {
                 auto type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->token.string);
                 if (type == nullptr) {
@@ -379,9 +392,6 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
                 AssignIdent(worker->currentBlock, funcSet, identToken.string);
 			}
 
-            // TODO We need to store somthing about the functions name here...
-            // or somthing of that nature
-
             auto function = CreateFunction(&worker->arena, worker->currentBlock, identToken.string, funcSet);
             worker->currentBlock->members.push_back(function);
 			worker->currentBlock = function;
@@ -430,56 +440,82 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 
 			// There was no type return ':>' operator after the argument list but an expected token followed.
 			// We assume it was intentional and that the return type is implicitly void
-			else if (worker->token.type == TOKEN_SCOPE_OPEN || worker->token.type == TOKEN_FOREIGN) {
+			else if (worker->token.type == TOKEN_BLOCK_OPEN || worker->token.type == TOKEN_FOREIGN) {
 				function->returnType = global_voidType;
 			} else {
 				ReportError(worker, worker->token.site, "Expected new block or statemnt after function defininition");
 			}
 
-		auto func = FindMatchingFunction(funcSet, function);
-		if (func != nullptr && func != function) {
-			ReportError(worker, identToken.site, "Function re-definition!	Overloaded function " + identToken.string + "was already defined!");
-		} else if (worker->token.type == TOKEN_SCOPE_OPEN) {
-			// TODO change this to parseStatement to get the nextblock
-			// A new scope has been opened...
-			NextToken(worker); // Eat the scope
+            ASTFunction* matchingFunction = nullptr;
+            for (auto func : funcSet->functions) {
+                bool foundMatchingFunction = true;
+                if (func->args.size() == function->args.size()) {
+                    for (U32 i = 0; i < func->args.size(); i++) {
+                        if (func->args[i]->type != function->args[i]->type) {
+                            foundMatchingFunction = false;
+                            break;
+                        }
+                    }
 
-			while (worker->token.type != TOKEN_SCOPE_CLOSE && worker->token.type != TOKEN_EOF) {
-				// Here we are going to push back nullptrs into the function because they will never
-				// Get to the codegenration phase anyway..	Instead of branching we can juse do this and not care
-				ASTNode* node = ParseStatement(worker);
-				function->members.push_back(node);
-			}
+                    if (foundMatchingFunction) {
+                        matchingFunction = func;
+                    }
+                }
+            }
 
-		} else if (worker->token.type != TOKEN_FOREIGN) {
-			ReportError(worker, worker->token.site, "Expected a new scope to open after function definition!");
-			LOG_INFO("Did you misspell foreign?");
-			return nullptr;
-		} else {
-			if(function->parent->parent != nullptr) {
-				// TODO why wouldn't we allow this?
-				ReportError(worker, worker->token.site, "Cannot create a foreign function nested in another block!	Foreign functions must be declared in the global scope!");
-				return nullptr;
-			}
-		}
+            if (matchingFunction != nullptr && matchingFunction != function) {
+			    ReportError(worker, &identToken.site, "Function %s has already been defined with arguments:", matchingFunction->name);
+                printf("\t");
+                for (U32 i = 0; i < matchingFunction->args.size(); i++) {
+                    auto arg = matchingFunction->args[i];
+                    printf("%s : %s", arg->name, arg->type->name);
+                }
+                printf("\n");
+                if (matchingFunction->returnType != function->returnType) {
+                    printf("Return types do not match!  Can not overload functions only by return type");
+                }
 
-		NextToken(worker);		// Eats the foreign or the end of the scope
-		worker->currentBlock = function->parent;
-		return function;
-	}
+            } else if (worker->token.type == TOKEN_BLOCK_OPEN) {
+                // TODO change this to parseStatement to get the nextblock
+                // A new scope has been opened...
+                NextToken(worker); // Eat the scope
 
-	// NOTE @STRUCT
+                while (worker->token.type != TOKEN_BLOCK_CLOSE && worker->token.type != TOKEN_EOF) {
+                    // Here we are going to push back nullptrs into the function because they will never
+                    // Get to the codegenration phase anyway..	Instead of branching we can juse do this and not care
+                    ASTNode* node = ParseStatement(worker);
+                    function->members.push_back(node);
+                }
+
+            } else if (worker->token.type != TOKEN_FOREIGN) {
+                ReportError(worker, worker->token.site, "Expected a new scope to open after function definition!");
+                LOG_INFO("Did you misspell foreign?");
+                return nullptr;
+            } else {
+                if(function->parent->parent != nullptr) {
+                    // This cant even happen there are no longer lambdas!
+                    ReportError(worker, worker->token.site, "Cannot create a foreign function nested in another block!	Foreign functions must be declared in the global scope!");
+                    return nullptr;
+                }
+            }
+
+            NextToken(worker);		// Eats the foreign or the end of the scope
+            worker->currentBlock = function->parent;
+            return function;
+        }
+
+	// @STRUCT
 	else if (worker->token.type == TOKEN_STRUCT) {
 		NextToken(worker); // Eat the struct keyword
 		if (node != nullptr) {
 			ReportError(worker, identToken.site, "Struct Redefinition");
 		}
 
-		if (worker->token.type == TOKEN_SCOPE_OPEN) {
+		if (worker->token.type == TOKEN_BLOCK_OPEN) {
 			NextToken(worker); // Eat the open scope
 
             std::vector<ASTStructMember> members;
-			while (worker->token.type != TOKEN_SCOPE_CLOSE) {
+			while (worker->token.type != TOKEN_BLOCK_CLOSE) {
 				if (worker->token.type != TOKEN_IDENTIFIER) {
 					ReportError(worker, worker->token.site, "All statements inside structDefns must be identifier decls");
 				}
@@ -546,7 +582,7 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 			ReportError(worker, identToken.site, "Could not resolve identifier " + identToken.string + " when trying to acess member");
 		}
 
-		// TODO this could also be a namespace / enum / whatever
+		// TODO namespace, enums, other things?
 		auto structVar = (ASTVariable*)node;
 		auto structDefn = (ASTStruct*)structVar->type;
 		if(structDefn->nodeType != AST_STRUCT) ReportError(worker, identToken.site, "Member access operator only applies to struct types!");
@@ -664,7 +700,7 @@ internal inline ASTNode* ParseIter (Worker* worker, const std::string& identName
 		}
 	}
 
-	else if (worker->token.type == TOKEN_SCOPE_OPEN) {
+	else if (worker->token.type == TOKEN_BLOCK_OPEN) {
 		auto block = ParseBlock(worker);
 		LOG_ERROR("Not dealing with these for now");
 	}
@@ -672,7 +708,7 @@ internal inline ASTNode* ParseIter (Worker* worker, const std::string& identName
 }
 
 internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
-	assert(worker->token.type == TOKEN_SCOPE_OPEN);
+	assert(worker->token.type == TOKEN_BLOCK_OPEN);
 	NextToken(worker);	 // Eat the SCOPE_OPEN
 	auto previousScope = worker->currentBlock;
 
@@ -682,7 +718,7 @@ internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 
 	worker->currentBlock = block;
 
-	while(worker->token.type != TOKEN_SCOPE_CLOSE && worker->token.type != TOKEN_EOF) {
+	while(worker->token.type != TOKEN_BLOCK_CLOSE && worker->token.type != TOKEN_EOF) {
 		auto node = ParseStatement (worker);
 		if (node == nullptr) {
 			LOG_ERROR(worker->token.site << "Could not parse statement inside block");
@@ -696,7 +732,7 @@ internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 	return block;
 }
 
-void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename) {
+void ParseFile(Worker* worker, const std::string& rootDir, const std::string& filename) {
 	worker->file = fopen((rootDir + filename).c_str(), "r");
 	if (!worker->file) {
 		ReportError(worker, "Could not open file: " + filename);

@@ -1,17 +1,1 @@
 printf :: (fmt : @U8 ...) FOREIGN
-
-#__PrintInt     :: (msg : S32) FOREIGN
-#__PrintFloat   :: (msg : F32) FOREIGN
-#__PrintStr     :: (msg : @U8) FOREIGN
-#
-#__PrintlnInt   :: (msg : S32) FOREIGN
-#__PrintlnFloat :: (msg : F32) FOREIGN
-#__PrintlnStr   :: (msg : @U8) FOREIGN
-#
-#Print :: (msg : S32)  { __PrintInt(msg) }
-#Print :: (msg : F32)  { __PrintFloat(msg) }
-#Print :: (msg : @U8)    { __PrintStr(msg) }
-#
-#Println :: (msg : S32) { __PrintlnInt(msg) }
-#Println :: (msg : F32) { __PrintlnFloat(msg) }
-#Println :: (msg : @U8) { __PrintlnStr(msg) }

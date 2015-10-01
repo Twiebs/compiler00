@@ -4,22 +4,24 @@
 #include "Common.hpp"
 #include "Build.hpp"
 
+#include "Lexer.hpp"
+
 // This is probably a terrible idea the interpeter and the static compiler will
 // be vastly different from the way that they handle expresions and do stuff like that
 // If you were to type x it would be a serious comipler error but the interpreter should tell you exactly what that
 // Thing is.
 
-#if 0
-struct InterpLexer {
-    Token token;
-    void NextToken();
-    void EatNext();
-    void AppendNext();
-private:
-    std::string buffer;
-    U32 bufferPos;
-    char lastChar, nextChar;
-};
+#if 1
+
+
+void InterpLexer::begin() {
+    if (buffer.size() > 0) {
+        nextChar = buffer[0];
+    } else {
+        nextChar = EOF;
+    }
+    bufferPos = 1;
+}
 
 void InterpLexer::EatNext() {
     lastChar = nextChar;
@@ -35,7 +37,7 @@ void InterpLexer::AppendNext() {
     token.string += lastChar;
 }
 
-void InterpLexer::NextToken() {
+void InterpLexer::nextToken() {
     token.string = "";
     token.type = TOKEN_UNKOWN;
     while (isspace(nextChar)) EatNext();
@@ -86,7 +88,7 @@ void InterpLexer::NextToken() {
             EatNext();	//Now we eat the comment body itself
         //We have reached the end of the comment.	If is not the end of the file get the next token
         if (nextChar != EOF) {
-            NextToken();
+            nextToken();
             return;
         }
     }
@@ -216,11 +218,11 @@ void InterpLexer::NextToken() {
         token.type = TOKEN_ARRAY_CLOSE;
     } else if (nextChar == '{') {
         AppendNext();
-        token.type = TOKEN_SCOPE_OPEN;
+        token.type = TOKEN_BLOCK_OPEN;
         // currentIndentLevel++;
     } else if (nextChar == '}') {
         AppendNext();
-        token.type = TOKEN_SCOPE_CLOSE;
+        token.type = TOKEN_BLOCK_CLOSE;
         // currentIndentLevel++;
     } else if (nextChar == EOF) {
         //Dont append or ead the EOF
@@ -288,14 +290,14 @@ void NextToken (Worker* worker) {
 
 			if (indentLevel > worker->currentIndentLevel) {
 				worker->token.string = "";
-				worker->token.type = TOKEN_SCOPE_OPEN;;
+				worker->token.type = TOKEN_BLOCK_OPEN;;
 				worker->token.site.lineNumber = worker->lineNumber;
 				worker->token.site.columNumber = worker->colNumber;
 				worker->currentIndentLevel = indentLevel;
 				return;
 			} else if (indentLevel < worker->currentIndentLevel) {
 				worker->token.string = "";
-				worker->token.type = TOKEN_SCOPE_CLOSE;
+				worker->token.type = TOKEN_BLOCK_CLOSE;
 				worker->token.site.lineNumber = worker->lineNumber;
 				worker->token.site.columNumber = worker->colNumber;
 				worker->currentIndentLevel = indentLevel;
@@ -486,11 +488,11 @@ void NextToken (Worker* worker) {
 				worker->token.type = TOKEN_ARRAY_CLOSE;
 		} else if (worker->nextChar == '{') {
 			AppendNext(worker);
-			worker->token.type = TOKEN_SCOPE_OPEN;
+			worker->token.type = TOKEN_BLOCK_OPEN;
 			// currentIndentLevel++;
 		} else if (worker->nextChar == '}') {
 			AppendNext(worker);
-			worker->token.type = TOKEN_SCOPE_CLOSE;
+			worker->token.type = TOKEN_BLOCK_CLOSE;
 			// currentIndentLevel++;
 		} else if (worker->nextChar == EOF) {
 			//Dont append or ead the EOF

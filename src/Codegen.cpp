@@ -346,7 +346,7 @@ llvm::Value* Codegen(ASTCall* call) {
 	auto llvmfunc = (llvm::Function*)call->function->llvmFunction;
 
 	std::vector<llvm::Value*> argsV;
-	auto argList = (ASTExpression**)(call + 1);
+	auto argList = call->args;
 	for (auto i = 0; i < call->argCount; i++) {
 		auto arg = argList[i];
 		auto arg_value = CodegenExpr(arg);

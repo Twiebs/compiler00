@@ -1,0 +1,6 @@
+# This file contains definitions for foreign compiler functions
+# For use in the languages interpreter
+
+ListAll :: () FOREIGN
+Build :: () FOREIGN
+InterpTest :: () FOREIGN

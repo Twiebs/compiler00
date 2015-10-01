@@ -1,10 +1,31 @@
-#printf :: (fmt : @U8 ...) FOREIGN
+IMPORT "IO.bang"
+IMPORT "lang.src"
+
+Vector3 :: STRUCT
+	x : F32
+	y : F32
+	z : F32
+
+Transform :: STRUCT
+	position : Vector3
+	rotation : Vector3
+	scale 	 : Vector3
 
 Test :: () :> S32
 	RETURN 0
 
+PrintSomeStuff :: ()
+	printf("Here is some stuff!")
+
+Test :: (x : S8)  :> S32 { }
+Test :: (x : S16) :> S32 { }
+Test :: (x : S32) :> S32 { }
+Test :: (x : S64) :> S32 { }
+Test :: (msg : @S16) { }
+Test :: (msg : @U8)  { }
+Test :: (msg : @U16) { }
+Test :: (msg : @U64) { }
 
 Main :: () :> S32
-	x := 5
-	#printf("Look! Its the number five: %d" x)
+	PrintSomeStuff()
 	RETURN 0

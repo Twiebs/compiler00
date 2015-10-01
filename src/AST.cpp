@@ -4,7 +4,13 @@
 
 void* Allocate (MemoryArena* arena, size_t size) {
   if (arena->used + size >= arena->capacity) {
-    assert(false);
+      if (arena->next == nullptr) {
+          arena->next = (MemoryArena*)(malloc(sizeof(MemoryArena) + ARENA_BLOCK_SIZE));
+          arena->next = new (arena->next) MemoryArena;
+          arena->next->capacity = ARENA_BLOCK_SIZE;
+          arena->next->memory = arena->next + 1;
+      }
+      return Allocate(arena->next, size);
   } else {
     auto ptr = (U8*)arena->memory + arena->used;
     arena->used += size;
@@ -178,28 +184,6 @@ ASTFunction* CreateFunction (MemoryArena* arena, ASTBlock* block, const std::str
     return function;
 }
 
-ASTFunction* FindMatchingFunction(ASTFunctionSet* funcSet, ASTFunction* function) {
-	assert(funcSet->nodeType == AST_FUNCTION);
-	for(auto func : funcSet->functions) {
-		bool functionsMatch = true;
-		if(func->args.size() == function->args.size()) {
-			for(U32 i = 0; i < func->args.size(); i++) {
-				if(func->args[i]->type != function->args[i]->type) {
-					functionsMatch = false;
-				}
-			}
-		} else functionsMatch = false;
-		if(functionsMatch) {
-			if(func->returnType != function->returnType) {
-				LOG_ERROR("Cannot overload function return types!  Arguments must differ!");
-				return nullptr;
-			}
-			return func;
-		}
-	}
-	return nullptr;
-}
-
 // We are going to try and do this thing with calls where we pack the arguments at the end
 // Im not sure if we need to bother with the pointer since we know they will procede the argument count
 // but for now it keeps it simple so i will leave it it will be intresting to see if it actualy works.  Eventualy this will
@@ -261,19 +245,16 @@ ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& st
 	return result;
 }
 
-ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, ASTBlock* block, const char* name, ASTExpression* initalExpr) {
-	auto result = (ASTVariable*)Allocate(arena, sizeof(ASTVariable) + strlen(name) + 1);
+ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, ASTBlock* block, const std::string& name, ASTExpression* initalExpr) {
+	auto result = new (Allocate(arena, sizeof(ASTVariable))) ASTVariable;
+    result->name = (char*)Allocate(arena, name.size() + 1);
+    memcpy(result->name, name.c_str(), name.size() + 1);
 	result->nodeType = AST_VARIABLE;
 	result->initalExpression = initalExpr;
 	result->block = block;
 	result->allocaInst = nullptr;
 	result->isPointer = false;
-    auto strptr = (U8*)(result + 1);
-    memcpy(strptr, name, strlen(name));
-    strptr += strlen(name);
-    *strptr = '\0';
-    result->name = (char*)strptr;
-	return result;
+    return result;
 }
 
 // Control flow

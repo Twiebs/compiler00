@@ -17,7 +17,7 @@ enum TokenType {
 	TOKEN_TYPE_RETURN,
 
 	TOKEN_STRUCT,
-	TOKEN_ACCESS,	// MemberAccess to be clearer?
+	TOKEN_ACCESS,	// TODO MemberAccess to be clearer?
 
 	TOKEN_ADDRESS,
 	TOKEN_VALUE,
@@ -64,8 +64,8 @@ enum TokenType {
 
 	TOKEN_PAREN_OPEN,
 	TOKEN_PAREN_CLOSE,
-	TOKEN_SCOPE_OPEN,
-	TOKEN_SCOPE_CLOSE,
+	TOKEN_BLOCK_OPEN,
+	TOKEN_BLOCK_CLOSE,
 	TOKEN_ARRAY_OPEN,
 	TOKEN_ARRAY_CLOSE,
 	TOKEN_EOF
@@ -102,7 +102,7 @@ struct MemoryArena {
     size_t used = 0;
     size_t capacity = 0;
     void* memory = nullptr;
-    MemoryArena* next;
+    MemoryArena* next = nullptr;
 };
 
 void* Allocate (MemoryArena* arena, size_t size);
@@ -113,6 +113,7 @@ enum ASTNodeType {
 	AST_DEFINITION,
 
 	AST_FUNCTION,
+    AST_FUNCTION_SET, // TODO set function sets to this seperate nodeType
 	AST_STRUCT,
 
     AST_VARIABLE,
@@ -215,7 +216,6 @@ struct ASTStructMember {
 };
 
 struct ASTStruct : public ASTDefinition {
-    char* name;
     ASTStructMember* members;
     U32 memberCount;
 };
@@ -278,7 +278,8 @@ struct ASTCall : public ASTNode {
     char* name;
     U32 argCount;
     ASTExpression** args;
-	ASTFunction* function;
+	ASTFunction* function = nullptr;
+    ASTCall() { nodeType = AST_CALL; }
 };
 
 struct ASTLiteral : public ASTExpression {
@@ -325,14 +326,13 @@ ASTNode* FindNodeWithIdent(ASTBlock* block, const std::string& name);
 // Statements
 ASTFunctionSet* CreateFunctionSet (MemoryArena* arena);		// This is where identifiers are resolved into
 ASTFunction* CreateFunction(MemoryArena* arena, ASTBlock* block, const std::string& name, ASTFunctionSet* funcSet);	// Functions now must be created within a function set
-ASTFunction* FindMatchingFunction(ASTFunctionSet* funcSet, ASTFunction* function);
 
 ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* block);
 
 ASTStruct* CreateStruct (MemoryArena* arena, const std::string& name, ASTStructMember* members, U32 memberCount);
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 
-ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, ASTBlock* block, const char* name, ASTExpression* initalExpr = nullptr);
+ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, ASTBlock* block, const std::string& name, ASTExpression* initalExpr = nullptr);
 
 // Operations
 ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* variable, Operation op, ASTExpression* expr);

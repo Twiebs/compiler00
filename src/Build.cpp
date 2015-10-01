@@ -22,7 +22,6 @@ struct Workspace {
     U32 workerCount;
     Worker* workers;
     WorkQueue workQueue;
-
     void* memory;
 };
 
@@ -116,7 +115,7 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, Bu
 // TODO InitWorkspace should be able to be done lazily if the interp is run instead of directly
 // calling the compiler to run on a file / package
 
-#define FORCE_SINGLE_THREADED 1
+#define FORCE_SINGLE_THREADED 0
 #define ARENA_BLOCK_SIZE 4096
 #define TEMP_BLOCK_SIZE 1 << 8
 internal void InitWorkspace (Workspace* workspace) {
@@ -139,11 +138,22 @@ internal void InitWorkspace (Workspace* workspace) {
     }
 }
 
-// TODO after subarenas are added make sure they are freed as well
 internal void ExitWorkspace (Workspace* workspace) {
     free(workspace->memory);
-}
+    for (U32 i = 0; i < workspace->workerCount; i++) {
+        std::function<void(MemoryArena*)> freeSubArena = [freeSubArena](MemoryArena* arena) {
+            if (arena->next != nullptr) {
+                freeSubArena(arena->next);
+            }
+            free(arena->next);
+        };
 
+        auto arena = &workspace->workers[i].arena;
+        if (arena->next != nullptr) {
+            freeSubArena(arena);
+        }
+    }
+}
 
 void Build () {
     // HACK to keep working with current build system

@@ -2,9 +2,23 @@
 #include <fstream>
 #include "AST.hpp"
 
+// We need a ASTPrototype because if we store functions in a package
+// and then we let its consituant members fall out of scope then there is no
+// reason to have the member defintions at all...
+// The block is then completly irrelevant
+// Then function prototypes could be stored directly inside of the package
+// along with structs, global variables and whatever else is required
+// mabye macro definitions?? or somthing similar?
+// This is an interesting idea because perhaps the current way the function resolver works then
+// could be changed to directly work on prototypes rather than concrete functions
+// Yeah thats exactly what you want to happen!
+// Internal functions could be just stored within the regular AST but that might become to cumbersome?
+// No thats fine it would work well enough.
+
 struct Package {
     std::string name;
     ASTBlock globalBlock;
+    MemoryArena arena;
 };
 
 struct Worker {
