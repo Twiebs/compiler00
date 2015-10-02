@@ -1,26 +1,23 @@
 IMPORT "IO.bang"
 
 Vector3 :: STRUCT
-  x : F32
-  y : F32
-  z : F32
+	x : F32
+	y : F32
+	z : F32
 
-Print :: (vector : @Vector3)
-  Print("[")
-  Print(vector.x)
-  Print(", ")
-  Print(vector.y)
-  Print(", ")
-  Print(vector.z)
-  Print("]")
+Transform :: STRUCT
+	position : Vector3
+	rotation : Vector3
+	scale 	 : Vector3
 
-VectorTest :: ()
-  position : Vector3
-  position.x = 1
-  position.y = 2
-  position.z = 3
-  Print("position: ")
-  Print(@position)
+Test :: (x : S8)  :> S32 { }
+Test :: (x : S16) :> S32 { }
+Test :: (x : S32) :> S32 { }
+Test :: (x : S64) :> S32 { }
+Test :: (msg : @S16) { }
+Test :: (msg : @U8)  { }
+Test :: (msg : @U16) { }
+Test :: (msg : @U64) { }
 
 
 Main :: () :> S32

@@ -114,8 +114,9 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, Bu
 
 // TODO InitWorkspace should be able to be done lazily if the interp is run instead of directly
 // calling the compiler to run on a file / package
-
-#define FORCE_SINGLE_THREADED 0
+// XXX Threading appears to be broken when analasis happens
+// They are all acting upon the same memory
+#define FORCE_SINGLE_THREADED 1
 #define ARENA_BLOCK_SIZE 4096
 #define TEMP_BLOCK_SIZE 1 << 8
 internal void InitWorkspace (Workspace* workspace) {

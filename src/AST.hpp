@@ -29,13 +29,14 @@ enum TokenType {
 	TOKEN_DIV,
 
 	TOKEN_LOGIC_NOT,
+
 	TOKEN_LOGIC_OR,
 	TOKEN_LOGIC_AND,
-	TOKEN_BOOLEAN_EQUAL,
-	TOKEN_BOOLEAN_GREATER,
-	TOKEN_BOOLEAN_LESS,
-	TOKEN_BOOLEAN_GREATER_EQAUL,
-	TOKEN_BOOLEAN_LESS_EQUAL,
+	TOKEN_LOGIC_EQUAL,
+	TOKEN_LOGIC_GREATER,
+	TOKEN_LOGIC_LESS,
+	TOKEN_LOGIC_GREATER_EQAUL,
+	TOKEN_LOGIC_LESS_EQUAL,
 
 	TOKEN_EQUALS,
 	TOKEN_ADD_EQUALS,
@@ -103,9 +104,17 @@ struct MemoryArena {
     size_t capacity = 0;
     void* memory = nullptr;
     MemoryArena* next = nullptr;
+
+    template<typename T, typename... Args>
+    T* alloc(Args... args);
 };
 
 void* Allocate (MemoryArena* arena, size_t size);
+
+template<typename T, typename... Args>
+T* MemoryArena::alloc(Args... args) {
+    return new (Allocate(this, sizeof(T))) T(args...);
+};
 
 enum ASTNodeType {
 	AST_IDENTIFIER,
@@ -120,9 +129,12 @@ enum ASTNodeType {
 
 	AST_MEMBER_OPERATION,
 	AST_VARIABLE_OPERATION,
+    AST_BINARY_OPERATION, // TODO consider switching to these for consistancy!
+    AST_UNARY_OPERATION, // TODO consider switching to these for consistancy!
 
 	AST_MEMBER_EXPR,
     AST_VAR_EXPR,
+    AST_CAST,
     AST_CALL,
 
 	AST_IF,
@@ -132,28 +144,24 @@ enum ASTNodeType {
 	AST_INTEGER_LITERAL,
 	AST_FLOAT_LITERAL,
 	AST_STRING_LITERAL,
-
-	AST_BINOP,
 };
 
 struct ASTNode {
 	ASTNodeType nodeType;
 };
 
-// XXX name is never set
 struct ASTDefinition : public ASTNode {
     char* name;
-	void* llvmType;
+	void* llvmType = nullptr;
+    ASTDefinition() { nodeType = AST_DEFINITION; }
 };
 
 struct ASTExpression : public ASTNode {
-	// We need to care about what an expression is going to evaluate to...
 	ASTDefinition* type;
 };
 
-// It is now time to have some sort of notion of scope!
 struct ASTBlock : public ASTNode {
-	ASTBlock* parent = nullptr;	// Null if the global scope
+	ASTBlock* parent = nullptr;
 	std::vector<ASTNode*> members;
     std::unordered_map<std::string, ASTNode*> identmap;
     ASTBlock() { nodeType = AST_BLOCK; }
@@ -161,18 +169,19 @@ struct ASTBlock : public ASTNode {
 
 struct ASTIfStatement : public ASTNode {
 	ASTExpression* expr;
-	ASTNode* ifBody;
-	ASTNode* elseBody;
+	ASTNode* ifBody = nullptr;
+	ASTNode* elseBody = nullptr;
+    ASTIfStatement() { nodeType = AST_IF; }
 };
 
 
 struct ASTVariable : public ASTExpression {
+    char* name;
 	FileSite site;	// This is where this variable was declared.
-	ASTBlock* block;	// also why would we ever need to store this???
 	ASTExpression* initalExpression = nullptr;
-	void* allocaInst;
-	bool isPointer = false;
-	char* name;
+    void* allocaInst = nullptr;
+    bool isPointer = false;
+    ASTVariable() { nodeType = AST_VARIABLE; }
 };
 
 struct ASTIter : public ASTNode {
@@ -221,11 +230,17 @@ struct ASTStruct : public ASTDefinition {
 };
 
 enum Operation {
-  OPERATION_ASSIGN,
-  OPERATION_ADD,
-  OPERATION_SUB,
-  OPERATION_MUL,
-  OPERATION_DIV
+    OPERATION_ASSIGN,
+    OPERATION_ADD,
+    OPERATION_SUB,
+    OPERATION_MUL,
+    OPERATION_DIV,
+    OPERATION_LT,
+    OPERATION_GT,
+    OPERATION_LTE,
+    OPERATION_GTE,
+    OPERATION_LOR,
+    OPERATION_LAND,
 };
 
 enum UnaryOperator {
@@ -255,6 +270,7 @@ struct ASTMemberOperation : public ASTNode {
 	Operation operation;
 	U32 indexCount;
     U32* indices;
+    ASTMemberOperation() { nodeType = AST_MEMBER_OPERATION; }
 };
 
 struct ASTVariableOperation : public ASTNode {
@@ -264,9 +280,11 @@ struct ASTVariableOperation : public ASTNode {
 };
 
 struct ASTBinaryOperation : public ASTExpression {
-	TokenType binop;
+	Operation operation;
 	ASTExpression* lhs;
 	ASTExpression* rhs;
+    ASTBinaryOperation(Operation operation, ASTExpression* lhs, ASTExpression* rhs)
+        : operation(operation), lhs(lhs), rhs(rhs) { nodeType = AST_BINARY_OPERATION; }
 };
 
 struct ASTReturn : public ASTExpression {
@@ -280,6 +298,12 @@ struct ASTCall : public ASTNode {
     ASTExpression** args;
 	ASTFunction* function = nullptr;
     ASTCall() { nodeType = AST_CALL; }
+};
+
+struct ASTCast : public ASTExpression {
+    ASTExpression* expr;
+    ASTCast() { nodeType = AST_CAST; }
+    ASTCast(ASTDefinition* type, ASTExpression* expr);
 };
 
 struct ASTLiteral : public ASTExpression {
@@ -332,12 +356,14 @@ ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* block);
 ASTStruct* CreateStruct (MemoryArena* arena, const std::string& name, ASTStructMember* members, U32 memberCount);
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 
-ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, ASTBlock* block, const std::string& name, ASTExpression* initalExpr = nullptr);
+ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, const std::string& name, ASTExpression* initalExpr = nullptr);
+
+ASTCast* CreateCast(MemoryArena* arena, ASTDefinition* typeDefn, ASTExpression* expr);
 
 // Operations
 ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* variable, Operation op, ASTExpression* expr);
 ASTMemberOperation*   CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation op, ASTExpression* expr, U32* indices, U32 indexCount);
-ASTBinaryOperation*   CreateBinaryOperation(MemoryArena* arena, TokenType binop, ASTExpression* lhs, ASTExpression* rhs);
+ASTBinaryOperation*   CreateBinaryOperation(MemoryArena* arena, Operation operation, ASTExpression* lhs, ASTExpression* rhs);
 
 // Control Flow
 ASTIfStatement* CreateIfStatement(MemoryArena* arena, ASTExpression* expr);	// TODO Why are ifstatements created without a body? also the body should probably be emitted into a stack thingyyy and then coppied into the if statement???
@@ -357,3 +383,8 @@ ASTFloatLiteral* CreateFloatLiteral(MemoryArena* arena, F64 value);
 ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& string);
 
 std::string ToString(ASTNodeType nodeType);
+std::string ToString(Operation operation);
+
+bool isFloatingPoint(ASTDefinition* type);
+bool isSignedInteger(ASTDefinition* type);
+bool isUnsignedInteger (ASTDefinition* type);

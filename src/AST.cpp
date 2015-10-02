@@ -46,10 +46,8 @@ ASTDefinition* global_F128Type;
 
 internal inline ASTDefinition* CreatePrimitiveType(MemoryArena* arena, ASTBlock* block, const std::string& name) {
 	auto typeDefn = new (Allocate(arena, sizeof(ASTDefinition))) ASTDefinition;
-    typeDefn->nodeType = AST_DEFINITION;
     typeDefn->name = (char*)Allocate(arena, name.size() + 1);
     memcpy(typeDefn->name, name.c_str(), name.size() + 1);
-    typeDefn->llvmType = nullptr;
     AssignIdent(block, typeDefn, name);
 	return typeDefn;
 }
@@ -91,6 +89,12 @@ ASTNode* FindNodeWithIdent (ASTBlock* block, const std::string& name) {
 	return result;
 }
 
+ASTCast::ASTCast(ASTDefinition* type, ASTExpression* expr) {
+    nodeType = AST_CAST;
+    this->type = type;
+    this->expr = expr;
+}
+
 ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* var, Operation op, ASTExpression* expr) {
 	auto result = (ASTVariableOperation*)Allocate(arena, sizeof(ASTVariableOperation));
 	result->nodeType = AST_VARIABLE_OPERATION;
@@ -113,12 +117,8 @@ ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* struc
     return result;
 }
 
-ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, TokenType binop, ASTExpression* lhs, ASTExpression* rhs) {
-	auto result = (ASTBinaryOperation*)Allocate(arena, sizeof(ASTBinaryOperation));
-	result->nodeType = AST_BINOP;
-	result->binop = binop;
-	result->lhs = lhs;
-	result->rhs = rhs;
+ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, Operation operation, ASTExpression* lhs, ASTExpression* rhs) {
+	auto result = new (Allocate(arena, sizeof(ASTBinaryOperation))) ASTBinaryOperation(operation, lhs, rhs);
     return result;
 }
 
@@ -135,12 +135,12 @@ ASTStruct* CreateStruct(MemoryArena* arena, const std::string& name,  ASTStructM
 
 
 ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, U32* indices, U32 indexCount) {
-	auto result = (ASTMemberExpr*)Allocate(arena, (sizeof(ASTMemberExpr)));
-	result->nodeType = AST_MEMBER_EXPR;
-	result->structVar = structVar;
+	auto result = new (Allocate(arena, (sizeof(ASTMemberExpr)))) ASTMemberExpr;
+    result->indices = (U32*)Allocate(arena, sizeof(result->indices) * indexCount);
+    result->nodeType = AST_MEMBER_EXPR;
+    result->structVar = structVar;
     result->accessMod = accessMod;
     result->indexCount = indexCount;
-    result->indices = (U32*)Allocate(arena, sizeof(result->indices) * indexCount);
 	memcpy(result->indices, indices, indexCount * sizeof(U32));
 	return result;
 }
@@ -201,6 +201,10 @@ ASTCall* CreateCall (MemoryArena* arena, ASTExpression** argList, U32 argCount, 
 	return call;
 }
 
+ASTCast* CreateCast(MemoryArena* arena, ASTDefinition* typeDefn, ASTExpression* expr) {
+    auto cast = new (Allocate(arena, sizeof(ASTCast))) ASTCast(typeDefn, expr);
+}
+
 ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* parent) {
 	auto block = new (Allocate(arena, sizeof(ASTBlock))) ASTBlock;
     block->parent = parent;
@@ -245,25 +249,18 @@ ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& st
 	return result;
 }
 
-ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, ASTBlock* block, const std::string& name, ASTExpression* initalExpr) {
+ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, const std::string& name, ASTExpression* initalExpr) {
 	auto result = new (Allocate(arena, sizeof(ASTVariable))) ASTVariable;
     result->name = (char*)Allocate(arena, name.size() + 1);
     memcpy(result->name, name.c_str(), name.size() + 1);
-	result->nodeType = AST_VARIABLE;
 	result->initalExpression = initalExpr;
-	result->block = block;
-	result->allocaInst = nullptr;
-	result->isPointer = false;
     return result;
 }
 
 // Control flow
 ASTIfStatement* CreateIfStatement(MemoryArena* arena, ASTExpression* expr) {
-    auto result = (ASTIfStatement*)(arena, sizeof(ASTIfStatement));
-	result->nodeType = AST_IF;
+    auto result = new (Allocate(arena, sizeof(ASTIfStatement))) ASTIfStatement;
 	result->expr = expr;
-	result->ifBody = nullptr;
-	result->elseBody = nullptr;
 	return result;
 }
 
@@ -284,4 +281,32 @@ std::string ToString(ASTNodeType nodeType) {
     case AST_VARIABLE:      return "Variable";
 	default: return "Too Lazy to implement ToString for this nodeType";
 	}
+}
+
+std::string ToString(Operation operation) {
+    switch (operation) {
+    case OPERATION_ADD: return "+";
+    default: return "Did not implement OperationToString";
+    }
+}
+
+
+bool isFloatingPoint(ASTDefinition* type) {
+    if (type == global_F32Type) return true;
+    if (type == global_F64Type) return true;
+    return false;
+}
+
+bool isSignedInteger(ASTDefinition* type) {
+    if (type == global_S32Type) return true;
+    if (type == global_S64Type) return true;
+    return false;
+}
+
+bool isUnsignedInteger (ASTDefinition* type) {
+    if (type == global_U8Type) return true;
+    if (type == global_U16Type) return true;
+    if (type == global_U32Type) return true;
+    if (type == global_U64Type) return true;
+    return false;
 }

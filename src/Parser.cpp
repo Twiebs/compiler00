@@ -26,7 +26,13 @@ void ReportError (Worker* worker, FileSite& site, const std::string& msg);
 void ReportError (Worker* worker, const std::string& msg);
 
 internal inline int GetTokenPrecedence (const Token& token) {
-	if (token.type == TOKEN_ADD) return 20;
+    if (token.type == TOKEN_LOGIC_OR) return 5;
+    if (token.type == TOKEN_LOGIC_AND) return 5;
+	if (token.type == TOKEN_LOGIC_LESS)           return 10;
+    if (token.type == TOKEN_LOGIC_GREATER)        return 10;
+    if (token.type == TOKEN_LOGIC_LESS_EQUAL)     return 10;
+    if (token.type == TOKEN_LOGIC_GREATER_EQAUL)  return 10;
+    if (token.type == TOKEN_ADD) return 20;
 	if (token.type == TOKEN_SUB) return 20;
 	if (token.type == TOKEN_MUL) return 40;
 	if (token.type == TOKEN_DIV) return 40;
@@ -41,6 +47,16 @@ void ReportError(Worker* worker, FileSite& site, const std::string& msg) {
 void ReportError(Worker* worker, const std::string& msg) {
     worker->errorCount++;
     std::cout << " \x1b[31m" << msg	<< "\033[39m\n";
+}
+
+void ReportError(Worker* worker, const char* msg, ...) {
+    worker->errorCount++;
+    va_list args;
+    printf(" \x1b[31m");
+    va_start(args, msg);
+    vprintf(msg, args);
+    va_end(args);
+    printf("\033[39m\n");
 }
 
 void ReportError(Worker* worker, FileSite* site, const char* msg, ...) {
@@ -74,14 +90,14 @@ ASTNode* ParseStatement (Worker* worker) {
 	case TOKEN_MUL:
 	case TOKEN_DIV:
 
-	case TOKEN_IDENTIFIER:	return ParseIdentifier(worker);
-	case TOKEN_IF: 					return ParseIF(worker);
-	case TOKEN_ITER:				return ParseIter(worker);
-	case TOKEN_RETURN: 			return ParseReturn(worker);
-	case TOKEN_BLOCK_OPEN:	return ParseBlock(worker);
-	case TOKEN_IMPORT:			return ParseImport(worker);
+	case TOKEN_IDENTIFIER:	      return ParseIdentifier(worker);
+	case TOKEN_IF: 			return ParseIF(worker);
+	case TOKEN_ITER:		return ParseIter(worker);
+	case TOKEN_RETURN: 			  return ParseReturn(worker);
+	case TOKEN_BLOCK_OPEN:	      return ParseBlock(worker);
+	case TOKEN_IMPORT:			  return ParseImport(worker);
 	default:
-		ReportError(worker, worker->token.site, "Could not parse statement: unkown Token");
+		ReportError(worker, &worker->token.site, "Could not parse statement unkown token(%s)", worker->token.string.c_str());
 		NextToken(worker);
 		return nullptr;
 	}
@@ -104,6 +120,22 @@ ASTNode* ParseReturn(Worker* worker) {
 		auto expr = ParseExpr(worker);
 		auto returnVal = CreateReturnValue(&worker->arena, expr);
 		return returnVal;
+}
+
+internal inline ASTCast* ParseCast(Worker* worker, const Token& identToken) {
+    NextToken(worker);
+    auto typeDefn = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, identToken.string);
+    assert(typeDefn->nodeType == AST_DEFINITION);
+    auto expr = ParseExpr(worker);
+
+    if (worker->token.type != TOKEN_PAREN_CLOSE) {
+        ReportError(worker, &worker->token.site, "expected close parren enlosing expression when casting to type %s", identToken.string.c_str());
+        return nullptr;
+    } else {
+        NextToken(worker);
+        auto cast = CreateCast(&worker->arena, typeDefn, expr);
+        return cast;
+    }
 }
 
 ASTCall* ParseCall(Worker* worker, const Token& identToken) {
@@ -177,8 +209,13 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 		}
 
 		if (worker->token.type == TOKEN_PAREN_OPEN) {
-			auto call = ParseCall (worker, identToken);
-			return (ASTExpression*)call;
+            if (node->nodeType == AST_DEFINITION || node->nodeType == AST_STRUCT) {
+                auto cast = ParseCast(worker, identToken);
+                return (ASTExpression*)cast;
+            } else {
+                auto call = ParseCall(worker, identToken);
+                return (ASTExpression*)call;
+            }
 		} else if (worker->token.type == TOKEN_ACCESS) {
 			auto structVar = (ASTVariable*)node;
 			auto structDefn = (ASTStruct*)structVar->type;
@@ -260,50 +297,71 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 		// This is dead code it will never happen.
 }
 
+// HACK there is a better way to do this but for now this works.
+// This is nessecary because i dont want operations tied to the parsing of tokens
+// because there may be suport for user defined operators in the future
+// and intrinsic operations should be seperated from their tokens.
+Operation tokenToOperation(const Token& token) {
+    switch (token.type) {
+    case TOKEN_ADD: return OPERATION_ADD;
+    case TOKEN_SUB: return OPERATION_SUB;
+    case TOKEN_MUL: return OPERATION_MUL;
+    case TOKEN_DIV: return OPERATION_DIV;
+
+    case TOKEN_LOGIC_GREATER: return OPERATION_GT;
+    case TOKEN_LOGIC_LESS: return OPERATION_LT;
+    case TOKEN_LOGIC_GREATER_EQAUL: return OPERATION_GTE;
+    case TOKEN_LOGIC_LESS_EQUAL: return OPERATION_LTE;
+
+    case TOKEN_LOGIC_OR: return OPERATION_LOR;
+    case TOKEN_LOGIC_AND: return OPERATION_LAND;
+    }
+}
+
 ASTExpression* ParseExprRHS (int exprPrec, ASTExpression* lhs, Worker* worker) {
 	assert(lhs != nullptr);
 	while (true) {
-				// If the token prec is less than 0 that means that this is not a binary opperator
-				// And we dont have to do anything aside from returning the allready parsed expression
-				auto tokenPrec = GetTokenPrecedence(worker->token);
-				if (tokenPrec < 0) {
-					return lhs;
-				}
+        // If the token prec is less than 0 that means that this is not a binary opperator
+        // And we dont have to do anything aside from returning the allready parsed expression
+        auto tokenPrec = GetTokenPrecedence(worker->token);
+        if (tokenPrec < 0) {
+            return lhs;
+        }
 
-				// We know that the currentToken is a binop
-				// Possibly?	Yes!
-				auto binopToken = worker->token;
-				NextToken(worker);		// Eat the binop
+        // We know that the currentToken is a binop
+        // Possibly?	Yes!
+        auto binopToken = worker->token;
+        NextToken(worker);		// Eat the binop
 
-				// We have a binop lets see what is on the other side!
-				ASTExpression* rhs = ParsePrimaryExpr(worker);
-				if (rhs == nullptr) {
-					ReportError(worker, binopToken.site, "Could not parse primary expression to the right of binary opperator '" + binopToken.string	+ "'");
-					return nullptr;
-				}
+        // We have a binop lets see what is on the other side!
+        ASTExpression* rhs = ParsePrimaryExpr(worker);
+        if (rhs == nullptr) {
+            ReportError(worker, binopToken.site, "Could not parse primary expression to the right of binary opperator '" + binopToken.string	+ "'");
+            return nullptr;
+        }
 
-				auto nextPrec = GetTokenPrecedence (worker->token);
-				if (tokenPrec < nextPrec) {
-					rhs = ParseExprRHS(tokenPrec + 1, rhs, worker);
-					if (rhs == nullptr) {
-						LOG_ERROR("Could not parse recursive rhsParsing!");
-						return nullptr;
-					}
-				}
+        auto nextPrec = GetTokenPrecedence (worker->token);
+        if (tokenPrec < nextPrec) {
+            rhs = ParseExprRHS(tokenPrec + 1, rhs, worker);
+            if (rhs == nullptr) {
+                LOG_ERROR("Could not parse recursive rhsParsing!");
+                return nullptr;
+            }
+        }
 
-				lhs = (ASTExpression*)CreateBinaryOperation(&worker->arena, binopToken.type, lhs, rhs);
-			}	 // Goes back to the while loop
+        lhs = (ASTExpression*)CreateBinaryOperation(&worker->arena, tokenToOperation(binopToken), lhs, rhs);
+    }	 // Goes back to the while loop
 }
 
 ASTExpression* ParseExpr(Worker* worker) {
 		auto lhs = ParsePrimaryExpr(worker);
 		if (lhs == nullptr){
-				return nullptr;
+            return nullptr;
 		}
 		return ParseExprRHS (0, lhs, worker);
 }
 
-internal inline ASTNode* ParseIdentifier(Worker* worker) {
+internal inline ASTNode* ParseIdentifier (Worker* worker) {
 	auto identToken = worker->token;	// save the token for now
 	auto node = FindNodeWithIdent(worker->currentBlock, identToken.string);
 	NextToken(worker);	// Eat the identifier
@@ -326,7 +384,7 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
 
         // @VARIABLE
 		else {
-			auto var = CreateVariable(&worker->arena, worker->token.site, worker->currentBlock, identToken.string.c_str());
+			auto var = CreateVariable(&worker->arena, worker->token.site, identToken.string.c_str());
             AssignIdent(worker->currentBlock, var, identToken.string);
 
 			if (worker->token.type == TOKEN_ADDRESS) {
@@ -373,7 +431,7 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
             ReportError(worker, identToken.site, "Redefinition of identifier: " + identToken.string);
             return nullptr;
         } else {
-            auto var = CreateVariable(&worker->arena, worker->token.site, worker->currentBlock, identToken.string.c_str(), expr);
+            auto var = CreateVariable(&worker->arena, worker->token.site, identToken.string.c_str(), expr);
             AssignIdent(worker->currentBlock, var, identToken.string);
             return var;
         }
@@ -395,7 +453,7 @@ internal inline ASTNode* ParseIdentifier(Worker* worker) {
             auto function = CreateFunction(&worker->arena, worker->currentBlock, identToken.string, funcSet);
             worker->currentBlock->members.push_back(function);
 			worker->currentBlock = function;
-			NextToken(worker); // Eat the open paren
+			NextToken(worker);
 
 			while (worker->token.type != TOKEN_PAREN_CLOSE) {
 				if (worker->token.type == TOKEN_DOTDOT) {
@@ -681,7 +739,7 @@ internal inline ASTNode* ParseIter (Worker* worker, const std::string& identName
 		 NextToken(worker); 	// Eat the to
 		 if (identName != "") {
 			auto block = CreateBlock(&worker->arena, worker->currentBlock);
-			auto var = CreateVariable(&worker->arena, worker->token.site, block, identName.c_str());
+			auto var = CreateVariable(&worker->arena, worker->token.site, identName.c_str());
 			var->type = global_S32Type;	// HACK
 			var->initalExpression = expr;
 			AssignIdent(block, var, identName);

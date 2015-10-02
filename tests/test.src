@@ -1,31 +1,25 @@
 IMPORT "IO.bang"
-IMPORT "lang.src"
 
-Vector3 :: STRUCT
-	x : F32
-	y : F32
-	z : F32
+CastTest :: ()
+	foo : F32 = F32(5)
+	printf("foo is %f\n" foo)
 
-Transform :: STRUCT
-	position : Vector3
-	rotation : Vector3
-	scale 	 : Vector3
+	bar : S32 = 8
+	foo = F32(bar)
+	printf("bar is : %i\n" bar)
+	printf("foo is: %f\n" foo)
 
-Test :: () :> S32
-	RETURN 0
+	someInt := 0
+	someInt = S32(6.7)
+	printf("someInt is: %d\n" someInt)
 
-PrintSomeStuff :: ()
-	printf("Here is some stuff!")
-
-Test :: (x : S8)  :> S32 { }
-Test :: (x : S16) :> S32 { }
-Test :: (x : S32) :> S32 { }
-Test :: (x : S64) :> S32 { }
-Test :: (msg : @S16) { }
-Test :: (msg : @U8)  { }
-Test :: (msg : @U16) { }
-Test :: (msg : @U64) { }
+BooleanTest :: ()
+	foo : F32 = 5.2
+	IF foo > 1.0 printf("Foo is greater than 1\n")
+	IF foo < 1.0 printf("Foo is less than 1.0\n")
 
 Main :: () :> S32
-	PrintSomeStuff()
+	CastTest()
+	BooleanTest()
+
 	RETURN 0

@@ -52,8 +52,6 @@ internal void CodegenPrimitiveTypes();
 void Codegen(ASTStruct* structDefn);
 void Codegen(ASTFunction* function, llvm::Module* module);
 
-
-
 // Statements
 void CodegenStatement(ASTNode* node);
 void Codegen(ASTVariable* var);
@@ -63,6 +61,8 @@ inline internal void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* merge
 inline internal void Codegen(ASTIter* iter);
 
 internal void Codegen(ASTReturn* retVal);
+
+internal llvm::Value* Codegen(ASTCast* cast);
 
 // Expressions
 llvm::Value* CodegenExpr (ASTNode* expr);
@@ -295,7 +295,7 @@ void Codegen(ASTVariableOperation* varOp) {
 llvm::Value* CodegenExpr(ASTNode* node) {
 	assert(node != nullptr);
 	switch(node->nodeType) {
-	case AST_BINOP:
+	case AST_BINARY_OPERATION:
 		return Codegen((ASTBinaryOperation*)node);
 	case AST_MEMBER_EXPR:
 		return Codegen((ASTMemberExpr*)node);
@@ -309,23 +309,47 @@ llvm::Value* CodegenExpr(ASTNode* node) {
 		return Codegen((ASTFloatLiteral*)node);
 	case AST_STRING_LITERAL:
 		return Codegen((ASTStringLiteral*)node);
+    case AST_CAST:
+        return Codegen((ASTCast*)node);
 	default:
 		assert(!"ASTNode is not an expression!");
 		return nullptr;
 	}
 }
 
-static llvm::Value* Codegen (ASTBinaryOperation* binop)	{
+internal llvm::Value* Codegen (ASTBinaryOperation* binop)	{
 	llvm::Value* lhs = CodegenExpr(binop->lhs);
 	llvm::Value* rhs = CodegenExpr(binop->rhs);
 	assert(lhs && rhs);
 
-	switch (binop->binop) {
-		case TOKEN_ADD: return builder->CreateAdd(lhs, rhs, "addtmp");
-		case TOKEN_SUB: return builder->CreateSub(lhs, rhs, "subtmp");
-		case TOKEN_MUL: return builder->CreateMul(lhs, rhs, "multmp");
-		case TOKEN_DIV: return builder->CreateSDiv(lhs, rhs, "divtmp");
-		default: assert(false); return nullptr;
+    enum CmpBits {
+        EQUAL       = 1 << 0, // 0 0 0 1
+        GREATER     = 1 << 1, // 0 0 1 0
+        LESS        = 1 << 2, // 0 1 0 0
+        UNORDERED   = 1 << 3, // 1 0 0 0
+        SIGNED      = 1 << 3, // 1 0 0 0
+    };
+
+    auto createCompare = [binop, lhs, rhs](U32 predicateBits) -> llvm::Value* {
+        if (isFloatingPoint(binop->lhs->type)) {
+            return builder->CreateFCmp((llvm::CmpInst::Predicate)predicateBits, lhs, rhs);
+        } else if (isUnsignedInteger(binop->lhs->type)) {
+            return builder->CreateICmp((llvm::CmpInst::Predicate)(predicateBits + 32), lhs, rhs);
+        } else if (isSignedInteger(binop->lhs->type)) {
+            return builder->CreateICmp((llvm::CmpInst::Predicate)(predicateBits + 36), lhs, rhs);
+        }
+    };
+
+	switch (binop->operation) {
+		case OPERATION_ADD: return builder->CreateAdd(lhs, rhs, "addtmp");
+		case OPERATION_SUB: return builder->CreateSub(lhs, rhs, "subtmp");
+		case OPERATION_MUL: return builder->CreateMul(lhs, rhs, "multmp");
+		case OPERATION_DIV: return builder->CreateSDiv(lhs, rhs, "divtmp");
+        case OPERATION_GT:  return createCompare(GREATER);  // TODO we can setup the operations so that bitor does not even need  to happen here we can just pass the operation as a parameter
+        case OPERATION_GTE: return createCompare(GREATER | EQUAL);
+        case OPERATION_LT:  return createCompare(LESS);
+        case OPERATION_LTE: return createCompare(LESS | EQUAL);
+		default: assert(false && "Did not implement codegen for this binary operation"); return nullptr;
 	}
 }
 
@@ -371,11 +395,13 @@ static inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* merge
 	auto exprValue = CodegenExpr(ifStatement->expr);
 	assert(exprValue != nullptr);
 
-	if (ifStatement->expr->nodeType != AST_BINOP) {
+	if (ifStatement->expr->nodeType != AST_BINARY_OPERATION) {
 		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 0);
 		auto cmp = builder->CreateICmpNE(exprValue, zeroValue, "ifcmp");
 		builder->CreateCondBr(cmp, ifBlock, elseBlock);
-	}
+	} else {
+        builder->CreateCondBr(exprValue, ifBlock, elseBlock);
+    }
 
 
 	builder->SetInsertPoint(ifBlock);
@@ -491,6 +517,27 @@ void Codegen(ASTMemberOperation* memberOp) {
 		builder->CreateStore(expr, gep);
 		return;
 	}
+}
+
+
+internal llvm::Value* Codegen(ASTCast* cast) {
+    auto exprValue = CodegenExpr(cast->expr);
+    assert(exprValue);
+
+    // TODO much much muach more roboust casting
+    // Does not handle signed / unsigned mistmatch
+    llvm::Instruction::CastOps  castOp;
+    if (isFloatingPoint(cast->expr->type)) {
+        if (isSignedInteger(cast->type)) castOp = llvm::Instruction::CastOps::FPToSI;
+        else if (isUnsignedInteger(cast->type)) castOp = llvm::Instruction::CastOps::FPToUI;
+    } else if (isSignedInteger(cast->expr->type)) {
+        if (isFloatingPoint(cast->type)) castOp = llvm::Instruction::CastOps::SIToFP;
+    } else if (isUnsignedInteger(cast->expr->type)) {
+        if (isFloatingPoint(cast->type)) castOp = llvm::Instruction::CastOps::UIToFP;
+    }
+
+    auto castValue = builder->CreateCast(castOp, exprValue, (llvm::Type*)cast->type->llvmType);
+    return castValue;
 }
 
 llvm::Value* Codegen(ASTMemberExpr* expr) {

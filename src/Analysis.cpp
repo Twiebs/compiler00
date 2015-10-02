@@ -1,3 +1,6 @@
+// TODO error callbacks when a node reports an error so that users of the
+// language can suscribe to errors and write their own custom handlers
+
 // TODO Analysis cares to much aboout the stucture of the AST here
 // but it shouldn't.  We can store the nodes of the tree better and traverse them
 // linearly here.  The tree can be optimized inorder to try and do as much work as posible
@@ -5,6 +8,7 @@
 // to only care about it during Codegen (and parsing naturaly)
 
 void ReportError (Worker* worker, FileSite& site, const std::string& msg);
+void ReportError(Worker* worker, const char* msg, ...);
 void ReportError (Worker* worker, const std::string& msg);
 
 internal void AnalyzeStatement(Worker* worker, ASTNode* node);
@@ -85,14 +89,14 @@ internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
 		auto varexpr = (ASTVarExpr*)expr;
 		varexpr->type = varexpr->var->type;
 	} break;
-	case AST_BINOP: {
+	case AST_BINARY_OPERATION: {
 		auto binop = (ASTBinaryOperation*)expr;
 		AnalyzeExpr(worker, binop->lhs);
 		AnalyzeExpr(worker, binop->rhs);
 		if (TypeCompareImplicit(binop->lhs, binop->rhs)) {
 			binop->type = binop->lhs->type;
 		} else {
-			ReportError(worker, "Type mismatch in binary operation: ");
+			ReportError(worker, "Type mismatch in binary operation (%s) %s (%s)", binop->lhs->type->name, ToString(binop->operation).c_str(), binop->rhs->type->name);
 		}
 	} break;
 	}
@@ -109,6 +113,12 @@ internal inline bool TypeCompareExplicit (ASTExpression* exprA, ASTExpression* e
 // TODO implement implicit casting only for temporary constants in expressions
 internal inline bool TypeCompareImplicit (ASTExpression* exprA, ASTExpression* exprB) {
     if (exprA->type != exprB->type)
+        return false;
+    return true;
+}
+
+internal inline bool TypeCompareExplicit(ASTDefinition* typeDefn, ASTExpression* expr) {
+    if (typeDefn != expr->type)
         return false;
     return true;
 }
@@ -182,7 +192,7 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 
 		else if (var->initalExpression != nullptr){
 			if (!TypeCheck(var->initalExpression, var->type)) {
-				ReportError(worker, "Type mismatch!  Variable type does not match inital expression");
+				ReportError(worker, "Type mismatch!  Variable (%s : %s) does not match inital expression (%s)", var->name, var->type->name, var->initalExpression->type->name);
 			}
 		}
 
@@ -193,6 +203,11 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 	case AST_VARIABLE_OPERATION: {
 		auto varOp = (ASTVariableOperation*)node;
 		AnalyzeExpr(worker, varOp->expr);
+        auto variable = varOp->variable;
+        if (!TypeCompareExplicit(variable->type, varOp->expr)) {
+            ReportError(worker, "Type mismatch! Variable %s of type %s does not match rhs expression of type %s",
+                        variable->name, variable->type->name, varOp->expr->type->name);
+        }
 	} break;
 
     case AST_MEMBER_OPERATION: {

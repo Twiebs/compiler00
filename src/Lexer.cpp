@@ -124,7 +124,7 @@ void InterpLexer::nextToken() {
         AppendNext();
         if (nextChar == '=') {
             AppendNext();
-            token.type == TOKEN_BOOLEAN_EQUAL;
+            token.type == TOKEN_LOGIC_EQUAL;
         } else {
             token.type = TOKEN_EQUALS;
         }
@@ -246,15 +246,8 @@ internal void EatNext (Worker* worker) {
 }
 
 internal void AppendNext (Worker* worker) {
-    worker->lastChar = worker->nextChar;
-    worker->nextChar = getc(worker->file);
-    worker->colNumber++;
-    if (worker->lastChar == '\n') {
-        worker->lineNumber++;
-        worker->colNumber = 1;
-    } else {
-        worker->token.string += worker->lastChar;
-    }
+    EatNext(worker);
+    worker->token.string += worker->lastChar;
 }
 
 void EatLine(Worker *worker) {
@@ -345,6 +338,10 @@ void NextToken (Worker* worker) {
 		else if (worker->nextChar == '"') {
 			EatNext(worker);
 			while (worker->nextChar != '"') {
+                if (worker->nextChar == 92) {
+                    EatNext(worker);
+                    if (worker->nextChar == 'n') worker->nextChar = '\n';
+                }
 				AppendNext(worker);
 			}
 			EatNext(worker);	// Eat the "
@@ -394,11 +391,31 @@ void NextToken (Worker* worker) {
 			AppendNext(worker);
 			if (worker->nextChar == '=') {
 				AppendNext(worker);
-				worker->token.type == TOKEN_BOOLEAN_EQUAL;
+				worker->token.type == TOKEN_LOGIC_EQUAL;
 			} else {
 					worker->token.type = TOKEN_EQUALS;
 			}
 		}
+
+        else if (worker->nextChar == '>') {
+            AppendNext(worker);
+            if (worker->nextChar == '=') {
+                AppendNext(worker);
+                worker->token.type = TOKEN_LOGIC_GREATER_EQAUL;
+            } else {
+                worker->token.type = TOKEN_LOGIC_GREATER;
+            }
+        }
+
+        else if (worker->nextChar == '<') {
+            AppendNext(worker);
+            if (worker->nextChar == '=') {
+                AppendNext(worker);
+                worker->token.type = TOKEN_LOGIC_LESS_EQUAL;
+            } else {
+                worker->token.type = TOKEN_LOGIC_LESS;
+            }
+        }
 
 		else if (worker->nextChar == '+') {
 			AppendNext(worker);
