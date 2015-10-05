@@ -129,7 +129,7 @@ enum ASTNodeType {
 
 	AST_MEMBER_OPERATION,
 	AST_VARIABLE_OPERATION,
-    AST_BINARY_OPERATION, // TODO consider switching to these for consistancy!
+    AST_BINARY_OPERATION,
     AST_UNARY_OPERATION, // TODO consider switching to these for consistancy!
 
 	AST_MEMBER_EXPR,

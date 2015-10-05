@@ -23,6 +23,8 @@ struct Workspace {
     Worker* workers;
     WorkQueue workQueue;
     void* memory;
+
+    std::vector<Package*> packages;
 };
 
 void RunInterp (Package* package);
@@ -139,27 +141,28 @@ internal void InitWorkspace (Workspace* workspace) {
     }
 }
 
-internal void ExitWorkspace (Workspace* workspace) {
-    free(workspace->memory);
-    for (U32 i = 0; i < workspace->workerCount; i++) {
-        std::function<void(MemoryArena*)> freeSubArena = [freeSubArena](MemoryArena* arena) {
-            if (arena->next != nullptr) {
-                freeSubArena(arena->next);
-            }
-            free(arena->next);
-        };
-
-        auto arena = &workspace->workers[i].arena;
-        if (arena->next != nullptr) {
-            freeSubArena(arena);
-        }
+internal void FreeSubArenas (MemoryArena* arena) {
+    if (arena->next != nullptr) {
+        FreeSubArenas(arena->next);
+        free(arena->next);
     }
+}
+
+internal void ExitWorkspace (Workspace* workspace) {
+    for (U32 i = 0; i < workspace->workerCount; i++)
+        FreeSubArenas(&workspace->workers[i].arena);
+    free(workspace->memory);
 }
 
 void Build () {
     // HACK to keep working with current build system
     Package thePackage;
+
     Package* package = &thePackage;
+    package->arena.memory = malloc(ARENA_BLOCK_SIZE);
+    package->arena.capacity = ARENA_BLOCK_SIZE;
+    package->arena.used = 0;
+
     auto& settings = global_settings;
     Workspace* workspace = &global_workspace;
     Worker* mainWorker = &global_workspace.workers[0];
@@ -171,6 +174,7 @@ void Build () {
     for (U32 i = 0; i < workspace->workerCount; i++) {
         Worker* worker = &workspace->workers[i];
         worker->currentBlock = &package->globalBlock;
+        worker->currentPackage = package;
     }
 
 	std::vector<std::thread> threads(workspace->workerCount - 1);
@@ -237,6 +241,8 @@ void Build () {
 
     // Test code to see how the interp works
     RunInterp(package);
+
+    FreeSubArenas(&package->arena);
 }
 
 int main (int argc, char** argv) {

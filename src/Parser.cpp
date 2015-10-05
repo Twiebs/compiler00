@@ -444,16 +444,27 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 		if (worker->token.type == TOKEN_PAREN_OPEN) {
 			ASTFunctionSet* funcSet = (ASTFunctionSet*)node;
 			if (funcSet == nullptr) {	// The identifier is null so the function set for this ident has not been created
-                // NOTE this will go terribly wrong if the worker isnt in the global scope
-                assert(worker->currentBlock->parent == nullptr && "NOTE this will go terribly wrong if the worker isnt in the global scope");
-                funcSet = CreateFunctionSet (&worker->arena);
-                AssignIdent(worker->currentBlock, funcSet, identToken.string);
+                if (worker->currentBlock->parent == nullptr) {
+                    worker->currentPackage->mutex.lock();
+                    funcSet = CreateFunctionSet (&worker->currentPackage->arena);
+                    AssignIdent(worker->currentBlock, funcSet, identToken.string);
+                    worker->currentPackage->mutex.unlock();
+                } else {
+                    assert(false && "NOTE this will go terribly wrong if the worker isnt in the global scope");
+                }
 			}
 
-            auto function = CreateFunction(&worker->arena, worker->currentBlock, identToken.string, funcSet);
-            worker->currentBlock->members.push_back(function);
-			worker->currentBlock = function;
-			NextToken(worker);
+            ASTFunction* function;
+            if (worker->currentBlock->parent == nullptr) {
+                worker->currentPackage->mutex.lock();
+                function = CreateFunction(&worker->currentPackage->arena, worker->currentBlock, identToken.string, funcSet);
+                worker->currentBlock->members.push_back(function);
+                worker->currentPackage->mutex.unlock();
+                worker->currentBlock = function;
+                NextToken(worker);
+            } else {
+                assert(false && "lambdas not implemented!");
+            }
 
 			while (worker->token.type != TOKEN_PAREN_CLOSE) {
 				if (worker->token.type == TOKEN_DOTDOT) {

@@ -292,7 +292,7 @@ void Codegen(ASTVariableOperation* varOp) {
 
 }
 
-llvm::Value* CodegenExpr(ASTNode* node) {
+llvm::Value* CodegenExpr (ASTNode* node) {
 	assert(node != nullptr);
 	switch(node->nodeType) {
 	case AST_BINARY_OPERATION:

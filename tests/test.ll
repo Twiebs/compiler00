@@ -63,3 +63,9 @@ entry:
   call void @BooleanTest()
   ret i32 0
 }
+
+declare void @ListAll()
+
+declare void @Build()
+
+declare void @InterpTest()

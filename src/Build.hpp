@@ -1,6 +1,7 @@
 #pragma once
 #include <fstream>
 #include "AST.hpp"
+#include <mutex>
 
 // We need a ASTPrototype because if we store functions in a package
 // and then we let its consituant members fall out of scope then there is no
@@ -19,6 +20,7 @@ struct Package {
     std::string name;
     ASTBlock globalBlock;
     MemoryArena arena;
+    std::mutex mutex;
 };
 
 struct Worker {
@@ -34,6 +36,7 @@ struct Worker {
     U8* tempMemory;
     U8* currentTempLocation;
 
+    Package* currentPackage = nullptr;
     ASTBlock* currentBlock = nullptr;
 };
 
