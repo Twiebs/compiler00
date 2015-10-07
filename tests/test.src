@@ -1,12 +1,8 @@
 IMPORT "IO.bang"
 IMPORT "lang.src"
-IMPORT "Vector.bang"
 
 CastTest :: ()
-	package : Package
-	package.id = 3
-	printf("Package id: %d\n" package.id)
-
+	printf("Running Cast Test!\n")
 
 	foo : F32 = F32(5)
 	printf("foo is %f\n" foo)
@@ -19,11 +15,14 @@ CastTest :: ()
 	someInt := 0
 	someInt = S32(6.7)
 	printf("someInt is: %d\n" someInt)
+	printf("\n")
 
 BooleanTest :: ()
+	printf("Running boolean test!\n")
 	foo : F32 = 5.2
 	IF foo > 1.0 printf("Foo is greater than 1\n")
 	IF foo < 1.0 printf("Foo is less than 1.0\n")
+	printf("\n")
 
 Main :: () :> S32
 	CastTest()

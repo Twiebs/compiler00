@@ -293,10 +293,12 @@ ASTIter* CreateIter(MemoryArena* arena, ASTVariable* var, ASTExpression* start, 
 }
 
 std::string ToString(ASTNodeType nodeType) {
-	switch(nodeType) {
-	case AST_IDENTIFIER:    return "Identifier";
-    case AST_VARIABLE:      return "Variable";
-	default: return "Too Lazy to implement ToString for this nodeType";
+	switch (nodeType) {
+        case AST_IDENTIFIER:    return "Identifier";
+        case AST_VARIABLE:      return "Variable";
+        case AST_DEFINITION:    return "Definition";
+        case AST_STRUCT:    return "Struct";
+        default: return "Too Lazy to implement ToString for this nodeType";
 	}
 }
 

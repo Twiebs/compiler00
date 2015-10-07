@@ -13,18 +13,19 @@ add_definitions(-std=c++14)
 add_definitions(${LLVM_DEFINITIONS})
 
 llvm_map_components_to_libnames(LLVM_LIBS
-support
-core
-irreader
-bitwriter
-mcjit
-bitreader
-asmparser
-asmprinter
-irreader
-target
-codegen
-linker
+        core
+        support
+        irreader
+        bitwriter
+        mcjit
+        interpreter
+        bitreader
+        asmparser
+        asmprinter
+        irreader
+        target
+        codegen
+        linker
 
 #=======
 #Targets

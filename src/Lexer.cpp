@@ -37,6 +37,10 @@ void InterpLexer::AppendNext() {
     token.string += lastChar;
 }
 
+void InterpLexer::end() {
+    buffer.clear();
+}
+
 void InterpLexer::nextToken() {
     token.string = "";
     token.type = TOKEN_UNKOWN;

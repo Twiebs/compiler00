@@ -5,8 +5,8 @@ public:
     Token token;
     std::string buffer;
     void nextToken();
-    void setBuffer(const std::string& buffer);
     void begin();
+    void end(); // clear out the buffer
 private:
     void EatNext();
     void AppendNext();

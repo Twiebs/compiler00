@@ -243,6 +243,8 @@ void Build () {
     FreeSubArenas(&package->arena);
 }
 
+void RunInterpTest();
+
 int main (int argc, char** argv) {
     InitWorkspace(&global_workspace);
 

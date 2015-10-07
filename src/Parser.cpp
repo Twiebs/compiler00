@@ -422,7 +422,7 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 				if (type == nullptr) {
 					var->typeName = (char*)Allocate(&worker->arena, worker->token.string.size() + 1);
 					memcpy(var->typeName, worker->token.string.c_str(), worker->token.string.size() + 1);
-				} else if (type->nodeType != AST_DEFINITION || type->nodeType != AST_STRUCT) {
+				} else if (type->nodeType != AST_DEFINITION && type->nodeType != AST_STRUCT) {
                     ReportError(worker, &worker->token.site, "%s does not name a type!  It names a %s", worker->token.string.c_str(), ToString(type->nodeType).c_str());
                 }
 

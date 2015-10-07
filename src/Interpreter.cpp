@@ -1,9 +1,14 @@
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/Support/FormattedStream.h>
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
+#include "llvm/ExecutionEngine/Interpreter.h"
 
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/raw_os_ostream.h"
 
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -19,7 +24,7 @@ extern "C" void InterpTest() {
 
 // For now this takes a single package until better packaing is
 // TODO DOUBLE POINTER
-void Print(ASTFunction* function) {
+void Print (ASTFunction* function) {
     printf("%s :: (", function->name);
     for (U32 i = 0; i < function->args.size(); i++) {
         ASTVariable* arg = function->args[i];
@@ -48,7 +53,7 @@ void Print(ASTFunction* function) {
 // TODO there is no way to declare double pointers in the language!
 
 // TODO @Incomplete does not understand double pointers because they are currently not implemented
-void Print(ASTStruct* structDefn) {
+void Print (ASTStruct* structDefn) {
     printf("%s :: STRUCT\n", structDefn->name);
     for (U32 i = 0; i < structDefn->memberCount; i++) {
         auto structMember = &structDefn->members[i];
@@ -61,7 +66,7 @@ void Print(ASTStruct* structDefn) {
 	printf("\n");
 }
 
-internal void PrintDefn(ASTNode* node) {
+internal void PrintDefn (ASTNode* node) {
 	switch (node->nodeType) {
 	case AST_FUNCTION: Print((ASTFunction*)node); break;
 	case AST_STRUCT: Print((ASTStruct*)node); break;
@@ -80,6 +85,39 @@ extern "C" void ListAll() {
 	}
 }
 
+static llvm::Function* GenerateTestFunction (llvm::Module* module) {
+    llvm::IRBuilder<> builder(llvm::getGlobalContext());
+    auto functionType = llvm::FunctionType::get(llvm::Type::getFloatTy(llvm::getGlobalContext()), false);
+    auto function = llvm::Function::Create(functionType, llvm::Function::LinkageTypes::ExternalLinkage, "ExampleFunction", module);
+
+    auto entryBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", function);
+    builder.SetInsertPoint(entryBlock);
+    builder.CreateRet(llvm::ConstantFP::get(llvm::Type::getFloatTy(llvm::getGlobalContext()), 9));
+    return function;
+}
+
+void RunInterpTest() {
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    LLVMLinkInMCJIT();
+
+    auto memoryManager = std::make_unique<llvm::SectionMemoryManager>();
+    auto unique_module = std::make_unique<llvm::Module>("Bang Interpreter", llvm::getGlobalContext());
+    auto module = unique_module.get();
+    auto testFunction = GenerateTestFunction(module);
+    testFunction->dump();
+
+    std::string errorStr;
+    // auto engine = llvm::EngineBuilder(std::move(unique_module)).setMCJITMemoryManager(std::move(memoryManager)).setErrorStr(&errorStr).create();
+    auto engine = llvm::EngineBuilder(std::move(unique_module)).setEngineKind(llvm::EngineKind::Interpreter).setErrorStr(&errorStr).create();
+    if (engine == nullptr) LOG_ERROR("Failed to create ExecutionEngine: " << errorStr);
+
+    assert(testFunction);
+    std::vector<llvm::GenericValue> testArgs;
+    auto result = engine->runFunction(testFunction, testArgs);
+    float returnValue = result.FloatVal;
+    printf("test function returned: %f", returnValue);
+}
 
 void RunInterp (Package* package) {
 	global_package = package;
@@ -89,6 +127,7 @@ void RunInterp (Package* package) {
 	auto memoryManager = std::make_unique<llvm::SectionMemoryManager>();
 	auto unique_module = std::make_unique<llvm::Module>("Bang Interpreter", llvm::getGlobalContext());
 	auto module = unique_module.get();
+    auto testFunction = GenerateTestFunction(module);
 
 	std::vector<llvm::Type*> args;
     args.push_back(llvm::PointerType::getInt8PtrTy(llvm::getGlobalContext(), 0));
@@ -96,22 +135,28 @@ void RunInterp (Package* package) {
 	auto testFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "Build", module);
 
 	std::string errorStr;
-	auto engine = llvm::EngineBuilder(std::move(unique_module)).setMCJITMemoryManager(std::move(memoryManager)).setErrorStr(&errorStr).create();
-	if (engine == nullptr) {
-		LOG_ERROR("Failed to create ExecutionEngine: " << errorStr);
-	}
+	// auto engine = llvm::EngineBuilder(std::move(unique_module)).setMCJITMemoryManager(std::move(memoryManager)).setErrorStr(&errorStr).create();
+    auto engine = llvm::EngineBuilder(std::move(unique_module)).setEngineKind(llvm::EngineKind::Interpreter).setErrorStr(&errorStr).create();
+    if (engine == nullptr) LOG_ERROR("Failed to create ExecutionEngine: " << errorStr);
 
     // For now the interpreter will just tell you what things are you wont be able to call things
     // It will do its parsing of whatever you give it and then you can determine infromation about the program
     // by typing in the name of an identifer and it will give you static information about what it actualy is
 
+
     bool isRunning = true;
     std::string inputBuffer;
     InterpLexer lex;
-    while (isRunning) {
-        printf("> ");
 
-        std::cin >> lex.buffer;
+    while (isRunning) {
+        lex.end(); // clears the buffer from the command line
+        printf("> ");
+        char lastChar = getchar();
+        while (lastChar != '\n') {
+            lex.buffer += lastChar;
+            lastChar = getchar();
+        }
+
         lex.begin();
         lex.nextToken();
 
@@ -133,8 +178,13 @@ void RunInterp (Package* package) {
                     engine->runFunction((llvm::Function *) function->llvmFunction, args);
                 }
             } else {
-
                 auto node = FindNodeWithIdent(&package->globalBlock, identToken.string);
+                bool listIR = false;
+                if (lex.token.type != TOKEN_EOF) {
+                    if (lex.token.string == "IR") {
+                        listIR = true;
+                    }
+                }
 
                 if (node == nullptr) {
                     printf("That doesnt name anything\n");
@@ -144,10 +194,24 @@ void RunInterp (Package* package) {
                 switch (node->nodeType) {
                     case AST_FUNCTION: {
                         auto funcSet = (ASTFunctionSet *) node;
-                        printf("Found %d functions named %s\n", funcSet->functions.size(), inputBuffer.c_str());
-                        for (U32 i = 0; i < funcSet->functions.size(); i++) {
-                            Print((ASTFunction *) funcSet->functions[i]);
+                        printf("Found %d functions named %s\n", funcSet->functions.size(), identToken.string.c_str());
+                        if (listIR) {
+                            printf("Printing IR");
+                            for (U32 i = 0; i < funcSet->functions.size(); i++) {
+                                auto function = (ASTFunction*)funcSet->functions[i];
+                                auto llvmFunction = (llvm::Function*)function->llvmFunction;
+                                std::ostream& stdOstream = std::cout;
+                                llvm::raw_os_ostream ostream(stdOstream);
+                                ostream.changeColor(llvm::raw_os_ostream::Colors::GREEN);
+                                llvmFunction->print(ostream);
+                            }
+                        } else {
+                            for (U32 i = 0; i < funcSet->functions.size(); i++) {
+                                auto function = (ASTFunction*)funcSet->functions[i];
+                                Print((ASTFunction *) funcSet->functions[i]);
+                            }
                         }
+
 						printf("\n");
                     }
                         break;
@@ -169,5 +233,6 @@ void RunInterp (Package* package) {
             }
 
         }
+
     }
 }
