@@ -1,7 +1,13 @@
 IMPORT "IO.bang"
 IMPORT "lang.src"
+IMPORT "Vector.bang"
 
 CastTest :: ()
+	package : Package
+	package.id = 3
+	printf("Package id: %d\n" package.id)
+
+
 	foo : F32 = F32(5)
 	printf("foo is %f\n" foo)
 

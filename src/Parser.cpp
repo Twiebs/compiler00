@@ -219,36 +219,50 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 		} else if (worker->token.type == TOKEN_ACCESS) {
 			auto structVar = (ASTVariable*)node;
 			auto structDefn = (ASTStruct*)structVar->type;
-			if(structDefn->nodeType != AST_STRUCT)
-				ReportError(worker, worker->token.site, identToken.string + " does not name a struct type!  It is a " + ToString(node->nodeType));
-
-			auto currentStruct = structDefn;
-			ASTDefinition* exprType = nullptr;
-			std::vector<U32> indices;
-			while(worker->token.type == TOKEN_ACCESS) {
-				NextToken(worker); // eat the member access
-				auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
-				if (memberIndex == -1) {
-					ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
-				} else {
-					indices.push_back(memberIndex);
-					auto memberType = currentStruct->members[memberIndex].type;
-					if(memberType->nodeType == AST_STRUCT)
-						currentStruct = (ASTStruct*)memberType;
-					exprType = memberType;
+			std::vector<std::string> memberNames;
+			if (structDefn == nullptr) {
+				while (worker->token.type == TOKEN_ACCESS) {
+					NextToken(worker);
+					if (worker->token.type != TOKEN_IDENTIFIER)
+						ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
+					memberNames.push_back(worker->token.string);
+					NextToken(worker);
 				}
-				NextToken(worker);	// eat the member ident
+
+				//auto expr = CreateMemberExpr(&worker->arena, structVar, unary, &indices[0], indices.size());
+				auto expr = CreateMemberExpr(&worker->arena, structVar, unary, memberNames);
+				return expr;
+			} else {
+				assert(false);
 			}
 
-			auto expr = CreateMemberExpr(&worker->arena, structVar, unary, &indices[0], indices.size());
-			expr->type = exprType;
-			return expr;
+			//			if(structDefn->nodeType != AST_STRUCT)
+//				ReportError(worker, worker->token.site, identToken.string + " does not name a struct type!  It is a " + ToString(node->nodeType));
+//
+//			auto currentStruct = structDefn;
+//			ASTDefinition* exprType = nullptr;
+//			std::vector<U32> indices;
+//			while(worker->token.type == TOKEN_ACCESS) {
+//				NextToken(worker); // eat the member access
+//				auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
+//				if (memberIndex == -1) {
+//					ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
+//				} else {
+//					indices.push_back(memberIndex);
+//					auto memberType = currentStruct->members[memberIndex].type;
+//					if(memberType->nodeType == AST_STRUCT)
+//						currentStruct = (ASTStruct*)memberType;
+//					exprType = memberType;
+//				}
+//				NextToken(worker);	// eat the member ident
+//			}
+
+
 		} else {
 			auto var = (ASTVariable*)node;
 			auto expr = CreateVarExpr(&worker->arena, var, unary);
 			return expr;
 		}
-
 		LOG_ERROR("SOMTHING TERRIBLE HAS HAPPENED!");
 	} break;
 
@@ -387,11 +401,16 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 			auto var = CreateVariable(&worker->arena, worker->token.site, identToken.string.c_str());
             AssignIdent(worker->currentBlock, var, identToken.string);
 
-			if (worker->token.type == TOKEN_ADDRESS) {
-				var->isPointer = true;
-				NextToken(worker); // Eat the pointer token
-			}
+			// TODO ParseUnaryOperators needs to handle double / triple / etc pointers
+			// Or whatever other unary operators are defined!
+			auto parseUnaryOperators = [&worker, &var]() {
+				if (worker->token.type == TOKEN_ADDRESS) {
+					var->isPointer = true;
+					NextToken(worker);
+				}
+			};
 
+			parseUnaryOperators();
 			if (worker->token.type != TOKEN_IDENTIFIER) {
                 if (worker->token.type == TOKEN_STRUCT) {
                     ReportError(worker, worker->token.site, "You accidently forgot the extra ':' when declaring a struct");
@@ -400,12 +419,13 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
                 }
 			} else {
                 auto type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->token.string);
-                if (type == nullptr) {
-                    ReportError(worker, worker->token.site, worker->token.string + " does not name a type!");
-                } else if (type->nodeType != AST_DEFINITION) {
+				if (type == nullptr) {
+					var->typeName = (char*)Allocate(&worker->arena, worker->token.string.size() + 1);
+					memcpy(var->typeName, worker->token.string.c_str(), worker->token.string.size() + 1);
+				} else if (type->nodeType != AST_DEFINITION || type->nodeType != AST_STRUCT) {
                     ReportError(worker, &worker->token.site, "%s does not name a type!  It names a %s", worker->token.string.c_str(), ToString(type->nodeType).c_str());
-                    // ReportError(worker, worker->token.site, worker->token.string + " does not name a type!  It names a: " + ToString(type->nodeType));
                 }
+
                 var->type = type;
 			}
 
@@ -654,24 +674,37 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 		// TODO namespace, enums, other things?
 		auto structVar = (ASTVariable*)node;
 		auto structDefn = (ASTStruct*)structVar->type;
-		if(structDefn->nodeType != AST_STRUCT) ReportError(worker, identToken.site, "Member access operator only applies to struct types!");
-
-		auto currentStruct = structDefn;
-		std::vector<U32> memberIndices;
-		while (worker->token.type == TOKEN_ACCESS) {
-			NextToken(worker);	// Eat the access token
-			if (worker->token.type != TOKEN_IDENTIFIER) ReportError(worker, worker->token.site, "Member access must reference an identifier");
-			auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
-			if (memberIndex == -1) {
-                ReportError(worker, worker->token.site, "");    // TODO fix these stupid log messages
-                printf("%s does not contain any member named %s", structDefn->name, worker->token.string.c_str());
-            }
-			memberIndices.push_back(memberIndex);
-
-			auto memberType = currentStruct->members[memberIndex].type;
-			if(memberType->nodeType == AST_STRUCT) currentStruct = (ASTStruct*)memberType;
-			NextToken(worker);	// Eat the member identifier
+		std::vector<std::string> memberNames;
+		if (structDefn == nullptr) {
+			while (worker->token.type == TOKEN_ACCESS) {
+				NextToken(worker);
+				if (worker->token.type != TOKEN_IDENTIFIER)
+					ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
+				memberNames.push_back(worker->token.string);
+				NextToken(worker);
+			}
+		} else {
+			assert(false);
 		}
+
+
+
+//		auto currentStruct = structDefn;
+//		std::vector<U32> memberIndices;
+//		while (worker->token.type == TOKEN_ACCESS) {
+//			NextToken(worker);	// Eat the access token
+//			if (worker->token.type != TOKEN_IDENTIFIER) ReportError(worker, worker->token.site, "Member access must reference an identifier");
+//			auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
+//			if (memberIndex == -1) {
+//                ReportError(worker, worker->token.site, "");    // TODO fix these stupid log messages
+//                printf("%s does not contain any member named %s", structDefn->name, worker->token.string.c_str());
+//            }
+//			memberIndices.push_back(memberIndex);
+//
+//			auto memberType = currentStruct->members[memberIndex].type;
+//			if(memberType->nodeType == AST_STRUCT) currentStruct = (ASTStruct*)memberType;
+//			NextToken(worker);	// Eat the member identifier
+//		}
 
 		Operation operation;
 		switch (worker->token.type) {
@@ -684,7 +717,7 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 		} NextToken(worker);
 
 		auto expr = ParseExpr(worker);
-		auto memberOperation = CreateMemberOperation(&worker->arena, structVar, operation, expr, &memberIndices[0], memberIndices.size());
+		auto memberOperation = CreateMemberOperation(&worker->arena, structVar, operation, expr, memberNames);
 		return memberOperation;
 	} break;
 

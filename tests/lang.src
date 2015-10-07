@@ -1,6 +1,10 @@
 # This file contains definitions for foreign compiler functions
 # For use in the languages interpreter
 
+Package :: STRUCT
+	id : U32
+
+
 ListAll :: () FOREIGN
 Build :: () FOREIGN
 InterpTest :: () FOREIGN

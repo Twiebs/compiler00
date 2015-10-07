@@ -177,6 +177,7 @@ struct ASTIfStatement : public ASTNode {
 
 struct ASTVariable : public ASTExpression {
     char* name;
+	char* typeName;
 	FileSite site;	// This is where this variable was declared.
 	ASTExpression* initalExpression = nullptr;
     void* allocaInst = nullptr;
@@ -250,11 +251,23 @@ enum UnaryOperator {
 	UNARY_NOT
 };
 
+struct ASTMemberAccess {
+	ASTVariable* structVar;
+	U32 memberCount;
+	char** memberNames;
+	U32* indices;
+};
+
 struct ASTMemberExpr : public ASTExpression {
 	ASTVariable* structVar;
 	UnaryOperator accessMod;
-	U32 indexCount;
-    U32* indices;
+
+	U32 memberCount;
+	U32* indices;
+	char** memberNames;
+
+	ASTMemberExpr(ASTVariable* structVar, UnaryOperator unary) :
+			structVar(structVar), accessMod(unary) { nodeType = AST_MEMBER_EXPR; }
 };
 
 struct ASTVarExpr : public ASTExpression {
@@ -263,14 +276,17 @@ struct ASTVarExpr : public ASTExpression {
 	UnaryOperator accessMod;
 };
 
-
 struct ASTMemberOperation : public ASTNode {
 	ASTVariable* structVar;
 	ASTExpression* expr;
 	Operation operation;
-	U32 indexCount;
+
+	U32 memberCount;
     U32* indices;
-    ASTMemberOperation() { nodeType = AST_MEMBER_OPERATION; }
+	char** memberNames;
+
+    ASTMemberOperation(ASTVariable* structVar, ASTExpression* expr, Operation operation) :
+			structVar(structVar), expr(expr), operation(operation) { nodeType = AST_MEMBER_OPERATION; }
 };
 
 struct ASTVariableOperation : public ASTNode {
@@ -362,8 +378,9 @@ ASTCast* CreateCast(MemoryArena* arena, ASTDefinition* typeDefn, ASTExpression* 
 
 // Operations
 ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* variable, Operation op, ASTExpression* expr);
-ASTMemberOperation*   CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation op, ASTExpression* expr, U32* indices, U32 indexCount);
-ASTBinaryOperation*   CreateBinaryOperation(MemoryArena* arena, Operation operation, ASTExpression* lhs, ASTExpression* rhs);
+ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation op, ASTExpression* expr, U32* indices, U32 indexCount);
+ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, const std::vector<std::string>& memberNames);
+ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, Operation operation, ASTExpression* lhs, ASTExpression* rhs);
 
 // Control Flow
 ASTIfStatement* CreateIfStatement(MemoryArena* arena, ASTExpression* expr);	// TODO Why are ifstatements created without a body? also the body should probably be emitted into a stack thingyyy and then coppied into the if statement???
@@ -375,6 +392,7 @@ ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
 //===============
 ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var, UnaryOperator accessMod);
 ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, U32* indices, U32 indexCount);
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator unary, const std::vector<std::string>& memberNames);
 
 ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argumentCount, const std::string& name);
 
@@ -388,3 +406,4 @@ std::string ToString(Operation operation);
 bool isFloatingPoint(ASTDefinition* type);
 bool isSignedInteger(ASTDefinition* type);
 bool isUnsignedInteger (ASTDefinition* type);
+bool isType(ASTNode* node);

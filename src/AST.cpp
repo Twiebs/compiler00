@@ -105,16 +105,24 @@ ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* v
 }
 
 ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, U32* indices, U32 indexCount) {
-	auto result = (ASTMemberOperation*)Allocate(arena, sizeof(ASTMemberOperation) + (sizeof(U32) * indexCount));
-	result->nodeType = AST_MEMBER_OPERATION;
-	result->structVar = structVar;
-	result->operation = operation;
-    result->expr = expr;
-    result->indexCount = indexCount;
-    auto indexptr = (U32*)(result + 1);
-    memcpy(indexptr, indices, sizeof(U32) * indexCount);
-	result->indices = indexptr;
+	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
+	result->indices = (U32*)Allocate(arena, sizeof(U32) * indexCount);
+    result->memberCount = indexCount;
+    memcpy(result->indices, indices, sizeof(U32) * indexCount);
     return result;
+}
+
+ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, const std::vector<std::string>& memberNames) {
+	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
+	result->memberNames = (char**)Allocate(arena, sizeof(char*) * memberNames.size());
+	result->indices = (U32*)Allocate(arena, sizeof(U32) * memberNames.size());
+	result->memberCount = memberNames.size();
+
+	for (U32 i = 0; i < memberNames.size(); i++) {
+		result->memberNames[i] = (char*)Allocate(arena, sizeof(memberNames[i].length() + 1));
+		memcpy(result->memberNames[i], memberNames[i].c_str(), memberNames[i].length() + 1);
+	}
+	return result;
 }
 
 ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, Operation operation, ASTExpression* lhs, ASTExpression* rhs) {
@@ -135,13 +143,22 @@ ASTStruct* CreateStruct(MemoryArena* arena, const std::string& name,  ASTStructM
 
 
 ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, U32* indices, U32 indexCount) {
-	auto result = new (Allocate(arena, (sizeof(ASTMemberExpr)))) ASTMemberExpr;
+	auto result = new (Allocate(arena, (sizeof(ASTMemberExpr)))) ASTMemberExpr(structVar, accessMod);
     result->indices = (U32*)Allocate(arena, sizeof(result->indices) * indexCount);
-    result->nodeType = AST_MEMBER_EXPR;
-    result->structVar = structVar;
-    result->accessMod = accessMod;
-    result->indexCount = indexCount;
+    result->memberCount = indexCount;
 	memcpy(result->indices, indices, indexCount * sizeof(U32));
+	return result;
+}
+
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, const std::vector<std::string>& memberNames) {
+	auto result = new (Allocate(arena, (sizeof(ASTMemberExpr)))) ASTMemberExpr(structVar, accessMod);
+	result->memberNames = (char**)Allocate(arena, sizeof(char*) * memberNames.size());
+	result->indices = (U32*)Allocate(arena, sizeof(U32) * memberNames.size());
+	result->memberCount = memberNames.size();
+	for (U32 i = 0; i < memberNames.size(); i++) {
+		result->memberNames[i] = (char*)Allocate(arena, memberNames[i].length() + 1);
+		memcpy(result->memberNames[i], memberNames[i].c_str(), memberNames.size() + 1);
+	}
 	return result;
 }
 
@@ -309,4 +326,8 @@ bool isUnsignedInteger (ASTDefinition* type) {
     if (type == global_U32Type) return true;
     if (type == global_U64Type) return true;
     return false;
+}
+
+bool isType(ASTNode* node) {
+	return node->nodeType == AST_DEFINITION || node->nodeType == AST_STRUCT;
 }

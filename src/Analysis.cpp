@@ -7,6 +7,8 @@
 // linearly here rather than be dependant on the structure of the tree.  In theory it should be possibe
 // to only care about it during Codegen (and parsing naturaly)
 
+#include "Build.hpp"
+
 void ReportError (Worker* worker, FileSite& site, const std::string& msg);
 void ReportError(Worker* worker, const char* msg, ...);
 void ReportError (Worker* worker, const std::string& msg);
@@ -99,6 +101,32 @@ internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
 			ReportError(worker, "Type mismatch in binary operation (%s) %s (%s)", binop->lhs->type->name, ToString(binop->operation).c_str(), binop->rhs->type->name);
 		}
 	} break;
+	case AST_MEMBER_EXPR: {
+		auto memberExpr = (ASTMemberExpr*)expr;
+		auto currentStruct = (ASTStruct*)memberExpr ->structVar->type;
+		assert(currentStruct->nodeType = AST_STRUCT);
+		for (U32 i = 0; i < memberExpr->memberCount; i++) {
+			auto memberName = memberExpr ->memberNames[i];
+			auto memberIndex = GetMemberIndex(currentStruct, memberName);
+			if (memberIndex == - 1) {
+				ReportError(worker, "Struct %s does not contain any member named %s", currentStruct->name, memberName);
+			} else if (currentStruct->members[memberIndex].type->nodeType == AST_STRUCT) {
+				currentStruct = (ASTStruct*)currentStruct->members[memberIndex].type;
+			}
+			memberExpr ->indices[i] = memberIndex;
+		}
+
+		auto lastIndex = memberExpr->indices[memberExpr->memberCount - 1];
+		if (lastIndex != -1) {
+			memberExpr->type = currentStruct->members[lastIndex].type;
+		} else {
+			// No error required we should already know what happened
+		}
+
+
+	} break;
+
+
 	}
 }
 
@@ -178,27 +206,31 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 			AnalyzeExpr(worker, var->initalExpression);
 		}
 
-		// Variables type will be null if variables type is being infered
 		if (var->type == nullptr) {
-			var->type = var->initalExpression->type;
-			if (var->initalExpression->nodeType == AST_VAR_EXPR) {
-				auto varExpr = (ASTVarExpr*)var->initalExpression;
-				var->isPointer = varExpr->accessMod == UNARY_ADDRESS;
-			} else if (var->initalExpression->nodeType == AST_MEMBER_EXPR) {
-				auto memberExpr = (ASTMemberExpr*)var->initalExpression;
-				var->isPointer = memberExpr->accessMod == UNARY_ADDRESS;
+			if (var->typeName != nullptr) {
+				var->type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, var->typeName);
+				assert(var->type->nodeType != AST_DEFINITION && "Primitive types should always be resolved already");
+				if (var->type->nodeType != AST_STRUCT) {
+					ReportError(worker, "Variable '%s' could not be declared with type '%s': '%s' does not represent a struct" , var->name, var->typeName, var->typeName);
+				}
+			} else if (var->initalExpression != nullptr) {
+				var->type = var->initalExpression->type;
+				if (var->initalExpression->nodeType == AST_VAR_EXPR) {
+					auto varExpr = (ASTVarExpr*)var->initalExpression;
+					var->isPointer = varExpr->accessMod == UNARY_ADDRESS;
+				} else if (var->initalExpression->nodeType == AST_MEMBER_EXPR) {
+					auto memberExpr = (ASTMemberExpr*)var->initalExpression;
+					var->isPointer = memberExpr->accessMod == UNARY_ADDRESS;
+				}
 			}
 		}
 
-		else if (var->initalExpression != nullptr){
+		if (var->initalExpression != nullptr){
 			if (!TypeCheck(var->initalExpression, var->type)) {
 				ReportError(worker, "Type mismatch!  Variable (%s : %s) does not match inital expression (%s)", var->name, var->type->name, var->initalExpression->type->name);
 			}
 		}
 
-		else {
-			// Nothing to do here this is just a declaration without an expression which has a type and is auto initialized
-		}
 	} break;
 	case AST_VARIABLE_OPERATION: {
 		auto varOp = (ASTVariableOperation*)node;
@@ -212,7 +244,20 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 
     case AST_MEMBER_OPERATION: {
         auto memberOp = (ASTMemberOperation*)node;
-        AnalyzeExpr(worker, memberOp->expr);
+		AnalyzeExpr(worker, memberOp->expr);
+
+		auto currentStruct = (ASTStruct*)memberOp->structVar->type;
+		assert(currentStruct->nodeType = AST_STRUCT);
+		for (U32 i = 0; i < memberOp->memberCount; i++) {
+			auto memberName = memberOp->memberNames[i];
+			auto memberIndex = GetMemberIndex(currentStruct, memberName);
+			if (memberIndex == - 1) {
+				ReportError(worker, "Struct %s does not contain any member named %s", currentStruct->name, memberName);
+			} else if (currentStruct->members[memberIndex].type->nodeType == AST_STRUCT) {
+				currentStruct = (ASTStruct*)currentStruct->members[memberIndex].type;
+			}
+			memberOp->indices[i] = memberIndex;
+		}
     } break;
 
 	case AST_RETURN: {

@@ -97,7 +97,14 @@ void CodegenPackage (Package* package, BuildSettings* settings) {
 	CodegenPrimitiveTypes();
 	global_module = new llvm::Module("BangCompiler", llvm::getGlobalContext());
 
- 	for (ASTNode* node : package->globalBlock.members) {
+	// HACK codegenerate the structs first
+	for (ASTNode* node : package->globalBlock.members) {
+		if (node->nodeType == AST_STRUCT) {
+			Codegen((ASTStruct*)node);
+		}
+	}
+
+		for (ASTNode* node : package->globalBlock.members) {
 		switch (node->nodeType) {
 			case AST_FUNCTION:
 				Codegen((ASTFunction*)node, global_module);
@@ -137,6 +144,11 @@ void Codegen(ASTStruct* structDefn) {
 	std::vector<llvm::Type*> memberTypes;
 	for (auto i = 0; i < structDefn->memberCount; i++) {
 		auto& type = structDefn->members[i].type;
+		if (type->llvmType == nullptr) {
+			assert(type->nodeType = AST_STRUCT);
+			Codegen((ASTStruct*)type);
+		}
+
 		auto llvmType = structDefn->members[i].isPointer ? llvm::PointerType::get((llvm::Type*)type->llvmType, 0) : (llvm::Type*)type->llvmType;
 		memberTypes.push_back(llvmType);
 	}
@@ -230,8 +242,7 @@ void Codegen(ASTVariable* var) {
 	assert(var->type != nullptr && "Variable must have type resolved during anaysis");
 	auto llvmType = (llvm::Type*)var->type->llvmType;
 	if (var->isPointer) llvmType = llvm::PointerType::get(llvmType, 0);
-	auto name = (const char*)(var + 1);
-	var->allocaInst = builder->CreateAlloca(llvmType, 0, name);
+	var->allocaInst = builder->CreateAlloca(llvmType, 0, var->name);
 
 	// TODO This is silly and should not be determined at this phase of the compiler state... maybe???
 	llvm::Value* expr = nullptr;
@@ -500,9 +511,8 @@ void Codegen(ASTMemberOperation* memberOp) {
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
 	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
 
-	auto memberIndices = (U32*)(memberOp + 1);
-	for (auto i = 0; i < memberOp->indexCount; i++) {
-		auto& memberIndex = memberIndices[i];
+	for (auto i = 0; i < memberOp->memberCount; i++) {
+		auto& memberIndex = memberOp->indices[i];
 		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
 		indices.push_back(indexValue);
 	}
@@ -548,9 +558,8 @@ llvm::Value* Codegen(ASTMemberExpr* expr) {
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
 	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
 
-	auto memberIndices = (U32*)(expr + 1);
-	for (auto i = 0; i < expr->indexCount; i++) {
-		auto& memberIndex = memberIndices[i];
+	for (auto i = 0; i < expr->memberCount; i++) {
+		auto& memberIndex = expr->indices[i];
 		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
 		indices.push_back(indexValue);
 	}

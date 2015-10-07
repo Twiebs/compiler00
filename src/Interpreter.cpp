@@ -58,6 +58,7 @@ void Print(ASTStruct* structDefn) {
             printf("\t%s : %s\n", structMember->name, structMember->type->name);
         }
     }
+	printf("\n");
 }
 
 internal void PrintDefn(ASTNode* node) {
@@ -119,8 +120,9 @@ void RunInterp (Package* package) {
             lex.nextToken();
             if (lex.token.type == TOKEN_PAREN_OPEN) {
                 lex.nextToken();
-                lex.nextToken(); // eat the arguments correctly!
-                // TODO parse the arguments correctly here!
+				// TODO parse the arguments correctly here!
+				lex.nextToken();
+
                 auto node = FindNodeWithIdent(&package->globalBlock, identToken.string);
                 if (node == nullptr) {
                     printf("could not find a function named %s", identToken.string.c_str());
@@ -146,6 +148,7 @@ void RunInterp (Package* package) {
                         for (U32 i = 0; i < funcSet->functions.size(); i++) {
                             Print((ASTFunction *) funcSet->functions[i]);
                         }
+						printf("\n");
                     }
                         break;
 

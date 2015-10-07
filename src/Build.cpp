@@ -7,8 +7,6 @@
 #include <condition_variable>
 #include <mutex>
 
-#include "Analysis.cpp"
-
 struct WorkQueue {
     std::mutex mutex;
     std::condition_variable cond;
