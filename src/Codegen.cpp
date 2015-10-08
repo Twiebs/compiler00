@@ -11,9 +11,9 @@
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
+
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
-
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 
@@ -23,11 +23,45 @@
 #include "llvm/CodeGen/LinkAllAsmWriterComponents.h"
 #include "llvm/CodeGen/LinkAllCodegenComponents.h"
 
-#include "llvm/PassManager.h"
-
 #include "llvm/IRReader/IRReader.h"
 
+
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/Triple.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/CodeGen/CommandFlags.h"
+#include "llvm/CodeGen/LinkAllAsmWriterComponents.h"
+#include "llvm/CodeGen/LinkAllCodegenComponents.h"
+#include "llvm/CodeGen/MIRParser/MIRParser.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/IRPrintingPasses.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
+#include "llvm/IRReader/IRReader.h"
+#include "llvm/MC/SubtargetFeature.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/FormattedStream.h"
+#include "llvm/Support/Host.h"
+#include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/PluginLoader.h"
+#include "llvm/Support/PrettyStackTrace.h"
+#include "llvm/Support/Signals.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/ToolOutputFile.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
+
+
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Value.h"
 #include "llvm/IR/Verifier.h"
@@ -232,6 +266,7 @@ void CodegenStatement (ASTNode* node) {
 		case AST_CALL: Codegen((ASTCall*)node); break;
 		case AST_ITER: Codegen((ASTIter*)node); break;
 		case AST_RETURN: Codegen((ASTReturn*)node); break;
+		case AST_STRUCT: Codegen((ASTStruct*)node); break;
 		default: assert(!"A top level node was not a statement"); break;
 	}
 }
@@ -369,7 +404,7 @@ static void Codegen (ASTReturn* retVal) {
 	builder->CreateRet(value);
 }
 
-llvm::Value* Codegen(ASTCall* call) {
+llvm::Value* Codegen (ASTCall* call) {
 	assert(call->function);	// A call should always have a function resolved when here
 	if (!call->function->llvmFunction) {
 		auto lastInsertBlock = builder->GetInsertBlock();
@@ -563,9 +598,11 @@ llvm::Value* Codegen(ASTMemberExpr* expr) {
 		indices.push_back(indexValue);
 	}
 
+
 	llvm::Value* value_ptr = structAlloca;
+	auto pointer_type = (llvm::Type*)expr->structVar->type->llvmType;
 	if(expr->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
-	auto gep = llvm::GetElementPtrInst::Create(value_ptr, indices, "access", builder->GetInsertBlock());
+	auto gep = llvm::GetElementPtrInst::Create(pointer_type, value_ptr, indices, "access", builder->GetInsertBlock());
 	if (expr->accessMod == UNARY_ADDRESS) {
 		return gep;
 	} else {
@@ -672,9 +709,6 @@ int WriteNativeObject(llvm::Module* module, BuildSettings* settings) {
 	std::unique_ptr<TargetMachine> Target(TheTarget->createTargetMachine(triple.getTriple(), MCPU, featuresStr, Options, RelocModel, CMModel, OLvl));
 	assert(Target && "Could not allocate target machine!");
 
-	if (GenerateSoftFloatCalls)
-		FloatABIForCalls = FloatABI::Soft;
-
 	// TODO add options for viewing asm as text!
 	bool binary = true;
 	sys::fs::OpenFlags openFlags = sys::fs::F_None;
@@ -683,7 +717,7 @@ int WriteNativeObject(llvm::Module* module, BuildSettings* settings) {
 	}
 
 	std::error_code errorCode;
-	auto fileOut = llvm::make_unique<tool_output_file>(settings->outputFile, errorCode, openFlags);
+	auto fileOut = std::make_unique<tool_output_file>(settings->outputFile, errorCode, openFlags);
 	if (errorCode) {
 		LOG_ERROR(errorCode.message());
 		return -1;
@@ -691,18 +725,14 @@ int WriteNativeObject(llvm::Module* module, BuildSettings* settings) {
 
 
 	// Build up all of the passes that we want to do to the module.
-	llvm::PassManager PM;
+	module->setDataLayout(Target->createDataLayout());
+	llvm::legacy::PassManager PM;
 
-	// Add an appropriate TargetLibraryInfo pass for the module's triple.
-	llvm::TargetLibraryInfo *TLI = new llvm::TargetLibraryInfo(triple);
-//	if (DisableSimplifyLibCalls)
-//		TLI->disableAllFunctions();
-	PM.add(TLI);
-
-	// Add the target data from the target machine, if it exists, or the module.
-	if (const DataLayout *DL = Target->getSubtargetImpl()->getDataLayout())
-		module->setDataLayout(DL);
-	PM.add(new DataLayoutPass());
+//	// Add an appropriate TargetLibraryInfo pass for the module's triple.
+//	llvm::TargetLibraryInfo *TLI = new llvm::TargetLibraryInfo(triple);
+////	if (DisableSimplifyLibCalls)
+////		TLI->disableAllFunctions();
+//	PM.add(TLI);
 
 
 	{
@@ -732,7 +762,7 @@ int WriteNativeObject(llvm::Module* module, BuildSettings* settings) {
 		//Verification is on for now
 		// NOTE we may want to remove it since we are allready verifiying at Codegen
 		auto fileType = TargetMachine::CGFT_ObjectFile;
-		if (Target->addPassesToEmitFile(PM, FOS, fileType, true, StartAfterID, StopAfterID)) {
+		if (Target->addPassesToEmitFile(PM, fileOut->os(), fileType, true, StartAfterID, StopAfterID)) {
 			LOG_ERROR("target does not support generation of this filetype");
 			return 1;
 		}

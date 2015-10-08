@@ -130,8 +130,6 @@ internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
 	}
 }
 
-
-
 internal inline bool TypeCompareExplicit (ASTExpression* exprA, ASTExpression* exprB) {
 	if (exprA->type != exprB->type)
 		return false;
@@ -173,9 +171,15 @@ internal inline void AnalyzeBlock (Worker* worker, ASTBlock* block) {
 
 internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 	switch(node->nodeType) {
+
 	case AST_BLOCK:
 		AnalyzeBlock(worker, (ASTBlock*)node);
 		break;
+
+	case AST_STRUCT: {
+		// TODO struct internal type dependencies
+	} break;
+
 
 	case AST_IF:
 		AnalyzeIfStatement(worker, (ASTIfStatement*)node);

@@ -1,42 +1,43 @@
 IMPORT "IO.bang"
+IMPORT "lang.src"
 
 Vector3 :: STRUCT
-	x : F32
-	y : F32
-	z : F32
+	x : S32
+	y : S32
+	z : S32
 
-Transform :: STRUCT
+Transform3D :: STRUCT
 	position : Vector3
 	rotation : Vector3
 	scale 	 : Vector3
 
-Test :: (x : S8)  :> S32 { }
-Test :: (x : S16) :> S32 { }
-Test :: (x : S32) :> S32 { }
-Test :: (x : S64) :> S32 { }
-Test :: (msg : @S16) { }
-Test :: (msg : @U8)  { }
-Test :: (msg : @U16) { }
-Test :: (msg : @U64) { }
+CastTest :: ()
+	printf("Running Cast Test!\n")
+
+	foo : F32 = F32(5)
+	printf("foo is %f\n" foo)
+
+	bar : S32 = 8
+	foo = F32(bar)
+	printf("bar is : %i\n" bar)
+	printf("foo is: %f\n" foo)
+
+	someInt := 0
+	someInt = S32(6.7)
+	printf("someInt is: %d\n" someInt)
+	printf("\n")
+
+BooleanTest :: ()
+	printf("Running boolean test!\n")
+	foo : F32 = 0.5
+	IF foo > 1.0 printf("Foo is greater than 1\n")
+	IF foo < 1.0 printf("Foo is less than 1.0\n")
+	printf("\n")
 
 
-Main :: () :> S32
-  bar := 7
-  foo := (1 + 3 + 1) * (bar + (3*2))
-  Print("foo: ")
-  Println(foo)
+Main :: () >> S32
+	CastTest()
+	BooleanTest()
+	RETURN 0
 
-  IF ~foo Println("False")
-  ELSE Println("True")
 
-  i : ITER 0 TO 100
-    Println(i)
-
-  start := 0
-  end := 100
-  i : ITER start TO end
-    Println(i)
-
-  VectorTest()
-
-  RETURN 0

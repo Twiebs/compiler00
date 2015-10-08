@@ -13,6 +13,7 @@ add_definitions(-std=c++14)
 add_definitions(${LLVM_DEFINITIONS})
 
 llvm_map_components_to_libnames(LLVM_LIBS
+        ${LLVM_TARGETS_TO_BUILD}
         core
         support
         irreader
@@ -85,13 +86,6 @@ powerpccodegen
 powerpcdesc
 powerpcdisassembler
 powerpcinfo
-
-r600
-r600asmparser
-r600asmprinter
-r600codegen
-r600desc
-r600info
 
 sparc
 sparcasmparser

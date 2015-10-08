@@ -104,12 +104,9 @@ void InterpLexer::nextToken() {
             AppendNext();
             token.type = TOKEN_TYPE_DEFINE;
         } else if (nextChar == '=') {
-            AppendNext();
-            token.type = TOKEN_TYPE_INFER;
-        } else if (nextChar == '>') {
-            AppendNext();
-            token.type = TOKEN_TYPE_RETURN;
-        } else {
+			AppendNext();
+			token.type = TOKEN_TYPE_INFER;
+		} else {
             token.type = TOKEN_TYPE_DECLARE;
         }
     }
@@ -181,6 +178,18 @@ void InterpLexer::nextToken() {
         token.type = TOKEN_LOGIC_NOT;
     }
 
+	else if (nextChar == '>') {
+		AppendNext();
+		if (nextChar == '>') {
+			AppendNext();
+			token.type = TOKEN_TYPE_RETURN;
+		} else if (nextChar == '=') {
+			AppendNext();
+			token.type = TOKEN_LOGIC_GREATER_EQAUL;
+		} else {
+			token.type = TOKEN_LOGIC_GREATER;
+		}
+	}
 
         // REMOVE NEED FOR MODULUS BECAUSE FUCK THAT
         // Mod(5, 2) would be better!
@@ -406,7 +415,10 @@ void NextToken (Worker* worker) {
             if (worker->nextChar == '=') {
                 AppendNext(worker);
                 worker->token.type = TOKEN_LOGIC_GREATER_EQAUL;
-            } else {
+            } else if (worker->nextChar == '>') {
+				AppendNext(worker);
+				worker->token.type = TOKEN_TYPE_RETURN;
+			} else {
                 worker->token.type = TOKEN_LOGIC_GREATER;
             }
         }

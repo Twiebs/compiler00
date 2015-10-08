@@ -91,8 +91,8 @@ ASTNode* ParseStatement (Worker* worker) {
 	case TOKEN_DIV:
 
 	case TOKEN_IDENTIFIER:	      return ParseIdentifier(worker);
-	case TOKEN_IF: 			return ParseIF(worker);
-	case TOKEN_ITER:		return ParseIter(worker);
+	case TOKEN_IF: 					return ParseIF(worker);
+	case TOKEN_ITER:				return ParseIter(worker);
 	case TOKEN_RETURN: 			  return ParseReturn(worker);
 	case TOKEN_BLOCK_OPEN:	      return ParseBlock(worker);
 	case TOKEN_IMPORT:			  return ParseImport(worker);
@@ -564,31 +564,34 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
                     printf("Return types do not match!  Can not overload functions only by return type");
                 }
 
-            } else if (worker->token.type == TOKEN_BLOCK_OPEN) {
-                // TODO change this to parseStatement to get the nextblock
-                // A new scope has been opened...
-                NextToken(worker); // Eat the scope
 
-                while (worker->token.type != TOKEN_BLOCK_CLOSE && worker->token.type != TOKEN_EOF) {
-                    // Here we are going to push back nullptrs into the function because they will never
-                    // Get to the codegenration phase anyway..	Instead of branching we can juse do this and not care
-                    ASTNode* node = ParseStatement(worker);
-                    function->members.push_back(node);
-                }
+            } else if (worker->token.type == TOKEN_BLOCK_OPEN) {
+				ParseBlock(worker, function);
+
+                // TODO change this to parseStatement to get the nextblock
+//                // A new scope has been opened...
+//                NextToken(worker); // Eat the scope
+//
+//                while (worker->token.type != TOKEN_BLOCK_CLOSE && worker->token.type != TOKEN_EOF) {
+//                    // Here we are going to push back nullptrs into the function because they will never
+//                    // Get to the codegenration phase anyway..	Instead of branching we can juse do this and not care
+//                    ASTNode* node = ParseStatement(worker);
+//                    function->members.push_back(node);
+//                }
 
             } else if (worker->token.type != TOKEN_FOREIGN) {
                 ReportError(worker, worker->token.site, "Expected a new scope to open after function definition!");
                 LOG_INFO("Did you misspell foreign?");
                 return nullptr;
             } else {
-                if(function->parent->parent != nullptr) {
+                if (function->parent->parent != nullptr) {
                     // This cant even happen there are no longer lambdas!
                     ReportError(worker, worker->token.site, "Cannot create a foreign function nested in another block!	Foreign functions must be declared in the global scope!");
                     return nullptr;
                 }
+				NextToken(worker);	// Eat the foreign token!
             }
 
-            NextToken(worker);		// Eats the foreign or the end of the scope
             worker->currentBlock = function->parent;
             return function;
         }
@@ -638,7 +641,7 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 				NextToken(worker); // eat the type ident
 			}
 
-            NextToken(worker); //Eat the close scope
+            NextToken(worker); // Eat the close scope
 
 			if (members.size() > 0) {
                 auto structDefn = CreateStruct(&worker->arena, identToken.string, &members[0], members.size());
@@ -675,18 +678,13 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 		auto structVar = (ASTVariable*)node;
 		auto structDefn = (ASTStruct*)structVar->type;
 		std::vector<std::string> memberNames;
-		if (structDefn == nullptr) {
-			while (worker->token.type == TOKEN_ACCESS) {
-				NextToken(worker);
-				if (worker->token.type != TOKEN_IDENTIFIER)
-					ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
-				memberNames.push_back(worker->token.string);
-				NextToken(worker);
-			}
-		} else {
-			assert(false);
+		while (worker->token.type == TOKEN_ACCESS) {
+			NextToken(worker);
+			if (worker->token.type != TOKEN_IDENTIFIER)
+				ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
+			memberNames.push_back(worker->token.string);
+			NextToken(worker);
 		}
-
 
 
 //		auto currentStruct = structDefn;
@@ -813,20 +811,15 @@ internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 	assert(worker->token.type == TOKEN_BLOCK_OPEN);
 	NextToken(worker);	 // Eat the SCOPE_OPEN
 	auto previousScope = worker->currentBlock;
-
 	if (block == nullptr) {
+		assert(false && "I dont think that this should ever happen!");
 		block = CreateBlock(&worker->arena, previousScope);
 	}
 
 	worker->currentBlock = block;
-
-	while(worker->token.type != TOKEN_BLOCK_CLOSE && worker->token.type != TOKEN_EOF) {
-		auto node = ParseStatement (worker);
-		if (node == nullptr) {
-			LOG_ERROR(worker->token.site << "Could not parse statement inside block");
-		} else {
-			block->members.push_back(node);
-		}
+	while (worker->token.type != TOKEN_BLOCK_CLOSE && worker->token.type != TOKEN_EOF) {
+		auto node = ParseStatement(worker);
+		block->members.push_back(node);
 	}
 
 	NextToken(worker);	// Eat the close scope

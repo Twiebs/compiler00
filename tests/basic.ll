@@ -1,134 +1,79 @@
 ; ModuleID = 'BangCompiler'
 
-%Vector3 = type { float, float, float }
+@str = private unnamed_addr constant [20 x i8] c"Running Cast Test!\0A\00"
+@str.1 = private unnamed_addr constant [11 x i8] c"foo is %f\0A\00"
+@str.2 = private unnamed_addr constant [13 x i8] c"bar is : %i\0A\00"
+@str.3 = private unnamed_addr constant [12 x i8] c"foo is: %f\0A\00"
+@str.4 = private unnamed_addr constant [16 x i8] c"someInt is: %d\0A\00"
+@str.5 = private unnamed_addr constant [2 x i8] c"\0A\00"
+@str.6 = private unnamed_addr constant [23 x i8] c"Running boolean test!\0A\00"
+@str.7 = private unnamed_addr constant [23 x i8] c"Foo is greater than 1\0A\00"
+@str.8 = private unnamed_addr constant [22 x i8] c"Foo is less than 1.0\0A\00"
+@str.9 = private unnamed_addr constant [2 x i8] c"\0A\00"
 
-@str = private unnamed_addr constant [2 x i8] c"[\00"
-@str3 = private unnamed_addr constant [3 x i8] c", \00"
-@str4 = private unnamed_addr constant [3 x i8] c", \00"
-@str5 = private unnamed_addr constant [2 x i8] c"]\00"
-@str6 = private unnamed_addr constant [6 x i8] c"foo: \00"
-@str8 = private unnamed_addr constant [6 x i8] c"False\00"
-@str9 = private unnamed_addr constant [5 x i8] c"True\00"
-@str10 = private unnamed_addr constant [11 x i8] c"position: \00"
-
-define void @Print(%Vector3* %vector) {
+define void @CastTest() {
 entry:
-  %vector1 = alloca %Vector3*
-  store %Vector3* %vector, %Vector3** %vector1
-  call void @Print1(i8* getelementptr inbounds ([2 x i8]* @str, i32 0, i32 0))
-  %0 = load %Vector3** %vector1
-  %access = getelementptr %Vector3* %0, i32 0, i32 0
-  %1 = load float* %access
-  call void @Print2(float %1)
-  call void @Print1(i8* getelementptr inbounds ([3 x i8]* @str3, i32 0, i32 0))
-  %2 = load %Vector3** %vector1
-  %access2 = getelementptr %Vector3* %2, i32 0, i32 1
-  %3 = load float* %access2
-  call void @Print2(float %3)
-  call void @Print1(i8* getelementptr inbounds ([3 x i8]* @str4, i32 0, i32 0))
-  %4 = load %Vector3** %vector1
-  %access3 = getelementptr %Vector3* %4, i32 0, i32 2
-  %5 = load float* %access3
-  call void @Print2(float %5)
-  call void @Print1(i8* getelementptr inbounds ([2 x i8]* @str5, i32 0, i32 0))
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([20 x i8], [20 x i8]* @str, i32 0, i32 0))
+  %foo = alloca float
+  store float 5.000000e+00, float* %foo
+  %0 = load float, float* %foo
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([11 x i8], [11 x i8]* @str.1, i32 0, i32 0), float %0)
+  %bar = alloca i32
+  store i32 8, i32* %bar
+  %1 = load i32, i32* %bar
+  %2 = sitofp i32 %1 to float
+  store float %2, float* %foo
+  %3 = load i32, i32* %bar
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([13 x i8], [13 x i8]* @str.2, i32 0, i32 0), i32 %3)
+  %4 = load float, float* %foo
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @str.3, i32 0, i32 0), float %4)
+  %someInt = alloca i32
+  store i32 0, i32* %someInt
+  store i32 6, i32* %someInt
+  %5 = load i32, i32* %someInt
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([16 x i8], [16 x i8]* @str.4, i32 0, i32 0), i32 %5)
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.5, i32 0, i32 0))
   ret void
 }
 
-define void @Print1(i8* %msg) {
+declare void @printf(i8*, ...)
+
+define void @BooleanTest() {
 entry:
-  %msg1 = alloca i8*
-  store i8* %msg, i8** %msg1
-  %0 = load i8** %msg1
-  call void @__PrintStr(i8* %0)
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([23 x i8], [23 x i8]* @str.6, i32 0, i32 0))
+  %foo = alloca float
+  store float 5.000000e-01, float* %foo
+  %0 = load float, float* %foo
+  %1 = fcmp ogt float %0, 1.000000e+00
+  br i1 %1, label %if, label %merge
+
+merge:                                            ; preds = %if, %entry
+  %2 = load float, float* %foo
+  %3 = fcmp olt float %2, 1.000000e+00
+  br i1 %3, label %if2, label %merge1
+
+if:                                               ; preds = %entry
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([23 x i8], [23 x i8]* @str.7, i32 0, i32 0))
+  br label %merge
+
+merge1:                                           ; preds = %if2, %merge
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.9, i32 0, i32 0))
   ret void
+
+if2:                                              ; preds = %merge
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([22 x i8], [22 x i8]* @str.8, i32 0, i32 0))
+  br label %merge1
 }
-
-declare void @__PrintStr(i8*)
-
-define void @Print2(float %msg) {
-entry:
-  %msg1 = alloca float
-  store float %msg, float* %msg1
-  %0 = load float* %msg1
-  call void @__PrintFloat(float %0)
-  ret void
-}
-
-declare void @__PrintFloat(float)
 
 define i32 @main() {
 entry:
-  %bar = alloca i32
-  store i32 7, i32* %bar
-  %foo = alloca i32
-  %0 = load i32* %bar
-  %addtmp = add i32 %0, 6
-  %multmp = mul i32 5, %addtmp
-  store i32 %multmp, i32* %foo
-  call void @Print1(i8* getelementptr inbounds ([6 x i8]* @str6, i32 0, i32 0))
-  %1 = load i32* %foo
-  call void @Println(i32 %1)
-  %2 = load i32* %foo
-  %3 = icmp eq i32 %2, 0
-  %4 = zext i1 %3 to i32
-  %ifcmp = icmp ne i32 %4, 0
-  br i1 %ifcmp, label %if, label %else
-
-merge:                                            ; preds = %else, %if
-  %position = alloca %Vector3
-  call void @Print1(i8* getelementptr inbounds ([11 x i8]* @str10, i32 0, i32 0))
-  call void @Print(%Vector3* %position)
+  call void @CastTest()
+  call void @BooleanTest()
   ret i32 0
-
-if:                                               ; preds = %entry
-  call void @Println7(i8* getelementptr inbounds ([6 x i8]* @str8, i32 0, i32 0))
-  br label %merge
-
-else:                                             ; preds = %entry
-  call void @Println7(i8* getelementptr inbounds ([5 x i8]* @str9, i32 0, i32 0))
-  br label %merge
 }
 
-define void @Println(i32 %msg) {
-entry:
-  %msg1 = alloca i32
-  store i32 %msg, i32* %msg1
-  %0 = load i32* %msg1
-  call void @__PrintlnInt(i32 %0)
-  ret void
-}
+declare void @ListAll()
 
-declare void @__PrintlnInt(i32)
+declare void @Build()
 
-define void @Println7(i8* %msg) {
-entry:
-  %msg1 = alloca i8*
-  store i8* %msg, i8** %msg1
-  %0 = load i8** %msg1
-  call void @__PrintlnStr(i8* %0)
-  ret void
-}
-
-declare void @__PrintlnStr(i8*)
-
-declare void @__PrintInt(i32)
-
-declare void @__PrintlnFloat(float)
-
-define void @Print11(i32 %msg) {
-entry:
-  %msg1 = alloca i32
-  store i32 %msg, i32* %msg1
-  %0 = load i32* %msg1
-  call void @__PrintInt(i32 %0)
-  ret void
-}
-
-define void @Println12(float %msg) {
-entry:
-  %msg1 = alloca float
-  store float %msg, float* %msg1
-  %0 = load float* %msg1
-  call void @__PrintlnFloat(float %0)
-  ret void
-}
+declare void @InterpTest()

@@ -1,31 +1,12 @@
-IMPORT "IO.bang"
 IMPORT "lang.src"
 
-CastTest :: ()
-	printf("Running Cast Test!\n")
+Main :: () >> S32
+	InternalType :: STRUCT
+		internalData : S32
 
-	foo : F32 = F32(5)
-	printf("foo is %f\n" foo)
-
-	bar : S32 = 8
-	foo = F32(bar)
-	printf("bar is : %i\n" bar)
-	printf("foo is: %f\n" foo)
-
-	someInt := 0
-	someInt = S32(6.7)
-	printf("someInt is: %d\n" someInt)
-	printf("\n")
-
-BooleanTest :: ()
-	printf("Running boolean test!\n")
-	foo : F32 = 5.2
-	IF foo > 1.0 printf("Foo is greater than 1\n")
-	IF foo < 1.0 printf("Foo is less than 1.0\n")
-	printf("\n")
-
-Main :: () :> S32
-	CastTest()
-	BooleanTest()
-
+	data : InternalType
 	RETURN 0
+
+
+OtherFunction :: ()
+	data : InternalType

@@ -36,7 +36,7 @@ void Print (ASTFunction* function) {
     }
     printf(") ");
     if (function->returnType != nullptr) {
-        printf("-> %s", function->returnType->name);
+        printf(">> %s", function->returnType->name);
     }
 
     // TODO functions are designated foregin if they do not contain a body
