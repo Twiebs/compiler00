@@ -6,6 +6,8 @@
 #include <assert.h>
 #include <stdint.h>
 
+#define ASSERT_ON_ERROR
+
 #define internal static
 #define global_variable static
 

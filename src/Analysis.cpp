@@ -213,6 +213,10 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 		if (var->type == nullptr) {
 			if (var->typeName != nullptr) {
 				var->type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, var->typeName);
+				if (var->type == nullptr) {
+					ReportError(worker, "Variable(%s) could not be declared with type(%s): Type does not exist!", var->name, var->typeName);
+					return;
+				}
 				assert(var->type->nodeType != AST_DEFINITION && "Primitive types should always be resolved already");
 				if (var->type->nodeType != AST_STRUCT) {
 					ReportError(worker, "Variable '%s' could not be declared with type '%s': '%s' does not represent a struct" , var->name, var->typeName, var->typeName);

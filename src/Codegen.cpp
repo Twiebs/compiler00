@@ -25,52 +25,20 @@
 
 #include "llvm/IRReader/IRReader.h"
 
-
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/CodeGen/CommandFlags.h"
-#include "llvm/CodeGen/LinkAllAsmWriterComponents.h"
-#include "llvm/CodeGen/LinkAllCodegenComponents.h"
 #include "llvm/CodeGen/MIRParser/MIRParser.h"
-#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
-#include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/IRReader/IRReader.h"
-#include "llvm/MC/SubtargetFeature.h"
-#include "llvm/Pass.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/FileSystem.h"
-#include "llvm/Support/FormattedStream.h"
-#include "llvm/Support/Host.h"
-#include "llvm/Support/ManagedStatic.h"
-#include "llvm/Support/PluginLoader.h"
-#include "llvm/Support/PrettyStackTrace.h"
-#include "llvm/Support/Signals.h"
-#include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/TargetRegistry.h"
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/ToolOutputFile.h"
-#include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/IR/LegacyPassManager.h"
-#include "llvm/IR/IRPrintingPasses.h"
-#include "llvm/IR/Value.h"
-#include "llvm/IR/Verifier.h"
-#include "llvm/IR/Constant.h"
-#include "llvm/IR/Module.h"
 
 #include "AST.hpp"
 #include "Build.hpp"
-#include "Common.hpp"
 
 global_variable llvm::IRBuilder<>* builder = new llvm::IRBuilder<>(llvm::getGlobalContext());
 global_variable llvm::Module* global_module;	// HACK HACK HACK HACK
@@ -79,33 +47,28 @@ internal int WriteIR (llvm::Module* module, BuildSettings* settings);
 internal int WriteNativeObject (llvm::Module* module, BuildSettings* settings);
 internal int WriteExecutable (BuildSettings* settings);
 
-// Top level statements
-// Eventualy we might consider allowing structs and functions to be declared localy at block level
-internal void CodegenPrimitiveTypes();
-void Codegen(ASTStruct* structDefn);
-void Codegen(ASTFunction* function, llvm::Module* module);
+internal void CodegenStatement (ASTNode* node);
+internal void Codegen (ASTFunction* function, llvm::Module* module);
+internal void Codegen (ASTStruct* structDefn);
+internal void Codegen (ASTVariable* var);
+internal void Codegen (ASTVariableOperation* varOp);
+internal void Codegen (ASTMemberOperation* memberOp);
+internal void Codegen (ASTReturn* retVal);
+internal inline void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
+internal inline void Codegen(ASTIter* iter);
 
-// Statements
-void CodegenStatement(ASTNode* node);
-void Codegen(ASTVariable* var);
-void Codegen(ASTVariableOperation* varOp);
-void Codegen(ASTMemberOperation* memberOp);
-inline internal void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
-inline internal void Codegen(ASTIter* iter);
+internal llvm::Value* CodegenExpr (ASTNode* expr);
+internal llvm::Value* Codegen (ASTIntegerLiteral* intLiteral);
+internal llvm::Value* Codegen (ASTFloatLiteral* floatLiteral);
+internal llvm::Value* Codegen (ASTBinaryOperation* binop);
+internal llvm::Value* Codegen (ASTMemberExpr* expr);
+internal llvm::Value* Codegen (ASTVarExpr* expr);
+internal llvm::Value* Codegen (ASTStringLiteral* str);
+internal llvm::Value* Codegen (ASTCall* call);
+internal llvm::Value* Codegen (ASTCast* cast);
 
-internal void Codegen(ASTReturn* retVal);
+internal void CodegenPrimitiveTypes ();
 
-internal llvm::Value* Codegen(ASTCast* cast);
-
-// Expressions
-llvm::Value* CodegenExpr (ASTNode* expr);
-llvm::Value* Codegen (ASTIntegerLiteral* intLiteral);
-llvm::Value* Codegen (ASTFloatLiteral* floatLiteral);
-static llvm::Value* Codegen (ASTBinaryOperation* binop);
-llvm::Value* Codegen (ASTMemberExpr* expr);
-llvm::Value* Codegen (ASTVarExpr* expr);
-llvm::Value* Codegen (ASTStringLiteral* str);
-llvm::Value* Codegen (ASTCall* call);
 
 internal void CodegenPrimitiveTypes() {
 	global_voidType->llvmType = llvm::Type::getVoidTy(llvm::getGlobalContext());
@@ -174,7 +137,7 @@ void CodegenPackage (Package* package, BuildSettings* settings) {
 	}
 }
 
-void Codegen(ASTStruct* structDefn) {
+void Codegen (ASTStruct* structDefn) {
 	std::vector<llvm::Type*> memberTypes;
 	for (auto i = 0; i < structDefn->memberCount; i++) {
 		auto& type = structDefn->members[i].type;
@@ -272,7 +235,7 @@ void CodegenStatement (ASTNode* node) {
 	}
 }
 
-void Codegen(ASTVariable* var) {
+internal void Codegen (ASTVariable* var) {
 	assert(var->allocaInst == nullptr);	// Variable codegens are variable decl statements
 	assert(var->type != nullptr && "Variable must have type resolved during anaysis");
 	auto llvmType = (llvm::Type*)var->type->llvmType;
@@ -296,7 +259,7 @@ void Codegen(ASTVariable* var) {
 	builder->CreateStore(expr, (llvm::AllocaInst*)var->allocaInst);
 }
 
-void Codegen(ASTVariableOperation* varOp) {
+internal void Codegen (ASTVariableOperation* varOp) {
 	assert((llvm::AllocaInst*)varOp->variable->allocaInst != nullptr);
 	auto exprValue = CodegenExpr(varOp->expr);
 	switch (varOp->operation) {
@@ -338,25 +301,17 @@ void Codegen(ASTVariableOperation* varOp) {
 
 }
 
-llvm::Value* CodegenExpr (ASTNode* node) {
+internal llvm::Value* CodegenExpr (ASTNode* node) {
 	assert(node != nullptr);
 	switch(node->nodeType) {
-	case AST_BINARY_OPERATION:
-		return Codegen((ASTBinaryOperation*)node);
-	case AST_MEMBER_EXPR:
-		return Codegen((ASTMemberExpr*)node);
-	case AST_VAR_EXPR:
-		return Codegen((ASTVarExpr*)node);
-	case AST_CALL:
-		return Codegen((ASTCall*)node);
-	case AST_INTEGER_LITERAL:
-		return Codegen((ASTIntegerLiteral*) node);
-	case AST_FLOAT_LITERAL:
-		return Codegen((ASTFloatLiteral*)node);
-	case AST_STRING_LITERAL:
-		return Codegen((ASTStringLiteral*)node);
-    case AST_CAST:
-        return Codegen((ASTCast*)node);
+	case AST_BINARY_OPERATION: return Codegen((ASTBinaryOperation*)node);
+	case AST_MEMBER_EXPR: return Codegen((ASTMemberExpr*)node);
+	case AST_VAR_EXPR: return Codegen((ASTVarExpr*)node);
+	case AST_CALL: return Codegen((ASTCall*)node);
+	case AST_INTEGER_LITERAL: return Codegen((ASTIntegerLiteral*) node);
+	case AST_FLOAT_LITERAL: return Codegen((ASTFloatLiteral*)node);
+	case AST_STRING_LITERAL: return Codegen((ASTStringLiteral*)node);
+    case AST_CAST: return Codegen((ASTCast*)node);
 	default:
 		assert(!"ASTNode is not an expression!");
 		return nullptr;
@@ -399,13 +354,13 @@ internal llvm::Value* Codegen (ASTBinaryOperation* binop)	{
 	}
 }
 
-static void Codegen (ASTReturn* retVal) {
+internal void Codegen (ASTReturn* retVal) {
 	auto value = CodegenExpr(retVal->value);
 	assert(value != nullptr);
 	builder->CreateRet(value);
 }
 
-llvm::Value* Codegen (ASTCall* call) {
+internal llvm::Value* Codegen (ASTCall* call) {
 	assert(call->function);	// A call should always have a function resolved when here
 	if (!call->function->llvmFunction) {
 		auto lastInsertBlock = builder->GetInsertBlock();
@@ -424,14 +379,14 @@ llvm::Value* Codegen (ASTCall* call) {
         argsV.push_back(arg_value);
 	}
 
-	if(call->function->returnType != global_voidType) {
+	if (call->function->returnType != global_voidType) {
 		return builder->CreateCall(llvmfunc, argsV, "calltmp");
 	} else {
 		return builder->CreateCall(llvmfunc, argsV);
 	}
 }
 
-static inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
+internal inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
 	auto ifBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "if", function);
 	auto elseBlock = mergeBlock;
 	if (ifStatement->elseBody != nullptr) {
@@ -539,7 +494,7 @@ static inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* merge
 	builder->SetInsertPoint(exitBlock);
 }
 
-void Codegen(ASTMemberOperation* memberOp) {
+internal void Codegen (ASTMemberOperation* memberOp) {
 	auto structAlloca = (llvm::AllocaInst*)memberOp->structVar->allocaInst;
 
 	std::vector<llvm::Value*> indices;

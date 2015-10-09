@@ -254,6 +254,17 @@ struct ASTMemberAccess {
 	U32 memberCount;
 	char** memberNames;
 	U32* indices;
+
+	ASTMemberAccess(MemoryArena* arena, ASTVariable* structVar, U32 memberCount, const std::vector& names) :
+			structVar(structVar), memberCount(memberCount) {
+		memberNames = (char**)Allocate(arena, memberCount * sizeof(char*));
+		indices = (U32*)Allocate(arena, memberCount * sizeof(U32));
+		for (U32 i = 0; i < names.size(); i++) {
+			memberNames[i] = (char*)Allocate(arena, names[i].size());
+			auto memberName = memberNames[i];
+			memcpy(memberName, names[i].c_str(), names[i].length() + 1);
+		}
+	}
 };
 
 struct ASTMemberExpr : public ASTExpression {

@@ -121,9 +121,10 @@ ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* struc
 	result->memberCount = memberNames.size();
 
 	for (U32 i = 0; i < memberNames.size(); i++) {
-		result->memberNames[i] = (char*)Allocate(arena, sizeof(memberNames[i].length() + 1));
+		result->memberNames[i] = (char*)Allocate(arena, memberNames[i].length() + 1);
 		memcpy(result->memberNames[i], memberNames[i].c_str(), memberNames[i].length() + 1);
 	}
+
 	return result;
 }
 

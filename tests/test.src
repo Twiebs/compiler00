@@ -1,9 +1,28 @@
+IMPORT "IO.bang"
 IMPORT "lang.src"
 
-Main :: () >> S32
+OtherFunction :: () >> S32
 	InternalType :: STRUCT
 		internalData : S32
 
 	data : InternalType
+	data.internalData = 7
+	printf("data is : %d" data.internalData)
+
+	RETURN 0
+
+
+Main :: () >> S32
+
+	FirstInternalType :: STRUCT
+		fistData : S32
+
+	InternalType :: STRUCT
+		internalData : S32
+		someOtherData : S32
+		myFirstInternalType : FirstInternalType
+
+	data : InternalType
 	data.internalData = 5
+
 	RETURN 0

@@ -90,12 +90,12 @@ ASTNode* ParseStatement (Worker* worker) {
 	case TOKEN_MUL:
 	case TOKEN_DIV:
 
-	case TOKEN_IDENTIFIER:	      return ParseIdentifier(worker);
+	case TOKEN_IDENTIFIER:	      	return ParseIdentifier(worker);
 	case TOKEN_IF: 					return ParseIF(worker);
 	case TOKEN_ITER:				return ParseIter(worker);
-	case TOKEN_RETURN: 			  return ParseReturn(worker);
-	case TOKEN_BLOCK_OPEN:	      return ParseBlock(worker);
-	case TOKEN_IMPORT:			  return ParseImport(worker);
+	case TOKEN_RETURN: 			  	return ParseReturn(worker);
+	case TOKEN_BLOCK_OPEN:	      	return ParseBlock(worker);
+	case TOKEN_IMPORT:			  	return ParseImport(worker);
 	default:
 		ReportError(worker, &worker->token.site, "Could not parse statement unkown token(%s)", worker->token.string.c_str());
 		NextToken(worker);
@@ -217,6 +217,22 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
                 return (ASTExpression*)call;
             }
 		} else if (worker->token.type == TOKEN_ACCESS) {
+
+
+			auto parseMemberAccess = [](ASTVariable* structVar) {
+				auto structType = (ASTStruct*)structVar->type;
+				if (structType == nullptr) {
+					std::vector<std::string> memberNames;
+					while (worker->token.type == TOKEN_ACCESS) {
+						NextToken(worker);
+						if (worker->token.type != TOKEN_IDENTIFIER)
+							ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
+						memberNames.push_back(worker->token.string);
+						NextToken(worker);
+					}
+				}
+			}
+
 			auto structVar = (ASTVariable*)node;
 			auto structDefn = (ASTStruct*)structVar->type;
 			std::vector<std::string> memberNames;
@@ -233,29 +249,30 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 				auto expr = CreateMemberExpr(&worker->arena, structVar, unary, memberNames);
 				return expr;
 			} else {
-				assert(false);
+				if (structDefn->nodeType != AST_STRUCT) ReportError(worker, worker->token.site, identToken.string + " does not name a struct type!  It is a " + ToString(node->nodeType));
+				auto currentStruct = structDefn;
+				ASTDefinition* exprType = nullptr;
+				std::vector<U32> indices;
+				while(worker->token.type == TOKEN_ACCESS) {
+					NextToken(worker); // eat the member access
+					auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
+					if (memberIndex == -1) {
+						ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
+					} else {
+						indices.push_back(memberIndex);
+						auto memberType = currentStruct->members[memberIndex].type;
+						if(memberType->nodeType == AST_STRUCT)
+							currentStruct = (ASTStruct*)memberType;
+						exprType = memberType;
+					}
+					NextToken(worker);	// eat the member ident
+				}
+
+				auto expr = CreateMemberExpr(&worker->arena, structVar, unary, memberNames);
+				return expr;
 			}
 
-			//			if(structDefn->nodeType != AST_STRUCT)
-//				ReportError(worker, worker->token.site, identToken.string + " does not name a struct type!  It is a " + ToString(node->nodeType));
-//
-//			auto currentStruct = structDefn;
-//			ASTDefinition* exprType = nullptr;
-//			std::vector<U32> indices;
-//			while(worker->token.type == TOKEN_ACCESS) {
-//				NextToken(worker); // eat the member access
-//				auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
-//				if (memberIndex == -1) {
-//					ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
-//				} else {
-//					indices.push_back(memberIndex);
-//					auto memberType = currentStruct->members[memberIndex].type;
-//					if(memberType->nodeType == AST_STRUCT)
-//						currentStruct = (ASTStruct*)memberType;
-//					exprType = memberType;
-//				}
-//				NextToken(worker);	// eat the member ident
-//			}
+
 
 
 		} else {
@@ -424,7 +441,9 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 					memcpy(var->typeName, worker->token.string.c_str(), worker->token.string.size() + 1);
 				} else if (type->nodeType != AST_DEFINITION && type->nodeType != AST_STRUCT) {
                     ReportError(worker, &worker->token.site, "%s does not name a type!  It names a %s", worker->token.string.c_str(), ToString(type->nodeType).c_str());
-                }
+                } else {
+
+				}
 
                 var->type = type;
 			}
@@ -827,7 +846,7 @@ internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 	return block;
 }
 
-void ParseFile(Worker* worker, const std::string& rootDir, const std::string& filename) {
+void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename) {
 	worker->file = fopen((rootDir + filename).c_str(), "r");
 	if (!worker->file) {
 		ReportError(worker, "Could not open file: " + filename);
@@ -839,6 +858,7 @@ void ParseFile(Worker* worker, const std::string& rootDir, const std::string& fi
 	worker->token.site.filename = filename;
 	worker->lineNumber = 1;
 	worker->colNumber = 1;
+	worker->currentIndentLevel = 0;
 	NextToken(worker);
 
 	while (worker->token.type != TOKEN_EOF) {
