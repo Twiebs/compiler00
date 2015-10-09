@@ -143,7 +143,7 @@ void RunInterp (Package* package) {
     // It will do its parsing of whatever you give it and then you can determine infromation about the program
     // by typing in the name of an identifer and it will give you static information about what it actualy is
 
-
+    package->llvmModule->dump();
     bool isRunning = true;
     std::string inputBuffer;
     InterpLexer lex;

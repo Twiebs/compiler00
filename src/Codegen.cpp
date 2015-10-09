@@ -128,7 +128,8 @@ internal void CodegenPrimitiveTypes() {
 
 void CodegenPackage (Package* package, BuildSettings* settings) {
 	CodegenPrimitiveTypes();
-	global_module = new llvm::Module("BangCompiler", llvm::getGlobalContext());
+    package->llvmModule = new llvm::Module("BangCompiler", llvm::getGlobalContext());
+	global_module = package->llvmModule;
 
 	// HACK codegenerate the structs first
 	for (ASTNode* node : package->globalBlock.members) {

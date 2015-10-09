@@ -5,8 +5,5 @@ Main :: () >> S32
 		internalData : S32
 
 	data : InternalType
+	data.internalData = 5
 	RETURN 0
-
-
-OtherFunction :: ()
-	data : InternalType

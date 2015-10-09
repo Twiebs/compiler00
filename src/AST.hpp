@@ -193,8 +193,6 @@ struct ASTIter : public ASTNode {
 	ASTBlock* body;
 };
 
-
-
 struct ASTFunction : public ASTBlock {
 	char* name;
     ASTDefinition* returnType = nullptr;

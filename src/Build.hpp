@@ -16,11 +16,14 @@
 // Internal functions could be just stored within the regular AST but that might become to cumbersome?
 // No thats fine it would work well enough.
 
+#include "llvm/IR/Module.h"
+
 struct Package {
     std::string name;
     ASTBlock globalBlock;
     MemoryArena arena;
     std::mutex mutex;
+    llvm::Module* llvmModule;
 };
 
 struct Worker {

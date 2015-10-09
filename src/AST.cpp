@@ -104,13 +104,15 @@ ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* v
 	return result;
 }
 
-ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, U32* indices, U32 indexCount) {
-	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
-	result->indices = (U32*)Allocate(arena, sizeof(U32) * indexCount);
-    result->memberCount = indexCount;
-    memcpy(result->indices, indices, sizeof(U32) * indexCount);
-    return result;
-}
+
+//ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, U32* indices, U32 indexCount) {
+//	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
+//	result->indices = (U32*)Allocate(arena, sizeof(U32) * indexCount);
+//    result->memberCount = indexCount;
+//    memcpy(result->indices, indices, sizeof(U32) * indexCount);
+//    return result;
+//}
+
 
 ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, const std::vector<std::string>& memberNames) {
 	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
