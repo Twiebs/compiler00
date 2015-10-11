@@ -117,7 +117,7 @@ T* MemoryArena::alloc(Args... args) {
 };
 
 enum ASTNodeType {
-	AST_IDENTIFIER,
+	AST_INVALID,
 	AST_BLOCK,
 	AST_DEFINITION,
 
@@ -179,10 +179,15 @@ struct ASTVariable : public ASTExpression {
     char* name;
 	char* typeName;
 	FileSite site;	// This is where this variable was declared.
-	ASTExpression* initalExpression = nullptr;
+	ASTExpression* initalExpression;
     void* allocaInst = nullptr;
     bool isPointer = false;
-    ASTVariable() { nodeType = AST_VARIABLE; }
+
+	ASTVariable (ASTExpression* initialExpr)
+		: initalExpression(initialExpr) {
+		nodeType = AST_VARIABLE;
+		this->type = nullptr;
+	}
 };
 
 struct ASTIter : public ASTNode {
@@ -191,6 +196,8 @@ struct ASTIter : public ASTNode {
 	ASTExpression* step;
 	ASTVariable* var;
 	ASTBlock* body;
+
+	ASTIter() { nodeType = AST_ITER; };
 };
 
 struct ASTFunction : public ASTBlock {
@@ -199,6 +206,7 @@ struct ASTFunction : public ASTBlock {
     bool isVarArgs = false;
 	std::vector<ASTVariable*> args;
 	void* llvmFunction = nullptr;
+	ASTFunction() { nodeType = AST_FUNCTION; };
 };
 
 // REFACTOR this could use a better name
@@ -210,7 +218,9 @@ struct ASTFunction : public ASTBlock {
 // It is simply just a container that points to overloaded functions!
 
 struct ASTFunctionSet : public ASTNode {
+	ASTFunctionSet* parent;
     std::vector<ASTFunction*> functions;
+	ASTFunctionSet(ASTFunctionSet* parent) : parent(parent) { nodeType = AST_FUNCTION_SET; }
 };
 
 // Structs should be stored seperately from the functions because they dont depend
@@ -226,6 +236,8 @@ struct ASTStructMember {
 struct ASTStruct : public ASTDefinition {
     ASTStructMember* members;
     U32 memberCount;
+
+	ASTStruct() { nodeType = AST_STRUCT; }
 };
 
 enum Operation {
@@ -250,49 +262,31 @@ enum UnaryOperator {
 };
 
 struct ASTMemberAccess {
-	ASTVariable* structVar;
 	U32 memberCount;
 	char** memberNames;
 	U32* indices;
-
-	ASTMemberAccess(MemoryArena* arena, ASTVariable* structVar, U32 memberCount, const std::vector& names) :
-			structVar(structVar), memberCount(memberCount) {
-		memberNames = (char**)Allocate(arena, memberCount * sizeof(char*));
-		indices = (U32*)Allocate(arena, memberCount * sizeof(U32));
-		for (U32 i = 0; i < names.size(); i++) {
-			memberNames[i] = (char*)Allocate(arena, names[i].size());
-			auto memberName = memberNames[i];
-			memcpy(memberName, names[i].c_str(), names[i].length() + 1);
-		}
-	}
 };
 
 struct ASTMemberExpr : public ASTExpression {
 	ASTVariable* structVar;
-	UnaryOperator accessMod;
+	UnaryOperator unaryOp;
+	ASTMemberAccess access;
 
-	U32 memberCount;
-	U32* indices;
-	char** memberNames;
-
-	ASTMemberExpr(ASTVariable* structVar, UnaryOperator unary) :
-			structVar(structVar), accessMod(unary) { nodeType = AST_MEMBER_EXPR; }
+	ASTMemberExpr (ASTVariable* structVar, UnaryOperator unary) :
+			structVar(structVar), unaryOp(unary) { nodeType = AST_MEMBER_EXPR; }
 };
 
 struct ASTVarExpr : public ASTExpression {
 	ASTVariable* var;
-	std::vector<U32> accessIndices;
 	UnaryOperator accessMod;
+	ASTVarExpr() { nodeType = AST_VAR_EXPR; }
 };
 
 struct ASTMemberOperation : public ASTNode {
 	ASTVariable* structVar;
 	ASTExpression* expr;
 	Operation operation;
-
-	U32 memberCount;
-    U32* indices;
-	char** memberNames;
+	ASTMemberAccess access;
 
     ASTMemberOperation(ASTVariable* structVar, ASTExpression* expr, Operation operation) :
 			structVar(structVar), expr(expr), operation(operation) { nodeType = AST_MEMBER_OPERATION; }
@@ -302,6 +296,9 @@ struct ASTVariableOperation : public ASTNode {
 	ASTVariable* variable;
 	Operation operation;
 	ASTExpression* expr;
+
+	ASTVariableOperation(ASTVariable* variable, Operation operation, ASTExpression* expr)
+			: variable(variable), operation(operation), expr(expr) { nodeType = AST_VARIABLE_OPERATION; }
 };
 
 struct ASTBinaryOperation : public ASTExpression {
@@ -314,10 +311,12 @@ struct ASTBinaryOperation : public ASTExpression {
 
 struct ASTReturn : public ASTExpression {
 	ASTExpression* value;
+
+	ASTReturn() { nodeType = AST_RETURN; }
 };
 
 
-struct ASTCall : public ASTNode {
+struct ASTCall : public ASTExpression {
     char* name;
     U32 argCount;
     ASTExpression** args;
@@ -332,11 +331,10 @@ struct ASTCast : public ASTExpression {
 };
 
 struct ASTLiteral : public ASTExpression {
-    union {
-        S64 intVal;
-        F64 floatVal;
-        U8* stringVal;
-    };
+    union { S64 intVal; F64 fltVal; U8* strVal; };
+	ASTLiteral(S32 intVal) : intVal(intVal) { nodeType = AST_INTEGER_LITERAL; }
+	ASTLiteral(F64 fltVal) : fltVal(fltVal) { nodeType = AST_FLOAT_LITERAL; }
+	ASTLiteral(U8* strVal) : strVal(strVal) { nodeType = AST_STRING_LITERAL; }
 };
 
 struct ASTIntegerLiteral : public ASTExpression {
@@ -353,7 +351,6 @@ struct ASTStringLiteral : public ASTExpression {
 
 void InitalizeLanguagePrimitives(MemoryArena* arena, ASTBlock* scope);
 
-extern ASTBlock global_defaultGlobalScope;
 extern ASTDefinition* global_voidType;
 extern ASTDefinition* global_U8Type;
 extern ASTDefinition* global_U16Type;
@@ -367,6 +364,7 @@ extern ASTDefinition* global_F16Type;
 extern ASTDefinition* global_F32Type;
 extern ASTDefinition* global_F64Type;
 extern ASTDefinition* global_F128Type;
+// TODO true / false literals
 
 // Identifiers
 void AssignIdent (ASTBlock* block, ASTNode* node, const std::string& name);
@@ -386,10 +384,12 @@ ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, const std:
 ASTCast* CreateCast(MemoryArena* arena, ASTDefinition* typeDefn, ASTExpression* expr);
 
 // Operations
-ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* variable, Operation op, ASTExpression* expr);
-ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation op, ASTExpression* expr, U32* indices, U32 indexCount);
-ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, const std::vector<std::string>& memberNames);
-ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, Operation operation, ASTExpression* lhs, ASTExpression* rhs);
+ASTVariableOperation* CreateVariableOperation (MemoryArena* arena, ASTVariable* variable, Operation op, ASTExpression* expr);
+// ASTMemberOperation*   CreateMemberOperation (MemoryArena* arena, ASTVariable* structVar, Operation op, ASTExpression* expr, U32* indices, U32 indexCount);
+// ASTMemberOperation*   CreateMemberOperation (MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, const std::vector<std::string>& memberNames);
+ASTMemberOperation*   CreateMemberOperation (MemoryArena* arena, ASTVariable* structVar, Operation op, ASTExpression* expr);
+
+ASTBinaryOperation*   CreateBinaryOperation (MemoryArena* arena, Operation operation, ASTExpression* lhs, ASTExpression* rhs);
 
 // Control Flow
 ASTIfStatement* CreateIfStatement(MemoryArena* arena, ASTExpression* expr);	// TODO Why are ifstatements created without a body? also the body should probably be emitted into a stack thingyyy and then coppied into the if statement???
@@ -399,9 +399,12 @@ ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
 //===============
 //  Expressions
 //===============
+
 ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var, UnaryOperator accessMod);
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, U32* indices, U32 indexCount);
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator unary, const std::vector<std::string>& memberNames);
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator unaryOp);
+
+
+// ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator unary, const std::vector<std::string>& memberNames);
 
 ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argumentCount, const std::string& name);
 

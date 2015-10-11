@@ -1,5 +1,9 @@
 ; ModuleID = 'BangCompiler'
 
+%InternalType = type { i32 }
+%InternalType.2 = type { i32, i32, %FirstInternalType }
+%FirstInternalType = type { i32 }
+
 @str = private unnamed_addr constant [20 x i8] c"Running Cast Test!\0A\00"
 @str.1 = private unnamed_addr constant [11 x i8] c"foo is %f\0A\00"
 @str.2 = private unnamed_addr constant [13 x i8] c"bar is : %i\0A\00"
@@ -10,6 +14,8 @@
 @str.7 = private unnamed_addr constant [23 x i8] c"Foo is greater than 1\0A\00"
 @str.8 = private unnamed_addr constant [22 x i8] c"Foo is less than 1.0\0A\00"
 @str.9 = private unnamed_addr constant [2 x i8] c"\0A\00"
+@str.10 = private unnamed_addr constant [33 x i8] c"InternalStructTestA returned %d\0A\00"
+@str.11 = private unnamed_addr constant [33 x i8] c"InternalStructTestB returned %d\0A\00"
 
 define void @CastTest() {
 entry:
@@ -65,10 +71,40 @@ if2:                                              ; preds = %merge
   br label %merge1
 }
 
+define i32 @InternalStructTestB() {
+entry:
+  %data = alloca %InternalType
+  %access = getelementptr %InternalType, %InternalType* %data, i32 0, i32 0
+  store i32 7, i32* %access
+  %access1 = getelementptr %InternalType, %InternalType* %data, i32 0, i32 0
+  %0 = load i32, i32* %access1
+  ret i32 %0
+}
+
+define i32 @InternalStructTestA() {
+entry:
+  %data = alloca %InternalType.2
+  %access = getelementptr %InternalType.2, %InternalType.2* %data, i32 0, i32 0
+  store i32 5, i32* %access
+  %access1 = getelementptr %InternalType.2, %InternalType.2* %data, i32 0, i32 0
+  %0 = load i32, i32* %access1
+  ret i32 %0
+}
+
 define i32 @main() {
 entry:
   call void @CastTest()
   call void @BooleanTest()
+  %a = alloca i32
+  %calltmp = call i32 @InternalStructTestA()
+  store i32 %calltmp, i32* %a
+  %b = alloca i32
+  %calltmp1 = call i32 @InternalStructTestB()
+  store i32 %calltmp1, i32* %b
+  %0 = load i32, i32* %a
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([33 x i8], [33 x i8]* @str.10, i32 0, i32 0), i32 %0)
+  %1 = load i32, i32* %b
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([33 x i8], [33 x i8]* @str.11, i32 0, i32 0), i32 %1)
   ret i32 0
 }
 

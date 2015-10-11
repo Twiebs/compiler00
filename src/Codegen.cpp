@@ -153,7 +153,7 @@ void Codegen (ASTStruct* structDefn) {
 	structDefn->llvmType = llvm::StructType::create(memberTypes, structName);
 }
 
-void Codegen(ASTFunction* function, llvm::Module* module) {
+void Codegen (ASTFunction* function, llvm::Module* module) {
 	// HACK to skip function codegen if the function has allready been resolved
 	if (function->llvmFunction != nullptr) return;
 
@@ -165,20 +165,19 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 		args[i] = type;
 	}
 
-	// Create the llvm function
-
-    // TODO Better handling of uppercase main function! We should be able to call it whatever
+    // TODO HACK Better handling of uppercase main function! We should be able to call it whatever
     llvm::FunctionType* funcType = llvm::FunctionType::get((llvm::Type*)function->returnType->llvmType, args, function->isVarArgs);
 	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
     llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, strcmp(function->name, "Main") ? function->name : std::string("main"), global_module);
 
-	// TODO arguments are created even if the function has no members!
+	// If the function has zero members thats how we determine that it was declared FORIGEN
+	// A normal function with no members will be a parsing error
+	auto lastInsertBlock = builder->GetInsertBlock();
 	if (function->members.size() > 0) {
 		llvm::BasicBlock* block = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", llvmFunc);
 		builder->SetInsertPoint(block);
 	}
 
-	// Create the allocas for our arguments!
 	U32 i = 0;
 	for (auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++) {
 		auto name = (const char*)(function->args[i] + 1);
@@ -220,6 +219,11 @@ void Codegen(ASTFunction* function, llvm::Module* module) {
 	// Also do a sainy check to make sure that it has created return values for all flow paths
 
 	function->llvmFunction = llvmFunc;
+	if (lastInsertBlock != nullptr) {
+		builder->SetInsertPoint(lastInsertBlock);
+	} else {
+		builder->ClearInsertionPoint();
+	}
 }
 
 void CodegenStatement (ASTNode* node) {
@@ -230,7 +234,9 @@ void CodegenStatement (ASTNode* node) {
 		case AST_CALL: Codegen((ASTCall*)node); break;
 		case AST_ITER: Codegen((ASTIter*)node); break;
 		case AST_RETURN: Codegen((ASTReturn*)node); break;
+
 		case AST_STRUCT: Codegen((ASTStruct*)node); break;
+		case AST_FUNCTION: Codegen((ASTFunction*)node, global_module); break;
 		default: assert(!"A top level node was not a statement"); break;
 	}
 }
@@ -279,10 +285,19 @@ internal void Codegen (ASTVariableOperation* varOp) {
 			builder->CreateStore(operation, alloca);
     } break;
 		case OPERATION_MUL: {
-      auto alloca = (llvm::AllocaInst*)varOp->variable->allocaInst;
-      auto load = builder->CreateLoad(alloca);
-      auto operation = builder->CreateMul(load, exprValue);
-      builder->CreateStore(operation, alloca);
+		auto alloca = (llvm::AllocaInst*)varOp->variable->allocaInst;
+		auto load = builder->CreateLoad(alloca);
+
+		llvm::Value* operation;
+		if (isFloatingPoint(varOp->expr->type)) {
+			operation = builder->CreateFMul(load, exprValue);
+		} else {
+			operation = builder->CreateMul(load, exprValue);
+
+		}
+
+		builder->CreateStore(operation, alloca);
+
     } break;
 		case OPERATION_DIV: {
       auto alloca = (llvm::AllocaInst*)varOp->variable->allocaInst;
@@ -341,10 +356,18 @@ internal llvm::Value* Codegen (ASTBinaryOperation* binop)	{
         }
     };
 
+	auto createMul = [binop, lhs, rhs]() -> llvm::Value* {
+		if (isFloatingPoint(binop->lhs->type)) {
+			return builder->CreateFMul(lhs, rhs);
+		} else {
+			return builder->CreateMul(lhs, rhs);
+		}
+	};
+
 	switch (binop->operation) {
 		case OPERATION_ADD: return builder->CreateAdd(lhs, rhs, "addtmp");
 		case OPERATION_SUB: return builder->CreateSub(lhs, rhs, "subtmp");
-		case OPERATION_MUL: return builder->CreateMul(lhs, rhs, "multmp");
+		case OPERATION_MUL: return createMul();
 		case OPERATION_DIV: return builder->CreateSDiv(lhs, rhs, "divtmp");
         case OPERATION_GT:  return createCompare(GREATER);  // TODO we can setup the operations so that bitor does not even need  to happen here we can just pass the operation as a parameter
         case OPERATION_GTE: return createCompare(GREATER | EQUAL);
@@ -501,8 +524,8 @@ internal void Codegen (ASTMemberOperation* memberOp) {
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
 	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
 
-	for (auto i = 0; i < memberOp->memberCount; i++) {
-		auto& memberIndex = memberOp->indices[i];
+	for (auto i = 0; i < memberOp->access.memberCount; i++) {
+		auto& memberIndex = memberOp->access.indices[i];
 		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
 		indices.push_back(indexValue);
 	}
@@ -526,10 +549,22 @@ internal llvm::Value* Codegen(ASTCast* cast) {
 
     // TODO much much muach more roboust casting
     // Does not handle signed / unsigned mistmatch
-    llvm::Instruction::CastOps  castOp;
+
+	auto floatingPointCastDirection = [](ASTDefinition* castFrom, ASTDefinition* castTo) {
+		if (castFrom == global_F32Type && castTo == global_F64Type) return  1;
+		if (castFrom == global_F64Type && castTo == global_F32Type) return -1;
+		return 0;
+	};
+
+	llvm::Instruction::CastOps castOp;
     if (isFloatingPoint(cast->expr->type)) {
-        if (isSignedInteger(cast->type)) castOp = llvm::Instruction::CastOps::FPToSI;
-        else if (isUnsignedInteger(cast->type)) castOp = llvm::Instruction::CastOps::FPToUI;
+		if (isFloatingPoint(cast->type)) {
+			if (floatingPointCastDirection(cast->expr->type, cast->type) == 1) castOp = llvm::Instruction::CastOps::FPExt;
+			else if (floatingPointCastDirection(cast->expr->type, cast->type) == -1) castOp = llvm::Instruction::CastOps::FPTrunc;
+		} else {
+			if (isSignedInteger(cast->type)) castOp = llvm::Instruction::CastOps::FPToSI;
+			else if (isUnsignedInteger(cast->type)) castOp = llvm::Instruction::CastOps::FPToUI;
+		}
     } else if (isSignedInteger(cast->expr->type)) {
         if (isFloatingPoint(cast->type)) castOp = llvm::Instruction::CastOps::SIToFP;
     } else if (isUnsignedInteger(cast->expr->type)) {
@@ -548,8 +583,8 @@ llvm::Value* Codegen(ASTMemberExpr* expr) {
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
 	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
 
-	for (auto i = 0; i < expr->memberCount; i++) {
-		auto& memberIndex = expr->indices[i];
+	for (auto i = 0; i < expr->access.memberCount; i++) {
+		auto& memberIndex = expr->access.indices[i];
 		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
 		indices.push_back(indexValue);
 	}
@@ -559,7 +594,7 @@ llvm::Value* Codegen(ASTMemberExpr* expr) {
 	auto pointer_type = (llvm::Type*)expr->structVar->type->llvmType;
 	if(expr->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
 	auto gep = llvm::GetElementPtrInst::Create(pointer_type, value_ptr, indices, "access", builder->GetInsertBlock());
-	if (expr->accessMod == UNARY_ADDRESS) {
+	if (expr->unaryOp == UNARY_ADDRESS) {
 		return gep;
 	} else {
 		auto load = builder->CreateLoad(gep);

@@ -1,28 +1,37 @@
 IMPORT "IO.bang"
-IMPORT "lang.src"
 
-OtherFunction :: () >> S32
-	InternalType :: STRUCT
-		internalData : S32
 
-	data : InternalType
-	data.internalData = 7
-	printf("data is : %d" data.internalData)
+Clamp :: (value : F32 min : F32 max : F32) >> F32
+	IF value < min value = min
+	IF value > max value = max
+	RETURN value
 
-	RETURN 0
+LambdaTest :: ()
+	lambdaA :: () >> S32
+		x : S32 = 5
+		y : S32 = 3
+		z : S32 = x * y
+		RETURN z
 
+	lambdaB :: (a : F32 b : F32) >> F32
+		temp : F32 = a * b
+		RETURN temp
+
+	lambdaC :: () >> F32
+		c := lambdaA()
+		d := lambdaB(5.0 27.0)
+		RETURN (F32(c) * d)
+
+	resultA := lambdaA()
+	resultB := lambdaB(2.0 3.0)
+	resultC := lambdaC()
+	printf("resultA is %d\n" resultA)
+	printf("resultB is %f\n" F64(resultB))
+	printf("resultC is %f\n" F64(resultC))
 
 Main :: () >> S32
-
-	FirstInternalType :: STRUCT
-		fistData : S32
-
-	InternalType :: STRUCT
-		internalData : S32
-		someOtherData : S32
-		myFirstInternalType : FirstInternalType
-
-	data : InternalType
-	data.internalData = 5
+	foo := 5.0
+	foo = Clamp(foo 6.0 7.0)
+	printf("foo was clamped to %f" foo)
 
 	RETURN 0

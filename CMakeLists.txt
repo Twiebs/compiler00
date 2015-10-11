@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 2.8.8)
+set(CMAKE_CXX_COMPILER clang++)
+
 project(LLVMLang)
 
 if(NOT CMAKE_ECLIPSE_VERSION)

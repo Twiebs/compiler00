@@ -97,7 +97,7 @@ ASTNode* ParseStatement (Worker* worker) {
 	case TOKEN_BLOCK_OPEN:	      	return ParseBlock(worker);
 	case TOKEN_IMPORT:			  	return ParseImport(worker);
 	default:
-		ReportError(worker, &worker->token.site, "Could not parse statement unkown token(%s)", worker->token.string.c_str());
+		ReportError(worker, &worker->token.site, "Could not parse statement: Unknown token(%s)", worker->token.string.c_str());
 		NextToken(worker);
 		return nullptr;
 	}
@@ -159,16 +159,56 @@ ASTCall* ParseCall(Worker* worker, const Token& identToken) {
 	return call;
 }
 
+auto ParseMemberAccess = [](Worker* worker, ASTVariable* structVar, ASTMemberAccess* memberAccess) {
+	auto structType = (ASTStruct*)structVar->type;
+	if (structType == nullptr) {
+		std::vector<char*> memberNames;
+		while (worker->token.type == TOKEN_ACCESS) {
+			NextToken(worker);
+			if (worker->token.type != TOKEN_IDENTIFIER)
+				ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
+			memberNames.push_back((char*)Allocate(&worker->arena, worker->token.string.length() + 1));
+			NextToken(worker);
+		}
+		memberAccess->memberCount = memberNames.size();
+		memberAccess->memberNames = (char**)Allocate(&worker->arena, memberNames.size() * sizeof(char*));
+		memberAccess->indices = (U32*)Allocate(&worker->arena, memberNames.size() * sizeof(U32));
+		memcpy(memberAccess->memberNames, &memberNames.front(), memberNames.size() * sizeof(char*));
+	} else {
+		ASTDefinition* exprType = nullptr;
+		auto currentStruct = structType;
+		std::vector<U32> indices;
+		while (worker->token.type == TOKEN_ACCESS) {
+			NextToken(worker); // eat the member access
+			auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
+			if (memberIndex == -1) {
+				ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
+			} else {
+				indices.push_back(memberIndex);
+				auto memberType = currentStruct->members[memberIndex].type;
+				if(memberType->nodeType == AST_STRUCT)
+					currentStruct = (ASTStruct*)memberType;
+				exprType = memberType;
+			}
+			NextToken(worker);	// eat the member ident
+		}
+		memberAccess->memberCount = indices.size();
+		memberAccess->indices = (U32*)Allocate(&worker->arena, indices.size() * sizeof(U32));
+		memcpy(&indices.front(), memberAccess->indices, indices.size() * sizeof(U32));
+	}
+};
+
+
 ASTExpression* ParsePrimaryExpr(Worker* worker) {
 	switch (worker->token.type) {
+
+	// TODO don't recreate true and false literals every time one is required
 	case TOKEN_TRUE:
 		NextToken(worker);
 		return CreateIntegerLiteral(&worker->arena, 1);
-		break;
 	case TOKEN_FALSE:
 		NextToken(worker);
 		return CreateIntegerLiteral(&worker->arena, 0);
-		break;
 
 	case TOKEN_ADDRESS:
 	case TOKEN_VALUE:
@@ -200,8 +240,8 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 				break;
 			default:
                 node = FindNodeWithIdent(worker->currentBlock, identToken.string);
-				if (!node) {
-					ReportError(worker, worker->token.site, "There is no node matching identifier: " + worker->token.string );
+				if (node == nullptr) {
+					ReportError(worker, &identToken.site, "There is no expression matching the identifier (%s)", identToken.string.c_str());
 					NextToken (worker);
 					return nullptr;
 				}
@@ -217,60 +257,47 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
                 return (ASTExpression*)call;
             }
 		} else if (worker->token.type == TOKEN_ACCESS) {
-
-
-			auto parseMemberAccess = [](ASTVariable* structVar) {
-				auto structType = (ASTStruct*)structVar->type;
-				if (structType == nullptr) {
-					std::vector<std::string> memberNames;
-					while (worker->token.type == TOKEN_ACCESS) {
-						NextToken(worker);
-						if (worker->token.type != TOKEN_IDENTIFIER)
-							ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
-						memberNames.push_back(worker->token.string);
-						NextToken(worker);
-					}
-				}
-			}
-
 			auto structVar = (ASTVariable*)node;
 			auto structDefn = (ASTStruct*)structVar->type;
-			std::vector<std::string> memberNames;
-			if (structDefn == nullptr) {
-				while (worker->token.type == TOKEN_ACCESS) {
-					NextToken(worker);
-					if (worker->token.type != TOKEN_IDENTIFIER)
-						ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
-					memberNames.push_back(worker->token.string);
-					NextToken(worker);
-				}
+			auto expr = CreateMemberExpr(&worker->arena, structVar, unary);
+			ParseMemberAccess(worker, structVar, &expr->access);
+			return expr;
 
-				//auto expr = CreateMemberExpr(&worker->arena, structVar, unary, &indices[0], indices.size());
-				auto expr = CreateMemberExpr(&worker->arena, structVar, unary, memberNames);
-				return expr;
-			} else {
-				if (structDefn->nodeType != AST_STRUCT) ReportError(worker, worker->token.site, identToken.string + " does not name a struct type!  It is a " + ToString(node->nodeType));
-				auto currentStruct = structDefn;
-				ASTDefinition* exprType = nullptr;
-				std::vector<U32> indices;
-				while(worker->token.type == TOKEN_ACCESS) {
-					NextToken(worker); // eat the member access
-					auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
-					if (memberIndex == -1) {
-						ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
-					} else {
-						indices.push_back(memberIndex);
-						auto memberType = currentStruct->members[memberIndex].type;
-						if(memberType->nodeType == AST_STRUCT)
-							currentStruct = (ASTStruct*)memberType;
-						exprType = memberType;
-					}
-					NextToken(worker);	// eat the member ident
-				}
-
-				auto expr = CreateMemberExpr(&worker->arena, structVar, unary, memberNames);
-				return expr;
-			}
+//			if (structDefn == nullptr) {
+//				while (worker->token.type == TOKEN_ACCESS) {
+//					NextToken(worker);
+//					if (worker->token.type != TOKEN_IDENTIFIER)
+//						ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
+//					memberNames.push_back(worker->token.string);
+//					NextToken(worker);
+//				}
+//
+//				//auto expr = CreateMemberExpr(&worker->arena, structVar, unary, &indices[0], indices.size());
+//				auto expr = CreateMemberExpr(&worker->arena, structVar, unary, memberNames);
+//				return expr;
+////			} else {
+//				if (structDefn->nodeType != AST_STRUCT) ReportError(worker, worker->token.site, identToken.string + " does not name a struct type!  It is a " + ToString(node->nodeType));
+//				auto currentStruct = structDefn;
+//				ASTDefinition* exprType = nullptr;
+//				std::vector<U32> indices;
+//				while(worker->token.type == TOKEN_ACCESS) {
+//					NextToken(worker); // eat the member access
+//					auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
+//					if (memberIndex == -1) {
+//						ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
+//					} else {
+//						indices.push_back(memberIndex);
+//						auto memberType = currentStruct->members[memberIndex].type;
+//						if(memberType->nodeType == AST_STRUCT)
+//							currentStruct = (ASTStruct*)memberType;
+//						exprType = memberType;
+//					}
+//					NextToken(worker);	// eat the member ident
+//				}
+//
+//				auto expr = CreateMemberExpr(&worker->arena, structVar, unary, memberNames);
+//				return expr;
+//			}
 
 
 
@@ -321,7 +348,7 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 		} break;
 
 		default:
-            ReportError(worker, &worker->token.site, "Unkown token when expecting expression");
+            ReportError(worker, &worker->token.site, "Error when expecting expression: Unknown Token(%s)", worker->token.string.c_str());
             NextToken(worker);
             return nullptr;
 		}
@@ -332,20 +359,20 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 // This is nessecary because i dont want operations tied to the parsing of tokens
 // because there may be suport for user defined operators in the future
 // and intrinsic operations should be seperated from their tokens.
-Operation tokenToOperation(const Token& token) {
+Operation tokenToOperation (const Token& token) {
     switch (token.type) {
-    case TOKEN_ADD: return OPERATION_ADD;
-    case TOKEN_SUB: return OPERATION_SUB;
-    case TOKEN_MUL: return OPERATION_MUL;
-    case TOKEN_DIV: return OPERATION_DIV;
+	case TOKEN_ADD: return OPERATION_ADD;
+	case TOKEN_SUB: return OPERATION_SUB;
+	case TOKEN_MUL: return OPERATION_MUL;
+	case TOKEN_DIV: return OPERATION_DIV;
 
-    case TOKEN_LOGIC_GREATER: return OPERATION_GT;
-    case TOKEN_LOGIC_LESS: return OPERATION_LT;
-    case TOKEN_LOGIC_GREATER_EQAUL: return OPERATION_GTE;
-    case TOKEN_LOGIC_LESS_EQUAL: return OPERATION_LTE;
+	case TOKEN_LOGIC_GREATER: return OPERATION_GT;
+	case TOKEN_LOGIC_LESS: return OPERATION_LT;
+	case TOKEN_LOGIC_GREATER_EQAUL: return OPERATION_GTE;
+	case TOKEN_LOGIC_LESS_EQUAL: return OPERATION_LTE;
 
-    case TOKEN_LOGIC_OR: return OPERATION_LOR;
-    case TOKEN_LOGIC_AND: return OPERATION_LAND;
+	case TOKEN_LOGIC_OR: return OPERATION_LOR;
+	case TOKEN_LOGIC_AND: return OPERATION_LAND;
     }
 }
 
@@ -391,6 +418,8 @@ ASTExpression* ParseExpr(Worker* worker) {
 		}
 		return ParseExprRHS (0, lhs, worker);
 }
+
+
 
 internal inline ASTNode* ParseIdentifier (Worker* worker) {
 	auto identToken = worker->token;	// save the token for now
@@ -442,10 +471,8 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 				} else if (type->nodeType != AST_DEFINITION && type->nodeType != AST_STRUCT) {
                     ReportError(worker, &worker->token.site, "%s does not name a type!  It names a %s", worker->token.string.c_str(), ToString(type->nodeType).c_str());
                 } else {
-
+					var->type = type;
 				}
-
-                var->type = type;
 			}
 
 
@@ -479,19 +506,46 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 	case TOKEN_TYPE_DEFINE: {
 		NextToken(worker); // Eat the typedef
 
+
+		std::function<ASTFunctionSet*(ASTBlock*)> getOrCreateFunctionSet = [&worker, &identToken, &getOrCreateFunctionSet](ASTBlock* block) -> ASTFunctionSet* {
+			if (block->parent == nullptr) {
+				worker->currentPackage->mutex.lock();
+				auto functionSet = worker->currentPackage->arena.alloc<ASTFunctionSet>(nullptr);
+				AssignIdent(block, functionSet, identToken.string);
+				worker->currentPackage->mutex.unlock();
+				return functionSet;
+			} else {
+				auto functionSet = (ASTFunctionSet*)FindNodeWithIdent(block, identToken.string);
+				if (functionSet == nullptr) {
+					auto parentFunctionSet = getOrCreateFunctionSet(block->parent);
+					functionSet = worker->arena.alloc<ASTFunctionSet>(parentFunctionSet);
+					AssignIdent(block, functionSet, identToken.string);
+				}
+				return functionSet;
+			}
+		};
+
+
         // @FUNCTION
 		if (worker->token.type == TOKEN_PAREN_OPEN) {
 			ASTFunctionSet* funcSet = (ASTFunctionSet*)node;
-			if (funcSet == nullptr) {	// The identifier is null so the function set for this ident has not been created
-                if (worker->currentBlock->parent == nullptr) {
-                    worker->currentPackage->mutex.lock();
-                    funcSet = CreateFunctionSet (&worker->currentPackage->arena);
-                    AssignIdent(worker->currentBlock, funcSet, identToken.string);
-                    worker->currentPackage->mutex.unlock();
-                } else {
-                    assert(false && "NOTE this will go terribly wrong if the worker isnt in the global scope");
-                }
+			if (funcSet == nullptr) {
+				funcSet = getOrCreateFunctionSet(worker->currentBlock);
 			}
+
+
+//			if (funcSet == nullptr) {	// The identifier is null so the function set for this ident has not been created
+//                if (worker->currentBlock->parent == nullptr) {
+//                    worker->currentPackage->mutex.lock();
+//                    funcSet = worker->currentPackage->arena.alloc<ASTFunctionSet>(nullptr);
+//                    AssignIdent(worker->currentBlock, funcSet, identToken.string);
+//                    worker->currentPackage->mutex.unlock();
+//                } else {
+//					ASTFunctionSet* parentFunctionSet = (ASTFunctionSet*)FindNodeWithIdent(worker->currentBlock->parent, identToken.string);
+//					funcSet = worker->arena.alloc<ASTFunctionSet>(parentFunctionSet);
+//					AssignIdent(worker->currentBlock, funcSet, identToken.string);
+//                }
+//			}
 
             ASTFunction* function;
             if (worker->currentBlock->parent == nullptr) {
@@ -500,10 +554,11 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
                 worker->currentBlock->members.push_back(function);
                 worker->currentPackage->mutex.unlock();
                 worker->currentBlock = function;
-                NextToken(worker);
             } else {
-                assert(false && "lambdas not implemented!");
+				function = CreateFunction(&worker->arena, worker->currentBlock, identToken.string, funcSet);
             }
+
+			NextToken(worker);
 
 			while (worker->token.type != TOKEN_PAREN_CLOSE) {
 				if (worker->token.type == TOKEN_DOTDOT) {
@@ -554,23 +609,35 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 				ReportError(worker, worker->token.site, "Expected new block or statemnt after function defininition");
 			}
 
-            ASTFunction* matchingFunction = nullptr;
-            for (auto func : funcSet->functions) {
-                bool foundMatchingFunction = true;
-                if (func->args.size() == function->args.size()) {
-                    for (U32 i = 0; i < func->args.size(); i++) {
-                        if (func->args[i]->type != function->args[i]->type) {
-                            foundMatchingFunction = false;
-                            break;
-                        }
-                    }
 
-                    if (foundMatchingFunction) {
-                        matchingFunction = func;
-                    }
-                }
-            }
+			std::function<ASTFunction*(ASTFunction*, ASTFunctionSet*, ASTBlock*)> CheckFunctionArgumentCollision = [&worker, &CheckFunctionArgumentCollision](ASTFunction* createdFunction, ASTFunctionSet* functionSet, ASTBlock* currentBlock) ->ASTFunction* {
+				for (auto func : functionSet->functions) {
+					bool foundMatchingFunction = true;
+					if (func->args.size() == createdFunction->args.size()) {
+						for (U32 i = 0; i < func->args.size(); i++) {
+							if (func->args[i]->type != createdFunction->args[i]->type) {
+								foundMatchingFunction = false;
+								break;
+							}
+						}
 
+						if (foundMatchingFunction) {
+							return func;
+						} else if (currentBlock->parent != nullptr) {
+							auto parentFunctionSet = (ASTFunctionSet*)FindNodeWithIdent(currentBlock->parent, createdFunction->name);
+							if (parentFunctionSet->nodeType != AST_FUNCTION_SET) {
+								ReportError(worker, &worker->token.site, "Identifier in blocks parrent scope was not a function!");
+							} else if (parentFunctionSet != nullptr) {
+								return CheckFunctionArgumentCollision(createdFunction, parentFunctionSet, currentBlock->parent);
+							}
+						}
+						return nullptr;
+					}
+				}
+			};
+
+
+			ASTFunction* matchingFunction = CheckFunctionArgumentCollision(function, funcSet, worker->currentBlock);
             if (matchingFunction != nullptr && matchingFunction != function) {
 			    ReportError(worker, &identToken.site, "Function %s has already been defined with arguments:", matchingFunction->name);
                 printf("\t");
@@ -582,8 +649,6 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
                 if (matchingFunction->returnType != function->returnType) {
                     printf("Return types do not match!  Can not overload functions only by return type");
                 }
-
-
             } else if (worker->token.type == TOKEN_BLOCK_OPEN) {
 				ParseBlock(worker, function);
 
@@ -696,14 +761,32 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 		// TODO namespace, enums, other things?
 		auto structVar = (ASTVariable*)node;
 		auto structDefn = (ASTStruct*)structVar->type;
-		std::vector<std::string> memberNames;
-		while (worker->token.type == TOKEN_ACCESS) {
-			NextToken(worker);
-			if (worker->token.type != TOKEN_IDENTIFIER)
-				ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
-			memberNames.push_back(worker->token.string);
-			NextToken(worker);
-		}
+		auto memberOperation = CreateMemberOperation(&worker->arena, structVar, (Operation)0, 0);
+		ParseMemberAccess(worker, structVar, &memberOperation->access);
+		Operation operation;
+		switch (worker->token.type) {
+			case TOKEN_EQUALS:		operation = OPERATION_ASSIGN; 	break;
+			case TOKEN_ADD_EQUALS:	operation = OPERATION_ADD;		break;
+			case TOKEN_SUB_EQUALS:	operation = OPERATION_SUB;		break;
+			case TOKEN_MUL_EQUALS:	operation = OPERATION_MUL;		break;
+			case TOKEN_DIV_EQUALS:	operation = OPERATION_DIV;		break;
+			default: ReportError(worker, worker->token.site, "Unkown operator: " + worker->token.string);
+		} NextToken(worker);
+
+		memberOperation->operation = operation;
+		auto expr = ParseExpr(worker);
+		memberOperation->expr = expr;
+		return memberOperation;
+
+	//	std::vector<std::string> memberNames;
+//		while (worker->token.type == TOKEN_ACCESS) {
+//			NextToken(worker);
+//			if (worker->token.type != TOKEN_IDENTIFIER)
+//				ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
+//			memberNames.push_back(worker->token.string);
+//			NextToken(worker);
+//		}
+//
 
 
 //		auto currentStruct = structDefn;
@@ -723,19 +806,7 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 //			NextToken(worker);	// Eat the member identifier
 //		}
 
-		Operation operation;
-		switch (worker->token.type) {
-		case TOKEN_EQUALS:			operation = OPERATION_ASSIGN; 	break;
-		case TOKEN_ADD_EQUALS:	operation = OPERATION_ADD;		break;
-		case TOKEN_SUB_EQUALS:	operation = OPERATION_SUB;		break;
-		case TOKEN_MUL_EQUALS:	operation = OPERATION_MUL;		break;
-		case TOKEN_DIV_EQUALS:	operation = OPERATION_DIV;		break;
-		default: ReportError(worker, worker->token.site, "Unkown operator: " + worker->token.string);
-		} NextToken(worker);
 
-		auto expr = ParseExpr(worker);
-		auto memberOperation = CreateMemberOperation(&worker->arena, structVar, operation, expr, memberNames);
-		return memberOperation;
 	} break;
 
 	case TOKEN_EQUALS:
@@ -839,6 +910,7 @@ internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 	while (worker->token.type != TOKEN_BLOCK_CLOSE && worker->token.type != TOKEN_EOF) {
 		auto node = ParseStatement(worker);
 		block->members.push_back(node);
+
 	}
 
 	NextToken(worker);	// Eat the close scope

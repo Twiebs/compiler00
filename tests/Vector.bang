@@ -11,9 +11,9 @@ Transform3D :: STRUCT
 	scale 	 : Vector3
 
 Print :: (transform : @Transform3D)
-	Print("position" @transform.position)
-	Print("\nrotation" @transform.rotation)
-	Print("\nscale" @transform.scale)
+	Print("position\n" 	@transform.position)
+	Print("rotation\n" 	@transform.rotation)
+	Print("scale\n" 	@transform.scale)
 
 Print :: (vector : @Vector3)
 	printf("[%d, %d, %d]" vector.x vector.y vector.z)

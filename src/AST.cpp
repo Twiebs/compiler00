@@ -95,15 +95,10 @@ ASTCast::ASTCast(ASTDefinition* type, ASTExpression* expr) {
     this->expr = expr;
 }
 
-ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* var, Operation op, ASTExpression* expr) {
-	auto result = (ASTVariableOperation*)Allocate(arena, sizeof(ASTVariableOperation));
-	result->nodeType = AST_VARIABLE_OPERATION;
-	result->variable = var;
-    result->operation = op;
-	result->expr = expr;
+ASTVariableOperation* CreateVariableOperation (MemoryArena* arena, ASTVariable* var, Operation op, ASTExpression* expr) {
+	auto result = new (Allocate(arena, sizeof(ASTVariableOperation))) ASTVariableOperation(var, op, expr);
 	return result;
 }
-
 
 //ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, U32* indices, U32 indexCount) {
 //	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
@@ -113,20 +108,24 @@ ASTVariableOperation* CreateVariableOperation(MemoryArena* arena, ASTVariable* v
 //    return result;
 //}
 
-
-ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, const std::vector<std::string>& memberNames) {
+ASTMemberOperation* CreateMemberOperation (MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr) {
 	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
-	result->memberNames = (char**)Allocate(arena, sizeof(char*) * memberNames.size());
-	result->indices = (U32*)Allocate(arena, sizeof(U32) * memberNames.size());
-	result->memberCount = memberNames.size();
-
-	for (U32 i = 0; i < memberNames.size(); i++) {
-		result->memberNames[i] = (char*)Allocate(arena, memberNames[i].length() + 1);
-		memcpy(result->memberNames[i], memberNames[i].c_str(), memberNames[i].length() + 1);
-	}
-
 	return result;
 }
+
+//ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, const std::vector<std::string>& memberNames) {
+//	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
+//	result->memberNames = (char**)Allocate(arena, sizeof(char*) * memberNames.size());
+//	result->indices = (U32*)Allocate(arena, sizeof(U32) * memberNames.size());
+//	result->memberCount = memberNames.size();
+//
+//	for (U32 i = 0; i < memberNames.size(); i++) {
+//		result->memberNames[i] = (char*)Allocate(arena, memberNames[i].length() + 1);
+//		memcpy(result->memberNames[i], memberNames[i].c_str(), memberNames[i].length() + 1);
+//	}
+//
+//	return result;
+//}
 
 ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, Operation operation, ASTExpression* lhs, ASTExpression* rhs) {
 	auto result = new (Allocate(arena, sizeof(ASTBinaryOperation))) ASTBinaryOperation(operation, lhs, rhs);
@@ -145,29 +144,25 @@ ASTStruct* CreateStruct(MemoryArena* arena, const std::string& name,  ASTStructM
 }
 
 
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, U32* indices, U32 indexCount) {
-	auto result = new (Allocate(arena, (sizeof(ASTMemberExpr)))) ASTMemberExpr(structVar, accessMod);
-    result->indices = (U32*)Allocate(arena, sizeof(result->indices) * indexCount);
-    result->memberCount = indexCount;
-	memcpy(result->indices, indices, indexCount * sizeof(U32));
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator unaryOp) {
+	auto result = new (Allocate(arena, (sizeof(ASTMemberExpr)))) ASTMemberExpr(structVar, unaryOp);
 	return result;
 }
 
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, const std::vector<std::string>& memberNames) {
-	auto result = new (Allocate(arena, (sizeof(ASTMemberExpr)))) ASTMemberExpr(structVar, accessMod);
-	result->memberNames = (char**)Allocate(arena, sizeof(char*) * memberNames.size());
-	result->indices = (U32*)Allocate(arena, sizeof(U32) * memberNames.size());
-	result->memberCount = memberNames.size();
-	for (U32 i = 0; i < memberNames.size(); i++) {
-		result->memberNames[i] = (char*)Allocate(arena, memberNames[i].length() + 1);
-		memcpy(result->memberNames[i], memberNames[i].c_str(), memberNames.size() + 1);
-	}
-	return result;
-}
+//ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator accessMod, const std::vector<std::string>& memberNames) {
+//	auto result = new (Allocate(arena, (sizeof(ASTMemberExpr)))) ASTMemberExpr(structVar, accessMod);
+//	result->memberNames = (char**)Allocate(arena, sizeof(char*) * memberNames.size());
+//	result->indices = (U32*)Allocate(arena, sizeof(U32) * memberNames.size());
+//	result->memberCount = memberNames.size();
+//	for (U32 i = 0; i < memberNames.size(); i++) {
+//		result->memberNames[i] = (char*)Allocate(arena, memberNames[i].length() + 1);
+//		memcpy(result->memberNames[i], memberNames[i].c_str(), memberNames.size() + 1);
+//	}
+//	return result;
+//}
 
 ASTVarExpr* CreateVarExpr (MemoryArena* arena, ASTVariable* var, UnaryOperator accessMod) {
-	auto result = (ASTVarExpr*)Allocate(arena, sizeof(ASTVarExpr));
-	result->nodeType = AST_VAR_EXPR;
+	auto result = new (Allocate(arena, sizeof(ASTVarExpr))) ASTVarExpr;
 	result->var = var;
 	result->type = var->type;
     result->accessMod = accessMod;
@@ -187,9 +182,8 @@ S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
 // Perhaps a identifier can point to a FunctionResolver()
 // Which determines the correct call for the function to use
 
-ASTFunctionSet* CreateFunctionSet (MemoryArena* arena) {
-	ASTFunctionSet* funcSet = (ASTFunctionSet*)Allocate(arena, sizeof(ASTFunctionSet));
-	funcSet->nodeType = AST_FUNCTION;
+ASTFunctionSet* CreateFunctionSet (MemoryArena* arena, ASTFunctionSet* parent) {
+	ASTFunctionSet* funcSet = new (Allocate(arena, sizeof(ASTFunctionSet))) ASTFunctionSet(parent);
 	return funcSet;
 }
 
@@ -235,8 +229,7 @@ ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* parent) {
 // We should begin to seperate out the difference between the statements and the expressions
 // And stuff like that
 ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value) {
-	auto result = (ASTReturn*)Allocate(arena, sizeof(ASTReturn));
-	result->nodeType = AST_RETURN;
+	auto result = new (Allocate(arena, sizeof(ASTReturn))) ASTReturn;
 	result->value = value;
 	return result;
 }
@@ -270,10 +263,9 @@ ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& st
 }
 
 ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, const std::string& name, ASTExpression* initalExpr) {
-	auto result = new (Allocate(arena, sizeof(ASTVariable))) ASTVariable;
+	auto result = new (Allocate(arena, sizeof(ASTVariable))) ASTVariable(initalExpr);
     result->name = (char*)Allocate(arena, name.size() + 1);
     memcpy(result->name, name.c_str(), name.size() + 1);
-	result->initalExpression = initalExpr;
     return result;
 }
 
@@ -285,8 +277,7 @@ ASTIfStatement* CreateIfStatement(MemoryArena* arena, ASTExpression* expr) {
 }
 
 ASTIter* CreateIter(MemoryArena* arena, ASTVariable* var, ASTExpression* start, ASTExpression* end, ASTExpression* step, ASTBlock* body) {
-	auto result = (ASTIter*)Allocate(arena, sizeof(ASTIter));
-	result->nodeType = AST_ITER;
+	auto result = new (Allocate(arena, sizeof(ASTIter))) ASTIter;
 	result->var = var;
 	result->start = start;
 	result->end = end;
@@ -297,7 +288,7 @@ ASTIter* CreateIter(MemoryArena* arena, ASTVariable* var, ASTExpression* start, 
 
 std::string ToString(ASTNodeType nodeType) {
 	switch (nodeType) {
-        case AST_IDENTIFIER:    return "Identifier";
+		case AST_INVALID:    return "INVALID NODE TPYE";
         case AST_VARIABLE:      return "Variable";
         case AST_DEFINITION:    return "Definition";
         case AST_STRUCT:    return "Struct";
