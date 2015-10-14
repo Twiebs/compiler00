@@ -228,11 +228,11 @@ ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* parent) {
 // This is a statement the value in its name might be confusing.
 // We should begin to seperate out the difference between the statements and the expressions
 // And stuff like that
-ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value) {
-	auto result = new (Allocate(arena, sizeof(ASTReturn))) ASTReturn;
-	result->value = value;
-	return result;
-}
+//ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value) {
+//	auto result = new (Allocate(arena, sizeof(ASTReturn))) ASTReturn;
+//	result->value = value;
+//	return result;
+//}
 
 ASTIntegerLiteral* CreateIntegerLiteral (MemoryArena* arena, S64 value) {
 	auto result = (ASTIntegerLiteral*)Allocate(arena, sizeof(ASTIntegerLiteral));

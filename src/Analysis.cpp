@@ -10,6 +10,7 @@
 #include "Build.hpp"
 
 void ReportError (Worker* worker, FileSite& site, const std::string& msg);
+void ReportError (Worker* worker, FileSite* site, const char* msg, ...);
 void ReportError(Worker* worker, const char* msg, ...);
 void ReportError (Worker* worker, const std::string& msg);
 
@@ -109,26 +110,20 @@ internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
 		assert(memberExpr->access.memberCount > 0 && (memberExpr->access.indices != nullptr || memberExpr->access.memberNames != nullptr));
 		assert(currentStructType->nodeType = AST_STRUCT);
 
-		if (memberExpr->access.indices == nullptr) {
-			for (U32 i = 0; i < memberExpr->access.memberCount; i++) {
-				auto memberName = memberExpr ->access.memberNames[i];
-				auto memberIndex = GetMemberIndex(currentStructType, memberName);
-				if (memberIndex == - 1) {
-					ReportError(worker, "Struct %s does not contain any member named %s", currentStructType->name, memberName);
-				} else if (currentStructType->members[memberIndex].type->nodeType == AST_STRUCT) {
-					currentStructType = (ASTStruct*)currentStructType->members[memberIndex].type;
-				}
-				memberExpr->access.indices[i] = memberIndex;
+		for (U32 i = 0; i < memberExpr->access.memberCount; i++) {
+			auto memberName = memberExpr ->access.memberNames[i];
+			auto memberIndex = GetMemberIndex(currentStructType, memberName);
+			if (memberIndex == - 1) {
+				ReportError(worker, "Struct %s does not contain any member named %s", currentStructType->name, memberName);
+			} else if (currentStructType->members[memberIndex].type->nodeType == AST_STRUCT) {
+				currentStructType = (ASTStruct*)currentStructType->members[memberIndex].type;
+			} else if (i == memberExpr->access.memberCount - 1) {
+				memberExpr->type = currentStructType->members[memberIndex].type;
+			} else {
+				ReportError(worker, "Member %s in member expr is not a struct type!", memberName);
 			}
+			memberExpr->access.indices[i] = memberIndex;
 		}
-
-		auto lastIndex = memberExpr->access.indices[memberExpr->access.memberCount - 1];
-		if (lastIndex != -1) {
-			memberExpr->type = currentStructType->members[lastIndex].type;
-		} else {
-			// No error required we should already know what happened
-		}
-
 
 	} break;
 
@@ -290,9 +285,10 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 	case AST_RETURN: {
 		auto retval = (ASTReturn*)node;
 		AnalyzeExpr(worker, retval->value);
+		retval->type = retval->value->type;
 		auto function = (ASTFunction*)worker->currentBlock;
 		if (!TypeCheck(retval->value, function->returnType)) {
-			ReportError(worker, "Return type does not match function return type in function: ");
+			ReportError(worker, &retval->site, "Return type(%s) does not match function return type(%s) in function(%s)", retval->type->name, function->returnType->name, function->name);
 		}
 
 	} break;

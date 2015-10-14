@@ -310,9 +310,10 @@ struct ASTBinaryOperation : public ASTExpression {
 };
 
 struct ASTReturn : public ASTExpression {
+	FileSite site;
 	ASTExpression* value;
-
-	ASTReturn() { nodeType = AST_RETURN; }
+	ASTReturn(ASTExpression* expr, const FileSite& site)
+			: site(site), value(expr) { nodeType = AST_RETURN; }
 };
 
 

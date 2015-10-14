@@ -1,9 +1,9 @@
 ; ModuleID = 'BangCompiler'
 
-@str = private unnamed_addr constant [15 x i8] c"resultA is %d\0A\00"
-@str.1 = private unnamed_addr constant [15 x i8] c"resultB is %f\0A\00"
-@str.2 = private unnamed_addr constant [15 x i8] c"resultC is %f\0A\00"
-@str.3 = private unnamed_addr constant [22 x i8] c"foo was clamped to %f\00"
+%InternalType = type { i32 }
+
+@str = private unnamed_addr constant [22 x i8] c"foo was clamped to %f\00"
+@str.1 = private unnamed_addr constant [22 x i8] c"bar was clamped to %f\00"
 
 define float @Clamp(float %value, float %min, float %max) {
 entry:
@@ -39,74 +39,21 @@ if5:                                              ; preds = %merge
   br label %merge4
 }
 
-define void @LambdaTest() {
+define void @LambdaInternalTypeTest() {
 entry:
-  %resultA = alloca i32
-  %calltmp = call i32 @lambdaA()
-  store i32 %calltmp, i32* %resultA
-  %resultB = alloca float
-  %calltmp1 = call float @lambdaB(float 2.000000e+00, float 3.000000e+00)
-  store float %calltmp1, float* %resultB
-  %resultC = alloca float
-  %calltmp2 = call float @lambdaC()
-  store float %calltmp2, float* %resultC
-  %0 = load i32, i32* %resultA
-  call void (i8*, ...) @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @str, i32 0, i32 0), i32 %0)
-  %1 = load float, float* %resultB
-  %2 = fpext float %1 to double
-  call void (i8*, ...) @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @str.1, i32 0, i32 0), double %2)
-  %3 = load float, float* %resultC
-  %4 = fpext float %3 to double
-  call void (i8*, ...) @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @str.2, i32 0, i32 0), double %4)
+  %calltmp = call i32 @DoThings()
   ret void
 }
 
-define i32 @lambdaA() {
+define i32 @DoThings() {
 entry:
-  %x = alloca i32
-  store i32 5, i32* %x
-  %y = alloca i32
-  store i32 3, i32* %y
-  %z = alloca i32
-  %0 = load i32, i32* %x
-  %1 = load i32, i32* %y
-  %2 = mul i32 %0, %1
-  store i32 %2, i32* %z
-  %3 = load i32, i32* %z
-  ret i32 %3
+  %data = alloca %InternalType
+  %access = getelementptr %InternalType, %InternalType* %data, i32 0, i32 0
+  store i32 7, i32* %access
+  %access1 = getelementptr %InternalType, %InternalType* %data, i32 0, i32 0
+  %0 = load i32, i32* %access1
+  ret i32 %0
 }
-
-define float @lambdaB(float %a, float %b) {
-entry:
-  %a1 = alloca float
-  store float %a, float* %a1
-  %b2 = alloca float
-  store float %b, float* %b2
-  %temp = alloca float
-  %0 = load float, float* %a1
-  %1 = load float, float* %b2
-  %2 = fmul float %0, %1
-  store float %2, float* %temp
-  %3 = load float, float* %temp
-  ret float %3
-}
-
-define float @lambdaC() {
-entry:
-  %c = alloca i32
-  %calltmp = call i32 @lambdaA()
-  store i32 %calltmp, i32* %c
-  %d = alloca float
-  %calltmp1 = call float @lambdaB(float 5.000000e+00, float 2.700000e+01)
-  store float %calltmp1, float* %d
-  %0 = load i32, i32* %c
-  %1 = sitofp i32 %0 to float
-  %2 = load float, float* %d
-  %3 = fmul float %1, %2
-  ret float %3
-}
-
-declare void @printf(i8*, ...)
 
 define i32 @main() {
 entry:
@@ -116,6 +63,18 @@ entry:
   %calltmp = call float @Clamp(float %0, float 6.000000e+00, float 7.000000e+00)
   store float %calltmp, float* %foo
   %1 = load float, float* %foo
-  call void (i8*, ...) @printf(i8* getelementptr inbounds ([22 x i8], [22 x i8]* @str.3, i32 0, i32 0), float %1)
+  %2 = fpext float %1 to double
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([22 x i8], [22 x i8]* @str, i32 0, i32 0), double %2)
+  %bar = alloca float
+  store float 0x4022666660000000, float* %bar
+  %3 = load float, float* %bar
+  %calltmp1 = call float @Clamp(float %3, float 6.000000e+00, float 7.000000e+00)
+  store float %calltmp1, float* %bar
+  %4 = load float, float* %bar
+  %5 = fpext float %4 to double
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([22 x i8], [22 x i8]* @str.1, i32 0, i32 0), double %5)
+  call void @LambdaInternalTypeTest()
   ret i32 0
 }
+
+declare void @printf(i8*, ...)

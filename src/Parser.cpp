@@ -118,8 +118,9 @@ ASTNode* ParseReturn(Worker* worker) {
 		LOG_VERBOSE(worker->token.site << ": Parsing a return statement");
 		NextToken(worker);
 		auto expr = ParseExpr(worker);
-		auto returnVal = CreateReturnValue(&worker->arena, expr);
-		return returnVal;
+		// auto returnVal = CreateReturnValue(&worker->arena, expr);
+		auto returnValue = worker->arena.alloc<ASTReturn>(expr, worker->token.site);
+		return returnValue;
 }
 
 internal inline ASTCast* ParseCast(Worker* worker, const Token& identToken) {
@@ -175,21 +176,20 @@ auto ParseMemberAccess = [](Worker* worker, ASTVariable* structVar, ASTMemberAcc
 		memberAccess->indices = (U32*)Allocate(&worker->arena, memberNames.size() * sizeof(U32));
 		memcpy(memberAccess->memberNames, &memberNames.front(), memberNames.size() * sizeof(char*));
 	} else {
-		ASTDefinition* exprType = nullptr;
-		auto currentStruct = structType;
+
 		std::vector<U32> indices;
+		auto currentStruct = structType;
 		while (worker->token.type == TOKEN_ACCESS) {
 			NextToken(worker); // eat the member access
 			auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
 			if (memberIndex == -1) {
 				ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
 			} else {
-				indices.push_back(memberIndex);
 				auto memberType = currentStruct->members[memberIndex].type;
 				if(memberType->nodeType == AST_STRUCT)
 					currentStruct = (ASTStruct*)memberType;
-				exprType = memberType;
 			}
+			indices.push_back(memberIndex);
 			NextToken(worker);	// eat the member ident
 		}
 		memberAccess->memberCount = indices.size();
