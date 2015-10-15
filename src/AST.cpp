@@ -254,11 +254,8 @@ ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& st
 	auto result = (ASTStringLiteral*)Allocate(arena, sizeof(ASTStringLiteral) + (str.size() + 1));
 	result->nodeType = AST_STRING_LITERAL;
 	result->type = global_U8Type;
-	result->charCount = str.size();
-	auto strptr = (U8*)(result + 1);
-	memcpy(strptr, str.data(), str.size());
-	strptr += str.size();
-	*strptr = '\0';
+	result->value = (U8*)Allocate(arena, str.size() + 1);
+	memcpy(result->value, str.data(), str.size() + 1);
 	return result;
 }
 

@@ -10,7 +10,6 @@ void PushWork (const std::string& filename);
 
 void EatLine(Worker* worker);
 void NextToken(Worker* worker);
-internal inline int GetTokenPrecedence(const Token& token);
 
 internal ASTNode* ParseStatement(Worker* worker);
 internal ASTExpression* ParseExpr(Worker* worker);
@@ -24,20 +23,6 @@ internal inline ASTNode* ParseBlock(Worker* worker, ASTBlock* block = nullptr);
 void ReportError (Worker* worker, FileSite* site, const char* msg, ...);
 void ReportError (Worker* worker, FileSite& site, const std::string& msg);
 void ReportError (Worker* worker, const std::string& msg);
-
-internal inline int GetTokenPrecedence (const Token& token) {
-    if (token.type == TOKEN_LOGIC_OR) return 5;
-    if (token.type == TOKEN_LOGIC_AND) return 5;
-	if (token.type == TOKEN_LOGIC_LESS)           return 10;
-    if (token.type == TOKEN_LOGIC_GREATER)        return 10;
-    if (token.type == TOKEN_LOGIC_LESS_EQUAL)     return 10;
-    if (token.type == TOKEN_LOGIC_GREATER_EQAUL)  return 10;
-    if (token.type == TOKEN_ADD) return 20;
-	if (token.type == TOKEN_SUB) return 20;
-	if (token.type == TOKEN_MUL) return 40;
-	if (token.type == TOKEN_DIV) return 40;
-	return -1;
-}
 
 void ReportError(Worker* worker, FileSite& site, const std::string& msg) {
 	worker->errorCount++;
@@ -338,14 +323,13 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
                     NextToken(worker); // Eat the int literal
                     return result;
 				}
-		} break;
+		}
 
 		case TOKEN_STRING: {
-			LOG_VERBOSE("Parsing a string expression...");
 			auto str = CreateStringLiteral (&worker->arena, worker->token.string);
 			NextToken(worker); // Eat the string token
 			return str;
-		} break;
+		}
 
 		default:
             ReportError(worker, &worker->token.site, "Error when expecting expression: Unknown Token(%s)", worker->token.string.c_str());
@@ -355,26 +339,7 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 		// This is dead code it will never happen.
 }
 
-// HACK there is a better way to do this but for now this works.
-// This is nessecary because i dont want operations tied to the parsing of tokens
-// because there may be suport for user defined operators in the future
-// and intrinsic operations should be seperated from their tokens.
-Operation tokenToOperation (const Token& token) {
-    switch (token.type) {
-	case TOKEN_ADD: return OPERATION_ADD;
-	case TOKEN_SUB: return OPERATION_SUB;
-	case TOKEN_MUL: return OPERATION_MUL;
-	case TOKEN_DIV: return OPERATION_DIV;
 
-	case TOKEN_LOGIC_GREATER: return OPERATION_GT;
-	case TOKEN_LOGIC_LESS: return OPERATION_LT;
-	case TOKEN_LOGIC_GREATER_EQAUL: return OPERATION_GTE;
-	case TOKEN_LOGIC_LESS_EQUAL: return OPERATION_LTE;
-
-	case TOKEN_LOGIC_OR: return OPERATION_LOR;
-	case TOKEN_LOGIC_AND: return OPERATION_LAND;
-    }
-}
 
 ASTExpression* ParseExprRHS (int exprPrec, ASTExpression* lhs, Worker* worker) {
 	assert(lhs != nullptr);
@@ -407,7 +372,7 @@ ASTExpression* ParseExprRHS (int exprPrec, ASTExpression* lhs, Worker* worker) {
             }
         }
 
-        lhs = (ASTExpression*)CreateBinaryOperation(&worker->arena, tokenToOperation(binopToken), lhs, rhs);
+        lhs = (ASTExpression*)CreateBinaryOperation(&worker->arena, TokenToOperation(binopToken), lhs, rhs);
     }	 // Goes back to the while loop
 }
 

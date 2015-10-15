@@ -57,7 +57,7 @@ internal void Codegen (ASTReturn* retVal);
 internal inline void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
 internal inline void Codegen(ASTIter* iter);
 
-internal llvm::Value* CodegenExpr (ASTNode* expr);
+llvm::Value* CodegenExpr (ASTNode* expr);
 internal llvm::Value* Codegen (ASTIntegerLiteral* intLiteral);
 internal llvm::Value* Codegen (ASTFloatLiteral* floatLiteral);
 internal llvm::Value* Codegen (ASTBinaryOperation* binop);
@@ -316,7 +316,7 @@ internal void Codegen (ASTVariableOperation* varOp) {
 
 }
 
-internal llvm::Value* CodegenExpr (ASTNode* node) {
+llvm::Value* CodegenExpr (ASTNode* node) {
 	assert(node != nullptr);
 	switch(node->nodeType) {
 	case AST_BINARY_OPERATION: return Codegen((ASTBinaryOperation*)node);
@@ -636,8 +636,7 @@ llvm::Value* Codegen (ASTFloatLiteral* floatNode) {
 }
 
 llvm::Value* Codegen (ASTStringLiteral* str) {
-	auto str_ptr = (const char*)(str + 1);
-	auto str_value = builder->CreateGlobalStringPtr(str_ptr, "str");
+	auto str_value = builder->CreateGlobalStringPtr((char*)str->value, "str");
 	return str_value;
 }
 

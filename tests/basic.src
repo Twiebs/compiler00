@@ -81,6 +81,43 @@ LambdaTest :: ()
 	printf("resultB is %f\n" F64(resultB))
 	printf("resultC is %f\n" F64(resultC))
 
+	Clamp :: (value : F32 min : F32 max : F32) >> F32
+    	IF value < min value = min
+    	IF value > max value = max
+    	RETURN value
+
+
+LambdaInternalTypeTest :: () >> S32
+	DoThings :: () >> S32
+		InternalType :: STRUCT
+			internalData : S32
+
+		data : InternalType
+		data.internalData = 7
+		RETURN data.internalData
+
+	DoInterestingThings :: () >> S32
+		InterestingThing :: STRUCT
+			interestingData  : S32
+			interestingCount : S32
+
+		BoringThing :: STRUCT
+			boringData  : S32
+			boringCount : S32
+
+		Stuff :: STRUCT
+			interestingThing : InterestingThing
+			boringThing : BoringThing
+
+		stuff : Stuff
+		stuff.interestingThing.interestingData = 7
+		RETURN stuff.interestingThing.interestingData
+
+	DoThings()
+	DoInterestingThings()
+	RETURN 0
+
+
 
 Main :: () >> S32
 	CastTest()

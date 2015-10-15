@@ -347,7 +347,7 @@ struct ASTFloatLiteral : public ASTExpression {
 };
 
 struct ASTStringLiteral : public ASTExpression {
-	U32 charCount;
+	U8* value;
 };
 
 void InitalizeLanguagePrimitives(MemoryArena* arena, ASTBlock* scope);
@@ -420,3 +420,39 @@ bool isFloatingPoint(ASTDefinition* type);
 bool isSignedInteger(ASTDefinition* type);
 bool isUnsignedInteger (ASTDefinition* type);
 bool isType(ASTNode* node);
+
+
+inline int GetTokenPrecedence (const Token& token) {
+	if (token.type == TOKEN_LOGIC_OR) 				return 5;
+	if (token.type == TOKEN_LOGIC_AND) 				return 5;
+	if (token.type == TOKEN_LOGIC_LESS)           	return 10;
+	if (token.type == TOKEN_LOGIC_GREATER)        	return 10;
+	if (token.type == TOKEN_LOGIC_LESS_EQUAL)     	return 10;
+	if (token.type == TOKEN_LOGIC_GREATER_EQAUL)  	return 10;
+	if (token.type == TOKEN_ADD) 					return 20;
+	if (token.type == TOKEN_SUB) 					return 20;
+	if (token.type == TOKEN_MUL) 					return 40;
+	if (token.type == TOKEN_DIV) 					return 40;
+	return -1;
+}
+
+// HACK there is a better way to do this but for now this works.
+// This is nessecary because i dont want operations tied to the parsing of tokens
+// because there may be suport for user defined operators in the future
+// and intrinsic operations should be seperated from their tokens.
+inline Operation TokenToOperation (const Token& token) {
+	switch (token.type) {
+		case TOKEN_ADD: return OPERATION_ADD;
+		case TOKEN_SUB: return OPERATION_SUB;
+		case TOKEN_MUL: return OPERATION_MUL;
+		case TOKEN_DIV: return OPERATION_DIV;
+
+		case TOKEN_LOGIC_GREATER: return OPERATION_GT;
+		case TOKEN_LOGIC_LESS: return OPERATION_LT;
+		case TOKEN_LOGIC_GREATER_EQAUL: return OPERATION_GTE;
+		case TOKEN_LOGIC_LESS_EQUAL: return OPERATION_LTE;
+
+		case TOKEN_LOGIC_OR: return OPERATION_LOR;
+		case TOKEN_LOGIC_AND: return OPERATION_LAND;
+	}
+}

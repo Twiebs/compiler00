@@ -16,6 +16,7 @@
 #include "Common.hpp"
 #include "Build.hpp"
 #include "Lexer.hpp"
+#include "Codegen.hpp"
 
 extern "C" void InterpTest() {
 	printf("Interpreter Test was sucuessfull\n");
@@ -75,6 +76,26 @@ internal void PrintDefn (ASTNode* node) {
 }
 
 
+internal void Print (ASTIntegerLiteral* literal) {
+	printf("%d : %s\n", literal->value, literal->type->name);
+}
+
+internal void Print (ASTStringLiteral* literal) {
+	printf("'%s' : @%s\n", literal->value, literal->type->name);
+}
+
+internal void PrintExpr (ASTExpression* expr) {
+	switch (expr->nodeType) {
+		case AST_INTEGER_LITERAL:
+			Print((ASTIntegerLiteral*)expr);
+			break;
+		case AST_STRING_LITERAL:
+			Print((ASTStringLiteral*)expr);
+			break;
+	}
+}
+
+
 global_variable Package* global_package;
 // HACK this is a quick hack for fun
 extern "C" void ListAll() {
@@ -119,6 +140,84 @@ void RunInterpTest() {
     printf("test function returned: %f", returnValue);
 }
 
+
+ASTExpression* ParseExpr(MemoryArena* arena, InterpLexer* lex) {
+	auto parsePrimary = [](MemoryArena* arena, InterpLexer* lex) -> ASTExpression* {
+		switch (lex->token.type) {
+			case TOKEN_TRUE: {
+				lex->nextToken();
+				return CreateIntegerLiteral(arena, 1);
+			}
+			case TOKEN_FALSE: {
+				lex->nextToken();
+				return CreateIntegerLiteral(arena, 0);
+			}
+			case TOKEN_STRING: {
+				auto str = CreateStringLiteral (arena, lex->token.string);
+				lex->nextToken();
+				return str;
+			}
+
+			case TOKEN_NUMBER: {
+				LOG_VERBOSE("Parsing a numberExpression!");
+				auto dotPos = lex->token.string.find(".");
+				bool isFloat = dotPos == std::string::npos ? false : true;
+				if (isFloat) {
+					if(lex->token.string.substr(dotPos + 1).find(".") != std::string::npos) {
+						// ReportError(worker, worker->token.site, "Floating Point value contains two decimal points!");
+					}
+					auto value = std::stof(lex->token.string);
+					auto result = CreateFloatLiteral(arena, value);
+					lex->nextToken();
+					return result;
+				} else {
+					auto value = std::stoi(lex->token.string);
+					auto result = CreateIntegerLiteral(arena , value);
+					lex->nextToken();
+					return result;
+				}
+			}
+
+		}
+		return nullptr;
+	};
+
+	std::function<ASTExpression*(MemoryArena*, InterpLexer*, ASTExpression*, int)> parseBinary = [&parsePrimary, &parseBinary](MemoryArena* arena, InterpLexer* lex, ASTExpression* lhs, int expressionPrec) -> ASTExpression* {
+		assert(lhs != nullptr);
+		while (true) {
+
+			auto tokenPrec = GetTokenPrecedence(lex->token);
+			if (tokenPrec < 0) return lhs;	// Bail if there is no binop
+
+			auto binopToken = lex->token;
+			lex->nextToken();
+
+			// We have a binop lets see what is on the other side!
+			ASTExpression* rhs = parsePrimary(arena, lex);
+			if (rhs == nullptr) {
+				//ReportError(worker, binopToken.site, "Could not parse primary expression to the right of binary opperator '" + binopToken.string	+ "'");
+				return nullptr;
+			}
+
+			auto nextPrec = GetTokenPrecedence (lex->token);
+			if (tokenPrec < nextPrec) {
+				rhs = parseBinary(arena, lex, rhs, tokenPrec + 1);
+				if (rhs == nullptr) {
+					LOG_ERROR("Could not parse recursive rhsParsing!");
+					return nullptr;
+				}
+			}
+
+			lhs = (ASTExpression*)CreateBinaryOperation(arena, TokenToOperation(binopToken), lhs, rhs);
+		}	 // Goes back to the while loop
+	};
+
+
+	auto lhs = parsePrimary(arena, lex);
+	if (lhs == nullptr) return nullptr;
+	return parseBinary(arena, lex, lhs, 0);
+}
+
 void RunInterp (Package* package) {
 	global_package = package;
 	llvm::InitializeAllTargets();
@@ -127,7 +226,11 @@ void RunInterp (Package* package) {
 	auto memoryManager = std::make_unique<llvm::SectionMemoryManager>();
 	auto unique_module = std::make_unique<llvm::Module>("Bang Interpreter", llvm::getGlobalContext());
 	auto module = unique_module.get();
-    auto testFunction = GenerateTestFunction(module);
+   // auto testFunction = GenerateTestFunction(module);
+
+	llvm::IRBuilder<> builder(llvm::getGlobalContext());
+	auto anonFunctionType = llvm::FunctionType::get(llvm::Type::getFloatTy(llvm::getGlobalContext()), false);
+	auto function = llvm::Function::Create(functionType, llvm::Function::LinkageTypes::ExternalLinkage, "REPLAnon", module);
 
 	std::vector<llvm::Type*> args;
     args.push_back(llvm::PointerType::getInt8PtrTy(llvm::getGlobalContext(), 0));
@@ -148,6 +251,11 @@ void RunInterp (Package* package) {
     std::string inputBuffer;
     InterpLexer lex;
 
+
+
+	MemoryArena arena;
+	arena.memory = malloc(ARENA_BLOCK_SIZE);
+
     while (isRunning) {
         lex.end(); // clears the buffer from the command line
         printf("> ");
@@ -160,6 +268,24 @@ void RunInterp (Package* package) {
         lex.begin();
         lex.nextToken();
 
+		static auto REPLEvaluate = [&engine](ASTExpression* expr) {
+			auto anonFunction =
+			auto exprValue = CodegenExpr(expr);
+			assert(exprValue != nullptr);
+
+
+		};
+
+		static auto REPLProc = [](MemoryArena* arena, InterpLexer* lex) -> bool {
+			auto expr = ParseExpr(arena, lex);
+			if (expr == nullptr) return false;
+			REPLEvaluate(expr);
+			PrintExpr(expr);
+			return true;
+		};
+
+		if (REPLProc(&arena, &lex)) continue;
+
         if (lex.token.type == TOKEN_IDENTIFIER) {
             Token identToken = lex.token;
             lex.nextToken();
@@ -170,7 +296,7 @@ void RunInterp (Package* package) {
 
                 auto node = FindNodeWithIdent(&package->globalBlock, identToken.string);
                 if (node == nullptr) {
-                    printf("could not find a function named %s", identToken.string.c_str());
+                    printf("could not find a function named %s\n", identToken.string.c_str());
                 } else {
                     auto funcSet = (ASTFunctionSet*)node;
                     auto function = funcSet->functions[0];
@@ -235,4 +361,6 @@ void RunInterp (Package* package) {
         }
 
     }
+
+	free(arena.memory);
 }
