@@ -40,7 +40,11 @@
 #include "AST.hpp"
 #include "Build.hpp"
 
+// HACK The current codegeneration structure is compleatly unsustainable
+// With new REPL implementation, Needs serious refactor
 global_variable llvm::IRBuilder<>* builder = new llvm::IRBuilder<>(llvm::getGlobalContext());
+llvm::IRBuilder<>* GetGlobalBuilderHack() { return builder; }
+
 global_variable llvm::Module* global_module;	// HACK HACK HACK HACK
 
 internal int WriteIR (llvm::Module* module, BuildSettings* settings);

@@ -228,9 +228,9 @@ void RunInterp (Package* package) {
 	auto module = unique_module.get();
    // auto testFunction = GenerateTestFunction(module);
 
-	llvm::IRBuilder<> builder(llvm::getGlobalContext());
-	auto anonFunctionType = llvm::FunctionType::get(llvm::Type::getFloatTy(llvm::getGlobalContext()), false);
-	auto function = llvm::Function::Create(functionType, llvm::Function::LinkageTypes::ExternalLinkage, "REPLAnon", module);
+//  llvm::IRBuilder<> builder(llvm::getGlobalContext());
+//	auto anonFunctionType = llvm::FunctionType::get(llvm::Type::getFloatTy(llvm::getGlobalContext()), false);
+//	auto function = llvm::Function::Create(functionType, llvm::Function::LinkageTypes::ExternalLinkage, "REPLAnon", module);
 
 	std::vector<llvm::Type*> args;
     args.push_back(llvm::PointerType::getInt8PtrTy(llvm::getGlobalContext(), 0));
@@ -269,11 +269,13 @@ void RunInterp (Package* package) {
         lex.nextToken();
 
 		static auto REPLEvaluate = [&engine](ASTExpression* expr) {
-			auto anonFunction =
-			auto exprValue = CodegenExpr(expr);
+            auto anonFunctionType = llvm::FunctionType::get((llvm::Type*)expr->type->llvmType, false);
+			auto anonFunction = llvm::Function::Create(anonFunctionType, llvm::Function::LinkageTypes::InternalLinkage, "anon", module);
+			auto entryBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", anonFunction);
+            auto builder = GetGlobalBuilderHack();
+            builder->SetInsertPoint(entryBlock);
+            auto exprValue = CodegenExpr(expr);
 			assert(exprValue != nullptr);
-
-
 		};
 
 		static auto REPLProc = [](MemoryArena* arena, InterpLexer* lex) -> bool {
