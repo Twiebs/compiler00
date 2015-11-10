@@ -263,8 +263,8 @@ enum UnaryOperator {
 
 struct ASTMemberAccess {
 	U32 memberCount;
-	char** memberNames;
 	U32* indices;
+	char** memberNames;
 };
 
 struct ASTMemberExpr : public ASTExpression {
@@ -315,7 +315,6 @@ struct ASTReturn : public ASTExpression {
 	ASTReturn(ASTExpression* expr, const FileSite& site)
 			: site(site), value(expr) { nodeType = AST_RETURN; }
 };
-
 
 struct ASTCall : public ASTExpression {
     char* name;

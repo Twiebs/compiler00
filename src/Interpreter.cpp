@@ -15,6 +15,7 @@
 
 #include "Common.hpp"
 #include "Build.hpp"
+#include "Analysis.hpp"
 #include "Lexer.hpp"
 #include "Codegen.hpp"
 
@@ -100,8 +101,8 @@ global_variable Package* global_package;
 // HACK this is a quick hack for fun
 extern "C" void ListAll() {
 	Package* package = global_package;
-	for (U32 i = 0; i < package->globalBlock.members.size(); i++) {
-		auto node = package->globalBlock.members[i];
+	for (U32 i = 0; i < package->rootBlock.members.size(); i++) {
+		auto node = package->rootBlock.members[i];
 		PrintDefn(node);
 	}
 }
@@ -251,8 +252,6 @@ void RunInterp (Package* package) {
     std::string inputBuffer;
     InterpLexer lex;
 
-
-
 	MemoryArena arena;
 	arena.memory = malloc(ARENA_BLOCK_SIZE);
 
@@ -268,7 +267,8 @@ void RunInterp (Package* package) {
         lex.begin();
         lex.nextToken();
 
-		static auto REPLEvaluate = [&engine](ASTExpression* expr) {
+		static auto REPLEvaluate = [&engine, &module](ASTExpression* expr) {
+			if (!engine->removeModule(module)) assert(false);
             auto anonFunctionType = llvm::FunctionType::get((llvm::Type*)expr->type->llvmType, false);
 			auto anonFunction = llvm::Function::Create(anonFunctionType, llvm::Function::LinkageTypes::InternalLinkage, "anon", module);
 			auto entryBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", anonFunction);
@@ -276,11 +276,29 @@ void RunInterp (Package* package) {
             builder->SetInsertPoint(entryBlock);
             auto exprValue = CodegenExpr(expr);
 			assert(exprValue != nullptr);
+			// auto exprLoad = builder->CreateLoad(exprValue, "returnLoad");
+			auto returnValue = builder->CreateRet(exprValue);
+
+			module->dump();
+			engine->addModule(std::unique_ptr<llvm::Module>(module));
+			std::vector<llvm::GenericValue> args;
+			auto result = engine->runFunction(anonFunction, args);
+
+			if (isSignedInteger(expr->type)) {
+				auto intValue = result.IntVal.getSExtValue();
+				printf("The result is %d ", intValue);
+			} else if (isFloatingPoint(expr->type)) {
+				auto floatValue = result.FloatVal;
+				printf("The result is %f", floatValue);
+			} else {
+			}
+
 		};
 
 		static auto REPLProc = [](MemoryArena* arena, InterpLexer* lex) -> bool {
 			auto expr = ParseExpr(arena, lex);
 			if (expr == nullptr) return false;
+			AnalyzeExpr(expr, nullptr);
 			REPLEvaluate(expr);
 			PrintExpr(expr);
 			return true;
@@ -296,7 +314,7 @@ void RunInterp (Package* package) {
 				// TODO parse the arguments correctly here!
 				lex.nextToken();
 
-                auto node = FindNodeWithIdent(&package->globalBlock, identToken.string);
+                auto node = FindNodeWithIdent(&package->rootBlock, identToken.string);
                 if (node == nullptr) {
                     printf("could not find a function named %s\n", identToken.string.c_str());
                 } else {
@@ -306,7 +324,7 @@ void RunInterp (Package* package) {
                     engine->runFunction((llvm::Function *) function->llvmFunction, args);
                 }
             } else {
-                auto node = FindNodeWithIdent(&package->globalBlock, identToken.string);
+                auto node = FindNodeWithIdent(&package->rootBlock, identToken.string);
                 bool listIR = false;
                 if (lex.token.type != TOKEN_EOF) {
                     if (lex.token.string == "IR") {

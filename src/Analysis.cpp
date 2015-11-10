@@ -8,18 +8,16 @@
 // to only care about it during Codegen (and parsing naturaly)
 
 #include "Build.hpp"
+#include "Analysis.hpp"
 
 void ReportError (Worker* worker, FileSite& site, const std::string& msg);
 void ReportError (Worker* worker, FileSite* site, const char* msg, ...);
 void ReportError(Worker* worker, const char* msg, ...);
 void ReportError (Worker* worker, const std::string& msg);
 
-internal void AnalyzeStatement(Worker* worker, ASTNode* node);
-internal void AnalyzeExpr(Worker* worker, ASTExpression* expr);
-
-internal inline void AnalyzeBlock(Worker* worker, ASTBlock* block);
-internal void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement);
-internal void AnalyzeCall(Worker* worker, ASTCall* call);
+internal inline void AnalyzeBlock(ASTBlock* block);
+internal void AnalyzeIfStatement (ASTIfStatement* ifStatement, ASTBlock* currentBlock);
+internal void AnalyzeCall(ASTCall* call, ASTBlock* currentBlock);
 
 internal inline bool TypeCheck (ASTExpression* expr, ASTDefinition* typedefn);
 internal inline bool TypeCompareExplicit (ASTExpression* exprA, ASTExpression* exprB);
@@ -60,33 +58,51 @@ ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 ar
     return nullptr;
 }
 
-internal void AnalyzeCall (Worker* worker, ASTCall* call) {
+internal void AnalyzeCall (ASTCall* call, ASTBlock* currentBlock) {
 	assert(call->nodeType == AST_CALL);
-    auto funcSet = (ASTFunctionSet*)FindNodeWithIdent(worker->currentBlock, call->name);
+    auto funcSet = (ASTFunctionSet*)FindNodeWithIdent(currentBlock, call->name);
 	if (funcSet == nullptr) {
-		ReportError(worker, "Could not find any function matching the identifier" + std::string(call->name));
+		// ReportError(worker, "Could not find any function matching the identifier" + std::string(call->name));
 		return;
 	} else if (funcSet->nodeType != AST_FUNCTION_SET) {
-        ReportError(worker, "Call to xxx does not name a function");
+        // ReportError(worker, "Call to xxx does not name a function");
         return;
     }
 
 	for (auto i = 0; i < call->argCount; i++) {
-		AnalyzeExpr(worker, call->args[i]);
+		AnalyzeExpr(call->args[i], currentBlock);
 	}
 
 	call->function = FindFunction(funcSet, call->args, call->argCount);
 	if (call->function == nullptr) {
-		ReportError(worker, "A function named %s exists but its signiture does not match the provided arguments!", call->name);
+		// ReportError(worker, "A function named %s exists but its signiture does not match the provided arguments!", call->name);
 	} else {
 		call->type = call->function->returnType;
 	}
 }
 
-internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
+
+ASTDefinition* ResolveMemberAccess(ASTMemberAccess* access, ASTStruct* structType) {
+	for (U32 i = 0; i < access->memberCount; i++) {
+		auto memberName = access->memberNames[i];
+		auto memberIndex = GetMemberIndex(structType, memberName);
+		if (memberIndex == - 1) {
+			ReportError() << "Struct " << structType->name << "does not contain any member named " << memberName;
+		} else if (structType->members[memberIndex].type->nodeType == AST_STRUCT) {
+			structType = (ASTStruct *) structType->members[memberIndex].type;
+		} else {
+			ReportError() << "Member " << memberName << "in member expr is not a struct type!";
+		}
+		access->indices[i] = memberIndex;
+	}
+
+	return structType->members[access->memberCount - 1].type;
+}
+
+void AnalyzeExpr (ASTExpression* expr, ASTBlock* currentBlock) {
 	if (expr->nodeType == AST_CALL) {
 		auto call = (ASTCall*)expr;
-		AnalyzeCall(worker, call);
+		AnalyzeCall(call, currentBlock);
 	}
 
 	switch (expr->nodeType) {
@@ -96,41 +112,32 @@ internal void AnalyzeExpr (Worker* worker, ASTExpression* expr) {
 	} break;
 	case AST_BINARY_OPERATION: {
 		auto binop = (ASTBinaryOperation*)expr;
-		AnalyzeExpr(worker, binop->lhs);
-		AnalyzeExpr(worker, binop->rhs);
+		AnalyzeExpr(binop->lhs, currentBlock);
+		AnalyzeExpr(binop->rhs, currentBlock);
 		if (TypeCompareImplicit(binop->lhs, binop->rhs)) {
 			binop->type = binop->lhs->type;
 		} else {
-			ReportError(worker, "Type mismatch in binary operation (%s) %s (%s)", binop->lhs->type->name, ToString(binop->operation).c_str(), binop->rhs->type->name);
+			// ReportError(worker, "Type mismatch in binary operation (%s) %s (%s)", binop->lhs->type->name, ToString(binop->operation).c_str(), binop->rhs->type->name);
 		}
 	} break;
 	case AST_MEMBER_EXPR: {
 		auto memberExpr = (ASTMemberExpr*)expr;
-		auto currentStructType = (ASTStruct*)memberExpr ->structVar->type;
 		assert(memberExpr->access.memberCount > 0 && (memberExpr->access.indices != nullptr || memberExpr->access.memberNames != nullptr));
-		assert(currentStructType->nodeType = AST_STRUCT);
 
-		for (U32 i = 0; i < memberExpr->access.memberCount; i++) {
-			auto memberName = memberExpr ->access.memberNames[i];
-			auto memberIndex = GetMemberIndex(currentStructType, memberName);
-			if (memberIndex == - 1) {
-				ReportError(worker, "Struct %s does not contain any member named %s", currentStructType->name, memberName);
-			} else if (currentStructType->members[memberIndex].type->nodeType == AST_STRUCT) {
-				currentStructType = (ASTStruct*)currentStructType->members[memberIndex].type;
-			} else if (i == memberExpr->access.memberCount - 1) {
-				memberExpr->type = currentStructType->members[memberIndex].type;
-			} else {
-				ReportError(worker, "Member %s in member expr is not a struct type!", memberName);
-			}
-			memberExpr->access.indices[i] = memberIndex;
-		}
+		if (memberExpr->access.memberNames != nullptr)
+			memberExpr->type = ResolveMemberAccess(&memberExpr->access, (ASTStruct*)memberExpr->structVar->type);
+
+
+
+
+
 
 	} break;
 
 
 	case AST_CAST: {
 		auto cast = (ASTCast*)expr;
-		AnalyzeExpr(worker, cast->expr);
+		AnalyzeExpr(cast->expr, currentBlock);
 	} break;
 
 
@@ -169,18 +176,19 @@ internal inline bool TypeCheck (ASTExpression* expr, ASTDefinition* typedefn) {
 // its pointer stored in the block.  In theory the blocks should only really mater for codegeneration and
 // parsing.  Otherwise we can hit the nodes in any order whatsoever during the anayalsis because it doesnt
 // mater and will be faster to traverse them linearly rather then this tree structure
-internal inline void AnalyzeBlock (Worker* worker, ASTBlock* block) {
+internal inline void AnalyzeBlock (ASTBlock* block) {
 	for(auto i = 0; i < block->members.size(); i++) {
 		auto node = block->members[i];
-		AnalyzeStatement(worker, node);
+		AnalyzeStatement(node, block);
 	}
 }
 
-internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
+
+void AnalyzeStatement (ASTNode* node, ASTBlock* currentBlock) {
 	switch(node->nodeType) {
 
 	case AST_BLOCK:
-		AnalyzeBlock(worker, (ASTBlock*)node);
+		AnalyzeBlock((ASTBlock*)node);
 		break;
 
 	case AST_STRUCT: {
@@ -189,44 +197,44 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 
 
 	case AST_IF:
-		AnalyzeIfStatement(worker, (ASTIfStatement*)node);
+		AnalyzeIfStatement((ASTIfStatement*)node, currentBlock);
 		break;
 	case AST_ITER: {
 		auto iter = (ASTIter*)node;
 		assert(iter->var);
 		assert(iter->start);
-		AnalyzeExpr(worker, iter->var);
-		AnalyzeExpr(worker, iter->start);
+		AnalyzeExpr(iter->var, currentBlock);
+		AnalyzeExpr(iter->start, currentBlock);
 		if (iter->end != nullptr) {
-			AnalyzeExpr(worker, iter->end);
+			AnalyzeExpr(iter->end, currentBlock);
 			if (!TypeCompareExplicit(iter->start, iter->end)) {
-				ReportError(worker, "Cannot iterate between two different types");
+				// ReportError(worker, "Cannot iterate between two different types");
 			}
 		}
 
-		AnalyzeBlock(worker, iter->body);
+		AnalyzeBlock(iter->body);
 	} break;
 
 	case AST_CALL:
-		AnalyzeCall(worker, (ASTCall*)node);
+		AnalyzeCall((ASTCall*)node, currentBlock);
 		break;
 
 	case AST_VARIABLE: {
 		auto var = (ASTVariable*)node;
 		if (var->initalExpression != nullptr) {
-			AnalyzeExpr(worker, var->initalExpression);
+			AnalyzeExpr(var->initalExpression, currentBlock);
 		}
 
 		if (var->type == nullptr) {
 			if (var->typeName != nullptr) {
-				var->type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, var->typeName);
+				var->type = (ASTDefinition*)FindNodeWithIdent(currentBlock, var->typeName);
 				if (var->type == nullptr) {
-					ReportError(worker, "Variable(%s) could not be declared with type(%s): Type does not exist!", var->name, var->typeName);
+					// ReportError(worker, "Variable(%s) could not be declared with type(%s): Type does not exist!", var->name, var->typeName);
 					return;
 				}
 				assert(var->type->nodeType != AST_DEFINITION && "Primitive types should always be resolved already");
 				if (var->type->nodeType != AST_STRUCT) {
-					ReportError(worker, "Variable '%s' could not be declared with type '%s': '%s' does not represent a struct" , var->name, var->typeName, var->typeName);
+					// ReportError(worker, "Variable '%s' could not be declared with type '%s': '%s' does not represent a struct" , var->name, var->typeName, var->typeName);
 				}
 			} else if (var->initalExpression != nullptr) {
 				var->type = var->initalExpression->type;
@@ -245,7 +253,7 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 				if (var->initalExpression->type == global_F32Type && var->type == global_F64Type) {
 					var->initalExpression->type = global_F64Type;
 				} else {
-					ReportError(worker, "Type mismatch!  Variable (%s : %s) does not match inital expression (%s)", var->name, var->type->name, var->initalExpression->type->name);
+					// ReportError(worker, "Type mismatch!  Variable (%s : %s) does not match inital expression (%s)", var->name, var->type->name, var->initalExpression->type->name);
 				}
 			}
 		}
@@ -253,42 +261,37 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 	} break;
 	case AST_VARIABLE_OPERATION: {
 		auto varOp = (ASTVariableOperation*)node;
-		AnalyzeExpr(worker, varOp->expr);
+		AnalyzeExpr(varOp->expr, currentBlock);
         auto variable = varOp->variable;
         if (!TypeCompareExplicit(variable->type, varOp->expr)) {
-            ReportError(worker, "Type mismatch! Variable %s of type %s does not match rhs expression of type %s",
-                        variable->name, variable->type->name, varOp->expr->type->name);
+           // ReportError(worker, "Type mismatch! Variable %s of type %s does not match rhs expression of type %s",
+            //            variable->name, variable->type->name, varOp->expr->type->name);
         }
 	} break;
 
     case AST_MEMBER_OPERATION: {
         auto memberOp = (ASTMemberOperation*)node;
-		AnalyzeExpr(worker, memberOp->expr);
+		AnalyzeExpr(memberOp->expr, currentBlock);
 
 		auto currentStruct = (ASTStruct*)memberOp->structVar->type;
 		assert(currentStruct->nodeType = AST_STRUCT);
 
-		if (memberOp->access.indices == nullptr) {
-			for (U32 i = 0; i < memberOp->access.memberCount; i++) {
-				auto memberName = memberOp->access.memberNames[i];
-				auto memberIndex = GetMemberIndex(currentStruct, memberName);
-				if (memberIndex == - 1) {
-					ReportError(worker, "Struct %s does not contain any member named %s", currentStruct->name, memberName);
-				} else if (currentStruct->members[memberIndex].type->nodeType == AST_STRUCT) {
-					currentStruct = (ASTStruct*)currentStruct->members[memberIndex].type;
-				}
-				memberOp->access.indices[i] = memberIndex;
+		if (memberOp->access.memberNames != nullptr) {
+			auto memberType = ResolveMemberAccess(&memberOp->access, (ASTStruct*)memberOp->structVar->type);
+			if (!TypeCompareExplicit(memberType, memberOp->expr)) {
+				ReportError() << "Type mistmatch!  Struct member ... does not match ...";
 			}
 		}
+
     } break;
 
 	case AST_RETURN: {
 		auto retval = (ASTReturn*)node;
-		AnalyzeExpr(worker, retval->value);
+		AnalyzeExpr(retval->value, currentBlock);
 		retval->type = retval->value->type;
-		auto function = (ASTFunction*)worker->currentBlock;
+		auto function = (ASTFunction*)currentBlock;
 		if (!TypeCheck(retval->value, function->returnType)) {
-			ReportError(worker, &retval->site, "Return type(%s) does not match function return type(%s) in function(%s)", retval->type->name, function->returnType->name, function->name);
+			// ReportError(worker, &retval->site, "Return type(%s) does not match function return type(%s) in function(%s)", retval->type->name, function->returnType->name, function->name);
 		}
 
 	} break;
@@ -300,14 +303,11 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 
 	case AST_FUNCTION : {
 		auto function = (ASTFunction*)node;
-		worker->currentBlock = function;
-		AnalyzeBlock(worker, function);
+		AnalyzeBlock(function);
 
 		// XXX we need to create some notion of a ASTTypeRefrence or somthing that will handle keeping the names of the types
 		// that we require if the tree is unable to find what they are looking for.  For instance the return type of thsi function may
 		// be a struct type that is declared in another file that we have not parsed yet and have no idea what it is.
-
-
 
 	} break;
 
@@ -318,12 +318,12 @@ internal void AnalyzeStatement (Worker* worker, ASTNode* node) {
 	}
 }
 
-internal void AnalyzeIfStatement (Worker* worker, ASTIfStatement* ifStatement) {
+internal void AnalyzeIfStatement (ASTIfStatement* ifStatement, ASTBlock* currentBlock) {
 	assert(ifStatement->expr != nullptr);
-	AnalyzeExpr(worker, ifStatement->expr);
-	AnalyzeStatement(worker, ifStatement->ifBody);
+	AnalyzeExpr(ifStatement->expr, currentBlock);
+	AnalyzeStatement(ifStatement->ifBody, currentBlock);
 	if (ifStatement->elseBody != nullptr) {
-		AnalyzeStatement(worker, ifStatement->elseBody);
+		AnalyzeStatement(ifStatement->elseBody, currentBlock);
 	}
 }
 
@@ -335,10 +335,7 @@ void AnalyzeAST (Worker* worker) {
 		auto node = worker->currentBlock->members[i];
 		if (node->nodeType == AST_FUNCTION) {
 			auto function = (ASTFunction*)node;
-			auto previousBlock = worker->currentBlock;
-			worker->currentBlock = function;
-			AnalyzeBlock(worker, function);
-			worker->currentBlock = previousBlock;
+			AnalyzeBlock(function);
 		}
 	}
 }

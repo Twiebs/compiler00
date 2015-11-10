@@ -98,14 +98,14 @@ void CodegenPackage (Package* package, BuildSettings* settings) {
     package->llvmModule = new llvm::Module("BangCompiler", llvm::getGlobalContext());
 	global_module = package->llvmModule;
 
-	// HACK codegenerate the structs first
-	for (ASTNode* node : package->globalBlock.members) {
+	// HACK codegenerate the structs rootBlock
+	for (ASTNode* node : package->rootBlock.members) {
 		if (node->nodeType == AST_STRUCT) {
 			Codegen((ASTStruct*)node);
 		}
 	}
 
-		for (ASTNode* node : package->globalBlock.members) {
+		for (ASTNode* node : package->rootBlock.members) {
 		switch (node->nodeType) {
 			case AST_FUNCTION:
 				Codegen((ASTFunction*)node, global_module);

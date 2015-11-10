@@ -30,6 +30,13 @@ void ParseFile (Worker* worker, const std::string& rootDir, const std::string& f
 void CodegenPackage(Package* package, BuildSettings* settings);
 void AnalyzeAST (Worker* worker);
 
+std::ostream& ReportError (const FileSite& site) {
+	return std::cout;
+}
+
+std::ostream& ReportError() {
+	return std::cout;
+}
 
 
 global_variable Workspace global_workspace;
@@ -165,13 +172,13 @@ void Build () {
     Workspace* workspace = &global_workspace;
     Worker* mainWorker = &global_workspace.workers[0];
 
-    InitalizeLanguagePrimitives(&mainWorker->arena, &package->globalBlock);
+    InitalizeLanguagePrimitives(&mainWorker->arena, &package->rootBlock);
     std::string typeName = "U8";
-    auto typeDefn = (ASTDefinition*)FindNodeWithIdent(&package->globalBlock, typeName);
+    auto typeDefn = (ASTDefinition*)FindNodeWithIdent(&package->rootBlock, typeName);
 
     for (U32 i = 0; i < workspace->workerCount; i++) {
         Worker* worker = &workspace->workers[i];
-        worker->currentBlock = &package->globalBlock;
+        worker->currentBlock = &package->rootBlock;
         worker->currentPackage = package;
     }
 

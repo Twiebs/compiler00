@@ -18,12 +18,22 @@
 
 #include "llvm/IR/Module.h"
 
+std::ostream& ReportError (const FileSite& site);
+std::ostream& ReportError ();
+
 struct Package {
     std::string name;
-    ASTBlock globalBlock;
+    ASTBlock rootBlock;
     MemoryArena arena;
     std::mutex mutex;
     llvm::Module* llvmModule;
+};
+
+struct FileLexer {
+	FILE* file = nullptr;
+	char lastChar = 0, nextChar = 0;
+	U32 lineNumber = 0, colNumber = 0;
+	int currentIndentLevel = 0;
 };
 
 struct Worker {

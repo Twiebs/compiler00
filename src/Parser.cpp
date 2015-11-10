@@ -15,16 +15,16 @@ internal ASTNode* ParseStatement(Worker* worker);
 internal ASTExpression* ParseExpr(Worker* worker);
 internal ASTNode* ParseReturn(Worker* worker);
 
-internal inline ASTNode* ParseIdentifier(Worker* worker);
-internal inline ASTNode* ParseIF(Worker* worker);
-internal inline ASTNode* ParseIter(Worker* worker, const std::string& identName = "");
-internal inline ASTNode* ParseBlock(Worker* worker, ASTBlock* block = nullptr);
+internal inline ASTNode* ParseIdentifier (Worker* worker);
+internal inline ASTNode* ParseIF (Worker* worker);
+internal inline ASTNode* ParseIter (Worker* worker, const std::string& identName = "");
+internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block = nullptr);
 
 void ReportError (Worker* worker, FileSite* site, const char* msg, ...);
 void ReportError (Worker* worker, FileSite& site, const std::string& msg);
 void ReportError (Worker* worker, const std::string& msg);
 
-void ReportError(Worker* worker, FileSite& site, const std::string& msg) {
+void ReportError (Worker* worker, FileSite& site, const std::string& msg) {
 	worker->errorCount++;
 	std::cout << site << " \x1b[31m" << msg	<< "\033[39m\n";
 }
@@ -59,7 +59,7 @@ ASTNode* ParseImport(Worker* worker) {
 	NextToken(worker); // Eat the import statement
 	if (worker->token.type != TOKEN_STRING) {
 		ReportError(worker, worker->token.site, "Import keyword requires a string to follow it");
-		EatLine(worker);	//TODO this is a minor hack ...
+		EatLine(worker);	// TODO this is a minor hack ...
 	}
 	else {
 		PushWork(worker->token.string);
@@ -99,8 +99,7 @@ internal void SkipEntireBlock (Worker* worker) {
     }
 }
 
-ASTNode* ParseReturn(Worker* worker) {
-		LOG_VERBOSE(worker->token.site << ": Parsing a return statement");
+ASTNode* ParseReturn (Worker* worker) {
 		NextToken(worker);
 		auto expr = ParseExpr(worker);
 		// auto returnVal = CreateReturnValue(&worker->arena, expr);
@@ -108,7 +107,7 @@ ASTNode* ParseReturn(Worker* worker) {
 		return returnValue;
 }
 
-internal inline ASTCast* ParseCast(Worker* worker, const Token& identToken) {
+internal inline ASTCast* ParseCast (Worker* worker, const Token& identToken) {
     NextToken(worker);
     auto typeDefn = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, identToken.string);
     assert(typeDefn->nodeType == AST_DEFINITION);
@@ -124,7 +123,7 @@ internal inline ASTCast* ParseCast(Worker* worker, const Token& identToken) {
     }
 }
 
-ASTCall* ParseCall(Worker* worker, const Token& identToken) {
+ASTCall* ParseCall (Worker* worker, const Token& identToken) {
     if (worker->currentBlock->parent == nullptr) {
         ReportError(worker, worker->token.site, "Can not call functions outside a block!  Did you mean to use :: ?");
     }
