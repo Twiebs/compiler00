@@ -18,6 +18,9 @@
 
 #include "llvm/IR/Module.h"
 
+#include "Parser.hpp"
+#include "Lexer.hpp"
+
 std::ostream& ReportError (const FileSite& site);
 std::ostream& ReportError ();
 
@@ -29,20 +32,15 @@ struct Package {
     llvm::Module* llvmModule;
 };
 
-struct FileLexer {
-	FILE* file = nullptr;
-	char lastChar = 0, nextChar = 0;
-	U32 lineNumber = 0, colNumber = 0;
-	int currentIndentLevel = 0;
-};
-
 struct Worker {
-	FILE* file = nullptr;
-	char lastChar = 0, nextChar = 0;
-	U32 lineNumber = 0, colNumber = 0;
-	int currentIndentLevel = 0;
+	// FILE* file = nullptr;
+	// char lastChar = 0, nextChar = 0;
+	// U32 lineNumber = 0, colNumber = 0;
+	// int currentIndentLevel = 0;
+	// Token token;
 
-	Token token;
+    Parser parser;
+    Lexer lex;
 
     U32 errorCount = 0;
     MemoryArena arena;

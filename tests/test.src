@@ -1,16 +1,8 @@
-IMPORT "IO.bang"
-IMPORT "Vector.bang"
+printf :: (fmt : @U8 ...) FOREIGN
 
-Vector2 :: STRUCT
-	x : F32
-	y : F32
-
-ReturnVector2 :: () >> Vector2
-	vector : Vector2
-	vector.x = 7.0
-	vector.y = 2.0
-	RETURN vector
+FooData :: STRUCT
+	size : U64
 
 Main :: () >> S32
-	vector := ReturnVector2()
+	printf("Hello world!")
 	RETURN 0

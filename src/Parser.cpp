@@ -5,20 +5,18 @@
 #include "AST.hpp"
 #include "Build.hpp"
 
+#include "Parser.hpp"
 
 void PushWork (const std::string& filename);
 
-void EatLine(Worker* worker);
-void NextToken(Worker* worker);
+static ASTNode* ParseStatement(Worker* worker);
+static ASTExpression* ParseExpr(Worker* worker);
+static ASTNode* ParseReturn(Worker* worker);
 
-internal ASTNode* ParseStatement(Worker* worker);
-internal ASTExpression* ParseExpr(Worker* worker);
-internal ASTNode* ParseReturn(Worker* worker);
-
-internal inline ASTNode* ParseIdentifier (Worker* worker);
-internal inline ASTNode* ParseIF (Worker* worker);
-internal inline ASTNode* ParseIter (Worker* worker, const std::string& identName = "");
-internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block = nullptr);
+static inline ASTNode* ParseIdentifier (Worker* worker);
+static inline ASTNode* ParseIF (Worker* worker);
+static inline ASTNode* ParseIter (Worker* worker, const std::string& identName = "");
+static inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block = nullptr);
 
 void ReportError (Worker* worker, FileSite* site, const char* msg, ...);
 void ReportError (Worker* worker, FileSite& site, const std::string& msg);
@@ -55,25 +53,28 @@ void ReportError(Worker* worker, FileSite* site, const char* msg, ...) {
     printf("\033[39m\n");
 }
 
-ASTNode* ParseImport(Worker* worker) {
-	NextToken(worker); // Eat the import statement
-	if (worker->token.type != TOKEN_STRING) {
-		ReportError(worker, worker->token.site, "Import keyword requires a string to follow it");
-		EatLine(worker);	// TODO this is a minor hack ...
+ASTNode* ParseImport (Worker* worker) {
+	worker->lex.nextToken(); // Eat the import statement
+	if (worker->lex.token.type != TOKEN_STRING) {
+		ReportError(worker, worker->lex.token.site, "Import keyword requires a string to follow it");
+		worker->lex.eatLine();	// TODO this is a minor hack ...
 	}
 	else {
-		PushWork(worker->token.string);
+		PushWork(worker->lex.token.string);
 	}
-	NextToken(worker);	 // Eat the import string
+	worker->lex.nextToken();	 // Eat the import string
 	return ParseStatement(worker);
 }
 
 ASTNode* ParseStatement (Worker* worker) {
-	switch (worker->token.type) {
-	case TOKEN_ADD:
+	switch (worker->lex.token.type) {
+
+    case TOKEN_ADD:
 	case TOKEN_SUB:
 	case TOKEN_MUL:
 	case TOKEN_DIV:
+    case TOKEN_CONSTRUCT:
+        
 
 	case TOKEN_IDENTIFIER:	      	return ParseIdentifier(worker);
 	case TOKEN_IF: 					return ParseIF(worker);
@@ -82,42 +83,42 @@ ASTNode* ParseStatement (Worker* worker) {
 	case TOKEN_BLOCK_OPEN:	      	return ParseBlock(worker);
 	case TOKEN_IMPORT:			  	return ParseImport(worker);
 	default:
-		ReportError(worker, &worker->token.site, "Could not parse statement: Unknown token(%s)", worker->token.string.c_str());
-		NextToken(worker);
+		ReportError(worker, &worker->lex.token.site, "Could not parse statement: Unknown token(%s)", worker->lex.token.string.c_str());
+		worker->lex.nextToken();
 		return nullptr;
 	}
 }
 
-internal void SkipEntireBlock (Worker* worker) {
+static void SkipEntireBlock (Worker* worker) {
     int blockLevel = 1;
     while (blockLevel > 0) {
-        if (worker->token.type == TOKEN_BLOCK_OPEN)
+        if (worker->lex.token.type == TOKEN_BLOCK_OPEN)
             blockLevel++;
-        else if (worker->token.type == TOKEN_BLOCK_CLOSE)
+        else if (worker->lex.token.type == TOKEN_BLOCK_CLOSE)
             blockLevel--;
-        NextToken(worker);
+        worker->lex.nextToken();
     }
 }
 
 ASTNode* ParseReturn (Worker* worker) {
-		NextToken(worker);
+		worker->lex.nextToken();
 		auto expr = ParseExpr(worker);
 		// auto returnVal = CreateReturnValue(&worker->arena, expr);
-		auto returnValue = worker->arena.alloc<ASTReturn>(expr, worker->token.site);
+		auto returnValue = worker->arena.alloc<ASTReturn>(expr, worker->lex.token.site);
 		return returnValue;
 }
 
-internal inline ASTCast* ParseCast (Worker* worker, const Token& identToken) {
-    NextToken(worker);
+static inline ASTCast* ParseCast (Worker* worker, const Token& identToken) {
+    worker->lex.nextToken();
     auto typeDefn = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, identToken.string);
     assert(typeDefn->nodeType == AST_DEFINITION);
     auto expr = ParseExpr(worker);
 
-    if (worker->token.type != TOKEN_PAREN_CLOSE) {
-        ReportError(worker, &worker->token.site, "expected close parren enlosing expression when casting to type %s", identToken.string.c_str());
+    if (worker->lex.token.type != TOKEN_PAREN_CLOSE) {
+        ReportError(worker, &worker->lex.token.site, "expected close parren enlosing expression when casting to type %s", identToken.string.c_str());
         return nullptr;
     } else {
-        NextToken(worker);
+        worker->lex.nextToken();
         auto cast = CreateCast(&worker->arena, typeDefn, expr);
         return cast;
     }
@@ -125,20 +126,20 @@ internal inline ASTCast* ParseCast (Worker* worker, const Token& identToken) {
 
 ASTCall* ParseCall (Worker* worker, const Token& identToken) {
     if (worker->currentBlock->parent == nullptr) {
-        ReportError(worker, worker->token.site, "Can not call functions outside a block!  Did you mean to use :: ?");
+        ReportError(worker, worker->lex.token.site, "Can not call functions outside a block!  Did you mean to use :: ?");
     }
 
 	std::vector<ASTExpression*> args;
-	NextToken(worker); // Eat the open paren
-	while (worker->token.type != TOKEN_PAREN_CLOSE) {
+	worker->lex.nextToken(); // Eat the open paren
+	while (worker->lex.token.type != TOKEN_PAREN_CLOSE) {
 		ASTExpression* expr = ParseExpr(worker);
 		if (expr == nullptr) {
-            ReportError(worker, &worker->token.site, "Could not resolve expression for argument at index %d in call to function named: %s", args.size(), identToken.string.c_str());
+            ReportError(worker, &worker->lex.token.site, "Could not resolve expression for argument at index %d in call to function named: %s", args.size(), identToken.string.c_str());
 		} else {
 			args.push_back(expr);
 		}
 	}
-	NextToken(worker);		// Eat the close paren
+	worker->lex.nextToken();		// Eat the close paren
 
 	ASTCall* call = CreateCall(&worker->arena, &args[0], args.size(), identToken.string);
 	return call;
@@ -148,12 +149,12 @@ auto ParseMemberAccess = [](Worker* worker, ASTVariable* structVar, ASTMemberAcc
 	auto structType = (ASTStruct*)structVar->type;
 	if (structType == nullptr) {
 		std::vector<char*> memberNames;
-		while (worker->token.type == TOKEN_ACCESS) {
-			NextToken(worker);
-			if (worker->token.type != TOKEN_IDENTIFIER)
-				ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
-			memberNames.push_back((char*)Allocate(&worker->arena, worker->token.string.length() + 1));
-			NextToken(worker);
+		while (worker->lex.token.type == TOKEN_ACCESS) {
+			worker->lex.nextToken();
+			if (worker->lex.token.type != TOKEN_IDENTIFIER)
+				ReportError(worker, &worker->lex.token.site, "A struct member access must reference an identifier");
+			memberNames.push_back((char*)Allocate(&worker->arena, worker->lex.token.string.length() + 1));
+			worker->lex.nextToken();
 		}
 		memberAccess->memberCount = memberNames.size();
 		memberAccess->memberNames = (char**)Allocate(&worker->arena, memberNames.size() * sizeof(char*));
@@ -163,18 +164,18 @@ auto ParseMemberAccess = [](Worker* worker, ASTVariable* structVar, ASTMemberAcc
 
 		std::vector<U32> indices;
 		auto currentStruct = structType;
-		while (worker->token.type == TOKEN_ACCESS) {
-			NextToken(worker); // eat the member access
-			auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
+		while (worker->lex.token.type == TOKEN_ACCESS) {
+			worker->lex.nextToken(); // eat the member access
+			auto memberIndex = GetMemberIndex(currentStruct, worker->lex.token.string);
 			if (memberIndex == -1) {
-				ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
+				ReportError(worker, worker->lex.token.site, worker->lex.token.string + " does not name a member in struct '" + currentStruct->name + "'");
 			} else {
 				auto memberType = currentStruct->members[memberIndex].type;
 				if(memberType->nodeType == AST_STRUCT)
 					currentStruct = (ASTStruct*)memberType;
 			}
 			indices.push_back(memberIndex);
-			NextToken(worker);	// eat the member ident
+			worker->lex.nextToken();	// eat the member ident
 		}
 		memberAccess->memberCount = indices.size();
 		memberAccess->indices = (U32*)Allocate(&worker->arena, indices.size() * sizeof(U32));
@@ -184,14 +185,14 @@ auto ParseMemberAccess = [](Worker* worker, ASTVariable* structVar, ASTMemberAcc
 
 
 ASTExpression* ParsePrimaryExpr(Worker* worker) {
-	switch (worker->token.type) {
+	switch (worker->lex.token.type) {
 
 	// TODO don't recreate true and false literals every time one is required
 	case TOKEN_TRUE:
-		NextToken(worker);
+		worker->lex.nextToken();
 		return CreateIntegerLiteral(&worker->arena, 1);
 	case TOKEN_FALSE:
-		NextToken(worker);
+		worker->lex.nextToken();
 		return CreateIntegerLiteral(&worker->arena, 0);
 
 	case TOKEN_ADDRESS:
@@ -199,40 +200,40 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 	case TOKEN_LOGIC_NOT:
 	case TOKEN_IDENTIFIER: {
 		UnaryOperator unary = UNARY_LOAD;
-		if (worker->token.type == TOKEN_ADDRESS) {
+		if (worker->lex.token.type == TOKEN_ADDRESS) {
 			unary = UNARY_ADDRESS;
-			NextToken(worker);	//Eat the pointer token
-		} else if (worker->token.type == TOKEN_VALUE) {
+			worker->lex.nextToken();	//Eat the pointer token
+		} else if (worker->lex.token.type == TOKEN_VALUE) {
 			unary = UNARY_VALUE;
-			NextToken(worker);	//Eat the deref token
-		} else if (worker->token.type == TOKEN_LOGIC_NOT) {
+			worker->lex.nextToken();	//Eat the deref token
+		} else if (worker->lex.token.type == TOKEN_LOGIC_NOT) {
 			unary = UNARY_NOT;
-			NextToken(worker);
+			worker->lex.nextToken();
 		}
 
-		Token identToken = worker->token;
-		NextToken(worker); // Eat the identifier
+		Token identToken = worker->lex.token;
+		worker->lex.nextToken(); // Eat the identifier
 		// TODO more robust error checking when receving statement tokens in an expression
         ASTNode* node;
-		switch (worker->token.type) {
+		switch (worker->lex.token.type) {
 			case TOKEN_TYPE_DECLARE:
 			case TOKEN_TYPE_DEFINE:
 			case TOKEN_TYPE_INFER:
 			case TOKEN_TYPE_RETURN:
-				ReportError(worker, worker->token.site, "Unexpected token when parsing expression.	Token '" + worker->token.string + "' cannot be used in an expression");
-				NextToken(worker);	// eat whatever that token was... hopefuly this will ha
+				ReportError(worker, worker->lex.token.site, "Unexpected token when parsing expression.	Token '" + worker->lex.token.string + "' cannot be used in an expression");
+				worker->lex.nextToken();	// eat whatever that token was... hopefuly this will ha
 				break;
 			default:
                 node = FindNodeWithIdent(worker->currentBlock, identToken.string);
 				if (node == nullptr) {
 					ReportError(worker, &identToken.site, "There is no expression matching the identifier (%s)", identToken.string.c_str());
-					NextToken (worker);
+					worker->lex.nextToken();
 					return nullptr;
 				}
 				break;
 		}
 
-		if (worker->token.type == TOKEN_PAREN_OPEN) {
+		if (worker->lex.token.type == TOKEN_PAREN_OPEN) {
             if (node->nodeType == AST_DEFINITION || node->nodeType == AST_STRUCT) {
                 auto cast = ParseCast(worker, identToken);
                 return (ASTExpression*)cast;
@@ -240,7 +241,7 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
                 auto call = ParseCall(worker, identToken);
                 return (ASTExpression*)call;
             }
-		} else if (worker->token.type == TOKEN_ACCESS) {
+		} else if (worker->lex.token.type == TOKEN_ACCESS) {
 			auto structVar = (ASTVariable*)node;
 			auto structDefn = (ASTStruct*)structVar->type;
 			auto expr = CreateMemberExpr(&worker->arena, structVar, unary);
@@ -248,27 +249,27 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 			return expr;
 
 //			if (structDefn == nullptr) {
-//				while (worker->token.type == TOKEN_ACCESS) {
-//					NextToken(worker);
-//					if (worker->token.type != TOKEN_IDENTIFIER)
-//						ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
-//					memberNames.push_back(worker->token.string);
-//					NextToken(worker);
+//				while (worker->lex.token.type == TOKEN_ACCESS) {
+//					worker->lex.nextToken();
+//					if (worker->lex.token.type != TOKEN_IDENTIFIER)
+//						ReportError(worker, &worker->lex.token.site, "A struct member access must reference an identifier");
+//					memberNames.push_back(worker->lex.token.string);
+//					worker->lex.nextToken();
 //				}
 //
 //				//auto expr = CreateMemberExpr(&worker->arena, structVar, unary, &indices[0], indices.size());
 //				auto expr = CreateMemberExpr(&worker->arena, structVar, unary, memberNames);
 //				return expr;
 ////			} else {
-//				if (structDefn->nodeType != AST_STRUCT) ReportError(worker, worker->token.site, identToken.string + " does not name a struct type!  It is a " + ToString(node->nodeType));
+//				if (structDefn->nodeType != AST_STRUCT) ReportError(worker, worker->lex.token.site, identToken.string + " does not name a struct type!  It is a " + ToString(node->nodeType));
 //				auto currentStruct = structDefn;
 //				ASTDefinition* exprType = nullptr;
 //				std::vector<U32> indices;
-//				while(worker->token.type == TOKEN_ACCESS) {
-//					NextToken(worker); // eat the member access
-//					auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
+//				while(worker->lex.token.type == TOKEN_ACCESS) {
+//					worker->lex.nextToken(); // eat the member access
+//					auto memberIndex = GetMemberIndex(currentStruct, worker->lex.token.string);
 //					if (memberIndex == -1) {
-//						ReportError(worker, worker->token.site, worker->token.string + " does not name a member in struct '" + currentStruct->name + "'");
+//						ReportError(worker, worker->lex.token.site, worker->lex.token.string + " does not name a member in struct '" + currentStruct->name + "'");
 //					} else {
 //						indices.push_back(memberIndex);
 //						auto memberType = currentStruct->members[memberIndex].type;
@@ -276,7 +277,7 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 //							currentStruct = (ASTStruct*)memberType;
 //						exprType = memberType;
 //					}
-//					NextToken(worker);	// eat the member ident
+//					worker->lex.nextToken();	// eat the member ident
 //				}
 //
 //				auto expr = CreateMemberExpr(&worker->arena, structVar, unary, memberNames);
@@ -295,44 +296,44 @@ ASTExpression* ParsePrimaryExpr(Worker* worker) {
 	} break;
 
 	case TOKEN_PAREN_OPEN: {
-		NextToken(worker); // Eat the open paren
+		worker->lex.nextToken(); // Eat the open paren
 		auto expr = ParseExpr(worker);
-		if (worker->token.type != TOKEN_PAREN_CLOSE) {
-			ReportError(worker, worker->token.site, "Expected close paren in expression");
+		if (worker->lex.token.type != TOKEN_PAREN_CLOSE) {
+			ReportError(worker, worker->lex.token.site, "Expected close paren in expression");
 		}
-		NextToken(worker); // Eat the close paren
+		worker->lex.nextToken(); // Eat the close paren
 		return expr;
 	} break;
 
 		case TOKEN_NUMBER: {
 				LOG_VERBOSE("Parsing a numberExpression!");
-				auto dotPos = worker->token.string.find(".");
+				auto dotPos = worker->lex.token.string.find(".");
 				bool isFloat = dotPos == std::string::npos ? false : true;
 				if (isFloat) {
-                    if(worker->token.string.substr(dotPos + 1).find(".") != std::string::npos) {
-                            ReportError(worker, worker->token.site, "Floating Point value contains two decimal points!");
+                    if(worker->lex.token.string.substr(dotPos + 1).find(".") != std::string::npos) {
+                            ReportError(worker, worker->lex.token.site, "Floating Point value contains two decimal points!");
                     }
-                    auto value = std::stof(worker->token.string);
+                    auto value = std::stof(worker->lex.token.string);
                     auto result = CreateFloatLiteral(&worker->arena, value);
-                    NextToken(worker); // Eat the float literal
+                    worker->lex.nextToken(); // Eat the float literal
                     return result;
 				} else {
-                    auto value = std::stoi(worker->token.string);
+                    auto value = std::stoi(worker->lex.token.string);
                     auto result = CreateIntegerLiteral(&worker->arena, value);
-                    NextToken(worker); // Eat the int literal
+                    worker->lex.nextToken(); // Eat the int literal
                     return result;
 				}
 		}
 
 		case TOKEN_STRING: {
-			auto str = CreateStringLiteral (&worker->arena, worker->token.string);
-			NextToken(worker); // Eat the string token
+			auto str = CreateStringLiteral (&worker->arena, worker->lex.token.string);
+			worker->lex.nextToken(); // Eat the string token
 			return str;
 		}
 
 		default:
-            ReportError(worker, &worker->token.site, "Error when expecting expression: Unknown Token(%s)", worker->token.string.c_str());
-            NextToken(worker);
+            ReportError(worker, &worker->lex.token.site, "Error when expecting expression: Unknown Token(%s)", worker->lex.token.string.c_str());
+            worker->lex.nextToken();
             return nullptr;
 		}
 		// This is dead code it will never happen.
@@ -345,15 +346,15 @@ ASTExpression* ParseExprRHS (int exprPrec, ASTExpression* lhs, Worker* worker) {
 	while (true) {
         // If the token prec is less than 0 that means that this is not a binary opperator
         // And we dont have to do anything aside from returning the allready parsed expression
-        auto tokenPrec = GetTokenPrecedence(worker->token);
+        auto tokenPrec = GetTokenPrecedence(worker->lex.token);
         if (tokenPrec < 0) {
             return lhs;
         }
 
         // We know that the currentToken is a binop
         // Possibly?	Yes!
-        auto binopToken = worker->token;
-        NextToken(worker);		// Eat the binop
+        auto binopToken = worker->lex.token;
+        worker->lex.nextToken();		// Eat the binop
 
         // We have a binop lets see what is on the other side!
         ASTExpression* rhs = ParsePrimaryExpr(worker);
@@ -362,7 +363,7 @@ ASTExpression* ParseExprRHS (int exprPrec, ASTExpression* lhs, Worker* worker) {
             return nullptr;
         }
 
-        auto nextPrec = GetTokenPrecedence (worker->token);
+        auto nextPrec = GetTokenPrecedence (worker->lex.token);
         if (tokenPrec < nextPrec) {
             rhs = ParseExprRHS(tokenPrec + 1, rhs, worker);
             if (rhs == nullptr) {
@@ -383,57 +384,103 @@ ASTExpression* ParseExpr(Worker* worker) {
 		return ParseExprRHS (0, lhs, worker);
 }
 
+static inline bool IsBinaryOperator(TokenType type) {
+    switch (type) {
+        case TOKEN_ADD:
+        case TOKEN_SUB:
+        case TOKEN_MUL:
+        case TOKEN_DIV:
+        case TOKEN_CONSTRUCT:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static void ExpectAndEatToken (Worker* worker, TokenType expectedToken) {
+    if (worker->lex.token.type != expectedToken) {
+        ReportError(worker, &worker->lex.token.site, "Expected token: %s");
+        return;
+    }
+
+    worker->lex.nextToken();
+}
+
+static void ExpectToken(Worker* worker, TokenType expectedToken) {
+    if (worker->lex.token.type != expectedToken) {
+        ReportError(worker, &worker->lex.token.site, "Expected token: %s");
+        return;
+    }
+}
 
 
-internal inline ASTNode* ParseIdentifier (Worker* worker) {
-	auto identToken = worker->token;	// save the token for now
+
+static void ParseOperatorOverload(Worker* worker) {
+    auto& lex = worker->lex;
+    assert(lex.token.type == TOKEN_CONSTRUCT && "Only construction operator supported currently");
+    ExpectAndEatToken(worker, TOKEN_TYPE_DEFINE);
+    ExpectToken(worker, TOKEN_PAREN_OPEN);
+
+}
+
+static void ParseTopLevelStatement (Worker* worker) {
+    auto& lex = worker->lex;
+    if (lex.token.type == TOKEN_IDENTIFIER)
+        ParseIdentifier(worker);
+    else if (IsBinaryOperator(lex.token.type)) {
+        ParseOperatorOverload(worker);
+    }
+}
+
+static inline ASTNode* ParseIdentifier (Worker* worker) {
+	auto identToken = worker->lex.token;	// save the token for now
 	auto node = FindNodeWithIdent(worker->currentBlock, identToken.string);
-	NextToken(worker);	// Eat the identifier
+	worker->lex.nextToken();	// Eat the identifier
 
 	// The identifier that we are parsing may exist, may exit but be unresolved, or not exist at all
 	// Depending on what we do with the identifer will determine if these factors matter
-	switch(worker->token.type) {
+	switch(worker->lex.token.type) {
 	case TOKEN_TYPE_DECLARE: {
 		if (node != nullptr) {
 			ReportError(worker, identToken.site, " redefintion of identifier " + identToken.string + " first declared at site TODO SITE");
 		}
 
-		NextToken(worker); // Eat the ':'
+		worker->lex.nextToken(); // Eat the ':'
 
 
-		if (worker->token.type == TOKEN_ITER) {
+		if (worker->lex.token.type == TOKEN_ITER) {
 			auto iter = ParseIter(worker, identToken.string);
 			return iter;
 		}
 
         // @VARIABLE
 		else {
-			auto var = CreateVariable(&worker->arena, worker->token.site, identToken.string.c_str());
+			auto var = CreateVariable(&worker->arena, worker->lex.token.site, identToken.string.c_str());
             AssignIdent(worker->currentBlock, var, identToken.string);
 
 			// TODO ParseUnaryOperators needs to handle double / triple / etc pointers
 			// Or whatever other unary operators are defined!
 			auto parseUnaryOperators = [&worker, &var]() {
-				if (worker->token.type == TOKEN_ADDRESS) {
+				if (worker->lex.token.type == TOKEN_ADDRESS) {
 					var->isPointer = true;
-					NextToken(worker);
+					worker->lex.nextToken();
 				}
 			};
 
 			parseUnaryOperators();
-			if (worker->token.type != TOKEN_IDENTIFIER) {
-                if (worker->token.type == TOKEN_STRUCT) {
-                    ReportError(worker, worker->token.site, "You accidently forgot the extra ':' when declaring a struct");
+			if (worker->lex.token.type != TOKEN_IDENTIFIER) {
+                if (worker->lex.token.type == TOKEN_STRUCT) {
+                    ReportError(worker, worker->lex.token.site, "You accidently forgot the extra ':' when declaring a struct");
                 } else {
-                    ReportError(worker, worker->token.site, "type token '" + worker->token.string + "' is not an idnetifier!");
+                    ReportError(worker, worker->lex.token.site, "type lex.token '" + worker->lex.token.string + "' is not an idnetifier!");
                 }
 			} else {
-                auto type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->token.string);
+                auto type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->lex.token.string);
 				if (type == nullptr) {
-					var->typeName = (char*)Allocate(&worker->arena, worker->token.string.size() + 1);
-					memcpy(var->typeName, worker->token.string.c_str(), worker->token.string.size() + 1);
+					var->typeName = (char*)Allocate(&worker->arena, worker->lex.token.string.size() + 1);
+					memcpy(var->typeName, worker->lex.token.string.c_str(), worker->lex.token.string.size() + 1);
 				} else if (type->nodeType != AST_DEFINITION && type->nodeType != AST_STRUCT) {
-                    ReportError(worker, &worker->token.site, "%s does not name a type!  It names a %s", worker->token.string.c_str(), ToString(type->nodeType).c_str());
+                    ReportError(worker, &worker->lex.token.site, "%s does not name a type!  It names a %s", worker->lex.token.string.c_str(), ToString(type->nodeType).c_str());
                 } else {
 					var->type = type;
 				}
@@ -441,9 +488,9 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 
 
 			// Now we determine if this variable will be initalzied
-			NextToken(worker); // eat type
-			if (worker->token.type == TOKEN_EQUALS) {
-				NextToken(worker);		//Eat the assignment operator
+			worker->lex.nextToken(); // eat type
+			if (worker->lex.token.type == TOKEN_EQUALS) {
+				worker->lex.nextToken();		//Eat the assignment operator
 				var->initalExpression = ParseExpr(worker);	// We parse the inital expression for the variable!
 				LOG_DEBUG(ident->site << "Identifier(" << ident->name << ") of Type(" << typeIdent->name << ") declared with an inital expression specified!");
 			} else {
@@ -455,20 +502,20 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 
 
 	case TOKEN_TYPE_INFER: {
-		NextToken(worker);	// Eat the inference
+		worker->lex.nextToken();	// Eat the inference
 		auto expr = ParseExpr(worker);
         if (node != nullptr) {
             ReportError(worker, identToken.site, "Redefinition of identifier: " + identToken.string);
             return nullptr;
         } else {
-            auto var = CreateVariable(&worker->arena, worker->token.site, identToken.string.c_str(), expr);
+            auto var = CreateVariable(&worker->arena, worker->lex.token.site, identToken.string.c_str(), expr);
             AssignIdent(worker->currentBlock, var, identToken.string);
             return var;
         }
 	} break;
 
 	case TOKEN_TYPE_DEFINE: {
-		NextToken(worker); // Eat the typedef
+		worker->lex.nextToken(); // Eat the typedef
 
 
 		std::function<ASTFunctionSet*(ASTBlock*)> getOrCreateFunctionSet = [&worker, &identToken, &getOrCreateFunctionSet](ASTBlock* block) -> ASTFunctionSet* {
@@ -491,7 +538,7 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 
 
         // @FUNCTION
-		if (worker->token.type == TOKEN_PAREN_OPEN) {
+		if (worker->lex.token.type == TOKEN_PAREN_OPEN) {
 			ASTFunctionSet* funcSet = (ASTFunctionSet*)node;
 			if (funcSet == nullptr) {
 				funcSet = getOrCreateFunctionSet(worker->currentBlock);
@@ -522,13 +569,13 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 				function = CreateFunction(&worker->arena, worker->currentBlock, identToken.string, funcSet);
             }
 
-			NextToken(worker);
+			worker->lex.nextToken();
 
-			while (worker->token.type != TOKEN_PAREN_CLOSE) {
-				if (worker->token.type == TOKEN_DOTDOT) {
+			while (worker->lex.token.type != TOKEN_PAREN_CLOSE) {
+				if (worker->lex.token.type == TOKEN_DOTDOT) {
                     function->isVarArgs = true;
-                    NextToken(worker);
-                    if (worker->token.type != TOKEN_PAREN_CLOSE) {
+                    worker->lex.nextToken();
+                    if (worker->lex.token.type != TOKEN_PAREN_CLOSE) {
                         ReportError(worker, "VarArgs must appear at the end of the argument list");
                     } else {
                         break;
@@ -537,40 +584,40 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 
                 ASTNode* node = ParseStatement(worker);
 				if (node == nullptr) {
-					ReportError(worker, worker->token.site, "Could not parse arguments for function definition " + identToken.string);
+					ReportError(worker, worker->lex.token.site, "Could not parse arguments for function definition " + identToken.string);
 				} else if (node->nodeType != AST_VARIABLE) {
-					ReportError(worker, worker->token.site, "Function argument is not a varaibe!");
+					ReportError(worker, worker->lex.token.site, "Function argument is not a varaibe!");
 				} else {
 					auto var = (ASTVariable*) node;
 					function->args.push_back(var);
 				}
 			}
 
-			NextToken(worker); // Eat the close ')'
+			worker->lex.nextToken(); // Eat the close ')'
 
-			if (worker->token.type == TOKEN_TYPE_RETURN) {
-				NextToken(worker);
-				if (worker->token.type != TOKEN_IDENTIFIER) {
+			if (worker->lex.token.type == TOKEN_TYPE_RETURN) {
+				worker->lex.nextToken();
+				if (worker->lex.token.type != TOKEN_IDENTIFIER) {
 					LOG_ERROR("expected a type after the return operator");
 					return nullptr;
 				}
 
-				function->returnType = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->token.string);
+				function->returnType = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->lex.token.string);
 				if (function->returnType == nullptr) {
-					ReportError(worker, worker->token.site, "Could not resolve return type for function " + identToken.string);
+					ReportError(worker, worker->lex.token.site, "Could not resolve return type for function " + identToken.string);
 				} else if (function->returnType->nodeType != AST_DEFINITION && function->returnType->nodeType != AST_STRUCT) {
-					ReportError(worker, worker->token.site, "Identifier " + worker->token.string + " does not name a type");
+					ReportError(worker, worker->lex.token.site, "Identifier " + worker->lex.token.string + " does not name a type");
 				}
 
-				NextToken(worker);
+				worker->lex.nextToken();
 			}
 
-			// There was no type return ':>' operator after the argument list but an expected token followed.
+			// There was no type return ':>' operator after the argument list but an expected lex.token followed.
 			// We assume it was intentional and that the return type is implicitly void
-			else if (worker->token.type == TOKEN_BLOCK_OPEN || worker->token.type == TOKEN_FOREIGN) {
+			else if (worker->lex.token.type == TOKEN_BLOCK_OPEN || worker->lex.token.type == TOKEN_FOREIGN) {
 				function->returnType = global_voidType;
 			} else {
-				ReportError(worker, worker->token.site, "Expected new block or statemnt after function defininition");
+				ReportError(worker, worker->lex.token.site, "Expected new block or statemnt after function defininition");
 			}
 
 
@@ -590,7 +637,7 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 						} else if (currentBlock->parent != nullptr) {
 							auto parentFunctionSet = (ASTFunctionSet*)FindNodeWithIdent(currentBlock->parent, createdFunction->name);
 							if (parentFunctionSet->nodeType != AST_FUNCTION_SET) {
-								ReportError(worker, &worker->token.site, "Identifier in blocks parrent scope was not a function!");
+								ReportError(worker, &worker->lex.token.site, "Identifier in blocks parrent scope was not a function!");
 							} else if (parentFunctionSet != nullptr) {
 								return CheckFunctionArgumentCollision(createdFunction, parentFunctionSet, currentBlock->parent);
 							}
@@ -613,31 +660,31 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
                 if (matchingFunction->returnType != function->returnType) {
                     printf("Return types do not match!  Can not overload functions only by return type");
                 }
-            } else if (worker->token.type == TOKEN_BLOCK_OPEN) {
+            } else if (worker->lex.token.type == TOKEN_BLOCK_OPEN) {
 				ParseBlock(worker, function);
 
                 // TODO change this to parseStatement to get the nextblock
 //                // A new scope has been opened...
-//                NextToken(worker); // Eat the scope
+//                worker->lex.nextToken(); // Eat the scope
 //
-//                while (worker->token.type != TOKEN_BLOCK_CLOSE && worker->token.type != TOKEN_EOF) {
+//                while (worker->lex.token.type != TOKEN_BLOCK_CLOSE && worker->lex.token.type != TOKEN_EOF) {
 //                    // Here we are going to push back nullptrs into the function because they will never
 //                    // Get to the codegenration phase anyway..	Instead of branching we can juse do this and not care
 //                    ASTNode* node = ParseStatement(worker);
 //                    function->members.push_back(node);
 //                }
 
-            } else if (worker->token.type != TOKEN_FOREIGN) {
-                ReportError(worker, worker->token.site, "Expected a new scope to open after function definition!");
+            } else if (worker->lex.token.type != TOKEN_FOREIGN) {
+                ReportError(worker, worker->lex.token.site, "Expected a new scope to open after function definition!");
                 LOG_INFO("Did you misspell foreign?");
                 return nullptr;
             } else {
                 if (function->parent->parent != nullptr) {
                     // This cant even happen there are no longer lambdas!
-                    ReportError(worker, worker->token.site, "Cannot create a foreign function nested in another block!	Foreign functions must be declared in the global scope!");
+                    ReportError(worker, worker->lex.token.site, "Cannot create a foreign function nested in another block!	Foreign functions must be declared in the global scope!");
                     return nullptr;
                 }
-				NextToken(worker);	// Eat the foreign token!
+				worker->lex.nextToken();	// Eat the foreign lex.token!
             }
 
             worker->currentBlock = function->parent;
@@ -645,38 +692,38 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
         }
 
 	// @STRUCT
-	else if (worker->token.type == TOKEN_STRUCT) {
-		NextToken(worker); // Eat the struct keyword
+	else if (worker->lex.token.type == TOKEN_STRUCT) {
+		worker->lex.nextToken(); // Eat the struct keyword
 		if (node != nullptr) {
 			ReportError(worker, identToken.site, "Struct Redefinition");
 		}
 
-		if (worker->token.type == TOKEN_BLOCK_OPEN) {
-			NextToken(worker); // Eat the open scope
+		if (worker->lex.token.type == TOKEN_BLOCK_OPEN) {
+			worker->lex.nextToken(); // Eat the open scope
 
             std::vector<ASTStructMember> members;
-			while (worker->token.type != TOKEN_BLOCK_CLOSE) {
-				if (worker->token.type != TOKEN_IDENTIFIER) {
-					ReportError(worker, worker->token.site, "All statements inside structDefns must be identifier decls");
+			while (worker->lex.token.type != TOKEN_BLOCK_CLOSE) {
+				if (worker->lex.token.type != TOKEN_IDENTIFIER) {
+					ReportError(worker, worker->lex.token.site, "All statements inside structDefns must be identifier decls");
 				}
 
-				auto memberToken = worker->token; // Copy the ident token
-				NextToken(worker); // Eat the identifier token;
+				auto memberToken = worker->lex.token; // Copy the ident lex.token
+				worker->lex.nextToken(); // Eat the identifier lex.token;
 
-				if (worker->token.type != TOKEN_TYPE_DECLARE) {
-					ReportError(worker, worker->token.site, "All identifiers inside a struct defn must be member declarations!");
+				if (worker->lex.token.type != TOKEN_TYPE_DECLARE) {
+					ReportError(worker, worker->lex.token.site, "All identifiers inside a struct defn must be member declarations!");
 				}
 
-				NextToken(worker); // Eat the typedecl
+				worker->lex.nextToken(); // Eat the typedecl
 				bool isPointer = false;
-				if (worker->token.type == TOKEN_ADDRESS) {
+				if (worker->lex.token.type == TOKEN_ADDRESS) {
 					isPointer = true;
-					NextToken(worker);
+					worker->lex.nextToken();
 				}
 
-				auto typedefn = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->token.string);
+				auto typedefn = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->lex.token.string);
                 if (typedefn == nullptr) {
-                    ReportError(worker, worker->token.site, "Could not resolve type" + worker->token.string);
+                    ReportError(worker, worker->lex.token.site, "Could not resolve type" + worker->lex.token.string);
                 }
 				members.push_back(ASTStructMember());
                 auto& structMember = members[members.size() - 1];
@@ -686,10 +733,10 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 				structMember.isPointer = isPointer;
 				structMember.type = typedefn;
 
-				NextToken(worker); // eat the type ident
+				worker->lex.nextToken(); // eat the type ident
 			}
 
-            NextToken(worker); // Eat the close scope
+            worker->lex.nextToken(); // Eat the close scope
 
 			if (members.size() > 0) {
                 auto structDefn = CreateStruct(&worker->arena, identToken.string, &members[0], members.size());
@@ -699,15 +746,15 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 				ReportError(worker, identToken.site, "Structs must contain at least one member");
 			}
 		} else {
-			ReportError(worker, worker->token.site, "Structs must be defined with a block");
+			ReportError(worker, worker->lex.token.site, "Structs must be defined with a block");
 		}
 
 		return ParseStatement(worker); // Consider the struct handeled and just get another node
 		// Most of this requiring to return a node on parsing is a reminatnt of the epxression pased
 		// functional stype language where everything is considered an expression
 	} else {
-		ReportError(worker, worker->token.site, "Could not define type with identifier: " + identToken.string +" (unknown keyword '" + worker->token.string + "')");
-		NextToken(worker);
+		ReportError(worker, worker->lex.token.site, "Could not define type with identifier: " + identToken.string +" (unknown keyword '" + worker->lex.token.string + "')");
+		worker->lex.nextToken();
 		return nullptr;
 	}
 } break;
@@ -728,14 +775,14 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 		auto memberOperation = CreateMemberOperation(&worker->arena, structVar, (Operation)0, 0);
 		ParseMemberAccess(worker, structVar, &memberOperation->access);
 		Operation operation;
-		switch (worker->token.type) {
+		switch (worker->lex.token.type) {
 			case TOKEN_EQUALS:		operation = OPERATION_ASSIGN; 	break;
 			case TOKEN_ADD_EQUALS:	operation = OPERATION_ADD;		break;
 			case TOKEN_SUB_EQUALS:	operation = OPERATION_SUB;		break;
 			case TOKEN_MUL_EQUALS:	operation = OPERATION_MUL;		break;
 			case TOKEN_DIV_EQUALS:	operation = OPERATION_DIV;		break;
-			default: ReportError(worker, worker->token.site, "Unkown operator: " + worker->token.string);
-		} NextToken(worker);
+			default: ReportError(worker, worker->lex.token.site, "Unkown operator: " + worker->lex.token.string);
+		} worker->lex.nextToken();
 
 		memberOperation->operation = operation;
 		auto expr = ParseExpr(worker);
@@ -743,31 +790,31 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 		return memberOperation;
 
 	//	std::vector<std::string> memberNames;
-//		while (worker->token.type == TOKEN_ACCESS) {
-//			NextToken(worker);
-//			if (worker->token.type != TOKEN_IDENTIFIER)
-//				ReportError(worker, &worker->token.site, "A struct member access must reference an identifier");
-//			memberNames.push_back(worker->token.string);
-//			NextToken(worker);
+//		while (worker->lex.token.type == TOKEN_ACCESS) {
+//			worker->lex.nextToken();
+//			if (worker->lex.token.type != TOKEN_IDENTIFIER)
+//				ReportError(worker, &worker->lex.token.site, "A struct member access must reference an identifier");
+//			memberNames.push_back(worker->lex.token.string);
+//			worker->lex.nextToken();
 //		}
 //
 
 
 //		auto currentStruct = structDefn;
 //		std::vector<U32> memberIndices;
-//		while (worker->token.type == TOKEN_ACCESS) {
-//			NextToken(worker);	// Eat the access token
-//			if (worker->token.type != TOKEN_IDENTIFIER) ReportError(worker, worker->token.site, "Member access must reference an identifier");
-//			auto memberIndex = GetMemberIndex(currentStruct, worker->token.string);
+//		while (worker->lex.token.type == TOKEN_ACCESS) {
+//			worker->lex.nextToken();	// Eat the access lex.token
+//			if (worker->lex.token.type != TOKEN_IDENTIFIER) ReportError(worker, worker->lex.token.site, "Member access must reference an identifier");
+//			auto memberIndex = GetMemberIndex(currentStruct, worker->lex.token.string);
 //			if (memberIndex == -1) {
-//                ReportError(worker, worker->token.site, "");    // TODO fix these stupid log messages
-//                printf("%s does not contain any member named %s", structDefn->name, worker->token.string.c_str());
+//                ReportError(worker, worker->lex.token.site, "");    // TODO fix these stupid log messages
+//                printf("%s does not contain any member named %s", structDefn->name, worker->lex.token.string.c_str());
 //            }
 //			memberIndices.push_back(memberIndex);
 //
 //			auto memberType = currentStruct->members[memberIndex].type;
 //			if(memberType->nodeType == AST_STRUCT) currentStruct = (ASTStruct*)memberType;
-//			NextToken(worker);	// Eat the member identifier
+//			worker->lex.nextToken();	// Eat the member identifier
 //		}
 
 
@@ -779,14 +826,14 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 	case TOKEN_MUL_EQUALS:
 	case TOKEN_DIV_EQUALS:
 		Operation operation;
-		switch (worker->token.type) {
+		switch (worker->lex.token.type) {
 		case TOKEN_EQUALS:			operation = OPERATION_ASSIGN; break;
 		case TOKEN_ADD_EQUALS:	operation = OPERATION_ADD;		break;
 		case TOKEN_SUB_EQUALS:	operation = OPERATION_SUB;		break;
 		case TOKEN_MUL_EQUALS:	operation = OPERATION_MUL;		break;
 		case TOKEN_DIV_EQUALS:	operation = OPERATION_DIV;		break;
-		default: ReportError(worker, worker->token.site, "Unkown operator: " + worker->token.string);
-		} NextToken(worker);	// Eat the operator
+		default: ReportError(worker, worker->lex.token.site, "Unkown operator: " + worker->lex.token.string);
+		} worker->lex.nextToken();	// Eat the operator
 
 		auto var = (ASTVariable*)node;
 		if (var == nullptr) {
@@ -805,65 +852,65 @@ internal inline ASTNode* ParseIdentifier (Worker* worker) {
 	return nullptr;
 }
 
-internal inline ASTNode* ParseIF(Worker* worker) {
-	NextToken(worker);	// Eat the IF token
+static inline ASTNode* ParseIF(Worker* worker) {
+	worker->lex.nextToken();	// Eat the IF lex.token
 	auto expr = ParseExpr(worker);
 	if (!expr) {
-		ReportError(worker, worker->token.site, "Could not parse expresion for IF statement evaluation");
+		ReportError(worker, worker->lex.token.site, "Could not parse expresion for IF statement evaluation");
 	}
 
 	auto ifStatement = CreateIfStatement(&worker->arena, expr);
 	auto body = ParseStatement(worker);
 	ifStatement->ifBody = body;
 
-	if (worker->token.type == TOKEN_ELSE) {
-		NextToken(worker); //Eat the else keyword!
+	if (worker->lex.token.type == TOKEN_ELSE) {
+		worker->lex.nextToken(); //Eat the else keyword!
 		auto elseBody = ParseStatement(worker);
 		ifStatement->elseBody = elseBody;
 	}
 	return ifStatement;
 }
 
-internal inline ASTNode* ParseIter (Worker* worker, const std::string& identName) {
-	LOG_VERBOSE(worker->token.site << "Parsing a iter statement");
-	NextToken(worker); // Eat the iter
+static inline ASTNode* ParseIter (Worker* worker, const std::string& identName) {
+	LOG_VERBOSE(worker->lex.token.site << "Parsing a iter statement");
+	worker->lex.nextToken(); // Eat the iter
 
 	auto expr = ParseExpr(worker);
-	if (!expr) LOG_ERROR(worker->token.site << "Could not parse expression to the right of iter");
+	if (!expr) LOG_ERROR(worker->lex.token.site << "Could not parse expression to the right of iter");
 
-	if (worker->token.type == TOKEN_TO) {
-		 NextToken(worker); 	// Eat the to
+	if (worker->lex.token.type == TOKEN_TO) {
+		 worker->lex.nextToken(); 	// Eat the to
 		 if (identName != "") {
 			auto block = CreateBlock(&worker->arena, worker->currentBlock);
-			auto var = CreateVariable(&worker->arena, worker->token.site, identName.c_str());
+			auto var = CreateVariable(&worker->arena, worker->lex.token.site, identName.c_str());
 			var->type = global_S32Type;	// HACK
 			var->initalExpression = expr;
 			AssignIdent(block, var, identName);
 
 			auto endExpr = ParseExpr(worker);
-			if (!endExpr) LOG_ERROR(worker->token.site << "Could not parse Expression after TO keyword");
+			if (!endExpr) LOG_ERROR(worker->lex.token.site << "Could not parse Expression after TO keyword");
 			ParseBlock(worker, block);
 			auto iter = CreateIter(&worker->arena, var, expr, endExpr, nullptr, block);
 			return iter;
 
 		} else {
-			ReportError(worker, worker->token.site, "iter statements that iterrate through a range must be declared with an identifier to hold the index!");
+			ReportError(worker, worker->lex.token.site, "iter statements that iterrate through a range must be declared with an identifier to hold the index!");
 			ParseExpr(worker);	//eat the other expr
 			//TODO skip block or somthing?
 			return nullptr;
 		}
 	}
 
-	else if (worker->token.type == TOKEN_BLOCK_OPEN) {
+	else if (worker->lex.token.type == TOKEN_BLOCK_OPEN) {
 		auto block = ParseBlock(worker);
 		LOG_ERROR("Not dealing with these for now");
 	}
 	return nullptr;
 }
 
-internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
-	assert(worker->token.type == TOKEN_BLOCK_OPEN);
-	NextToken(worker);	 // Eat the SCOPE_OPEN
+static inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
+	assert(worker->lex.token.type == TOKEN_BLOCK_OPEN);
+	worker->lex.nextToken();	 // Eat the SCOPE_OPEN
 	auto previousScope = worker->currentBlock;
 	if (block == nullptr) {
 		assert(false && "I dont think that this should ever happen!");
@@ -871,37 +918,85 @@ internal inline ASTNode* ParseBlock (Worker* worker, ASTBlock* block) {
 	}
 
 	worker->currentBlock = block;
-	while (worker->token.type != TOKEN_BLOCK_CLOSE && worker->token.type != TOKEN_EOF) {
+	while (worker->lex.token.type != TOKEN_BLOCK_CLOSE && worker->lex.token.type != TOKEN_END_OF_BUFFER) {
 		auto node = ParseStatement(worker);
 		block->members.push_back(node);
-
 	}
 
-	NextToken(worker);	// Eat the close scope
-	worker->currentBlock = previousScope;
+    auto& lex = worker->lex;
+
+    worker->currentBlock = previousScope;
+    if (lex.token.type == TOKEN_END_OF_BUFFER) {
+        return block;
+    }
+
+	worker->lex.nextToken();	// Eat the close scope
+
 	return block;
 }
 
+static char * ReadFile (const char* filename)  {
+    char* result = nullptr;
+
+    FILE* file = fopen(filename, "r");
+    if (file) {
+        fseek(file, 0, SEEK_END);
+        size_t filesize = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
+        result = (char *)malloc(filesize + 1);
+        fread(result, filesize, 1, file);
+        result[filesize] = 0;
+
+        fclose(file);
+    }
+
+    return result;
+}
+
+ASTNode* Parser::ParseStatement() {
+
+}
+
+void Parser::ParseFile(const std::string& root_directory, const std::string& filename) {
+    this->filename = filename;
+    auto file_buffer = ReadFile((root_directory + filename).c_str());
+    if (file_buffer == nullptr) return;
+
+    lex.SetBuffer(file_buffer);
+    lex.nextToken();
+
+    while (lex.token.type != TOKEN_END_OF_BUFFER) {
+        ParseStatement();
+    }
+
+    free(file_buffer);
+}
+
 void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename) {
-	worker->file = fopen((rootDir + filename).c_str(), "r");
-	if (!worker->file) {
-		ReportError(worker, "Could not open file: " + filename);
-		return;
-	}
-
     auto currentErrorCount = worker->errorCount;
-	worker->nextChar = getc(worker->file);
-	worker->token.site.filename = filename;
-	worker->lineNumber = 1;
-	worker->colNumber = 1;
-	worker->currentIndentLevel = 0;
-	NextToken(worker);
 
-	while (worker->token.type != TOKEN_EOF) {
+    auto fileBuffer = ReadFile(filename.c_str());
+    assert(fileBuffer != nullptr);
+
+    worker->lex.SetBuffer(fileBuffer);
+    worker->lex.token.site.filename = filename;
+    worker->lex.nextToken();
+
+
+	// worker->nextChar = getc(worker->file);
+
+//	worker->lineNumber = 1;
+//	worker->colNumber = 1;
+//	worker->currentIndentLevel = 0;
+
+
+	while (worker->lex.token.type != TOKEN_END_OF_BUFFER) {
 		ParseStatement(worker);
 	}
 
+    free(fileBuffer);
+
     auto errorCount = worker->errorCount - currentErrorCount;
 	LOG_INFO("Parsed " << filename << (errorCount ? ("There were" + std::to_string(errorCount) + "errors") : ""));
-	fclose(worker->file);
 }

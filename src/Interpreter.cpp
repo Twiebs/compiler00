@@ -142,8 +142,8 @@ void RunInterpTest() {
 }
 
 
-ASTExpression* ParseExpr(MemoryArena* arena, InterpLexer* lex) {
-	auto parsePrimary = [](MemoryArena* arena, InterpLexer* lex) -> ASTExpression* {
+ASTExpression* ParseExpr(MemoryArena* arena, Lexer* lex) {
+	auto parsePrimary = [](MemoryArena* arena, Lexer* lex) -> ASTExpression* {
 		switch (lex->token.type) {
 			case TOKEN_TRUE: {
 				lex->nextToken();
@@ -183,7 +183,8 @@ ASTExpression* ParseExpr(MemoryArena* arena, InterpLexer* lex) {
 		return nullptr;
 	};
 
-	std::function<ASTExpression*(MemoryArena*, InterpLexer*, ASTExpression*, int)> parseBinary = [&parsePrimary, &parseBinary](MemoryArena* arena, InterpLexer* lex, ASTExpression* lhs, int expressionPrec) -> ASTExpression* {
+	std::function<ASTExpression*(MemoryArena*, Lexer*, ASTExpression*, int)> parseBinary
+            = [&parsePrimary, &parseBinary](MemoryArena* arena, Lexer* lex, ASTExpression* lhs, int expressionPrec) -> ASTExpression* {
 		assert(lhs != nullptr);
 		while (true) {
 
@@ -250,22 +251,27 @@ void RunInterp (Package* package) {
    // package->llvmModule->dump();
     bool isRunning = true;
     std::string inputBuffer;
-    InterpLexer lex;
+    // InterpLexer lex;
+    Lexer lex;
 
 	MemoryArena arena;
 	arena.memory = malloc(ARENA_BLOCK_SIZE);
 
     while (isRunning) {
-        lex.end(); // clears the buffer from the command line
+        // lex.end(); // clears the buffer from the command line
         printf("> ");
-        char lastChar = getchar();
-        while (lastChar != '\n') {
-            lex.buffer += lastChar;
-            lastChar = getchar();
-        }
-
-        lex.begin();
+        std::cin >> inputBuffer;
+        lex.SetBuffer(inputBuffer.c_str());
         lex.nextToken();
+
+//        char lastChar = getchar();
+//        while (lastChar != '\n') {
+//            lex.buffer += lastChar;
+//            lastChar = getchar();
+//        }
+
+//        lex.begin();
+//        lex.nextToken();
 
 		static auto REPLEvaluate = [&engine, &module](ASTExpression* expr) {
 			if (!engine->removeModule(module)) assert(false);
@@ -295,7 +301,7 @@ void RunInterp (Package* package) {
 
 		};
 
-		static auto REPLProc = [](MemoryArena* arena, InterpLexer* lex) -> bool {
+		static auto REPLProc = [](MemoryArena* arena, Lexer* lex) -> bool {
 			auto expr = ParseExpr(arena, lex);
 			if (expr == nullptr) return false;
 			AnalyzeExpr(expr, nullptr);
@@ -326,7 +332,7 @@ void RunInterp (Package* package) {
             } else {
                 auto node = FindNodeWithIdent(&package->rootBlock, identToken.string);
                 bool listIR = false;
-                if (lex.token.type != TOKEN_EOF) {
+                if (lex.token.type != TOKEN_END_OF_BUFFER) {
                     if (lex.token.string == "IR") {
                         listIR = true;
                     }
