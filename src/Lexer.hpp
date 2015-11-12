@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include "Common.hpp"
+
 enum TokenType {
     TOKEN_UNKOWN,
     TOKEN_IMPORT,

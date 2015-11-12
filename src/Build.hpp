@@ -33,22 +33,13 @@ struct Package {
 };
 
 struct Worker {
-	// FILE* file = nullptr;
-	// char lastChar = 0, nextChar = 0;
-	// U32 lineNumber = 0, colNumber = 0;
-	// int currentIndentLevel = 0;
-	// Token token;
-
-    Parser parser;
-    Lexer lex;
-
     U32 errorCount = 0;
     MemoryArena arena;
     U8* tempMemory;
-    U8* currentTempLocation;
 
-    Package* currentPackage = nullptr;
+    Lexer lex;
     ASTBlock* currentBlock = nullptr;
+    Package* currentPackage = nullptr;
 };
 
 enum PackageFlags {
