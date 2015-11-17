@@ -1,8 +1,24 @@
 printf :: (fmt : @U8 ...) FOREIGN
 
+ListAll :: () FOREIGN
+InterpTest :: () FOREIGN
+
 FooData :: STRUCT
 	size : U64
 
+MemoryBlock :: STRUCT
+	size : S32
+	used : S32
+	memory : @U8
+
 Main :: () >> S32
-	printf("Hello world!")
+	memblock : MemoryBlock
+	memblock.size = U64(4096)
+	memblock.used = U64(0)
+
+	printf("Hello World!\n")
+	printf("Memblock size: %d\n" memblock.size)
+	printf("Memblock used: %d\n" memblock.Liused)
+
+
 	RETURN 0

@@ -60,6 +60,7 @@ enum TokenType {
             TOKEN_NUMBER,
     TOKEN_STRING,
 
+	TOKEN_COMMA,
     TOKEN_DOTDOT,
 
     TOKEN_PAREN_OPEN,
@@ -97,10 +98,12 @@ public:
     void SetBuffer(const char* buffer);
 private:
 
-    const char* currentChar;
-    U32 columnNumber, lineNumber;
-    U32 currentIndentLevel;
+    const char* currentChar = 0;
+    U32 columnNumber = 0, lineNumber = 0;
+    U32 currentIndentLevel = 0;
 
-    void AppendNext();
-    void EatNext();
+	void AppendToken(char character);
+	void AppendCurrentChar();
+    void EatCurrentChar();
+	void EatNewlineChars();
 };

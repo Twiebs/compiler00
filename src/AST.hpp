@@ -16,7 +16,27 @@ class Array {
     T* data;
 };
 
+template<size_t MEMORY_SIZE>
+struct MemoryBlock {
+	size_t used = 0;
+	U8 memory[MEMORY_SIZE];
+};
 
+
+//class ASTNodeAllocator {
+//	typedef MemoryBlock<4096> ASTMemblock;
+//	std::vector<ASTMemblock*> blocks;
+//	void* Allocate(size_t size);
+//
+//public:
+//	template<typename TNode, typename... TArgs>
+//	T* CreateNode(TArgs... args);
+//};
+//
+//template<typename TNode, typename... TArgs>
+//T* ASTNodeAllocator::CreateNode(TArgs..args) {
+//	
+//}
 
 #define ARENA_BLOCK_SIZE 4096
 struct MemoryArena {
@@ -71,9 +91,14 @@ struct ASTNode {
 };
 
 struct ASTDefinition : public ASTNode {
-    char* name;
+    const char* name;
+	FileSite sourceLocation;
+
 	void* llvmType = nullptr;
-    ASTDefinition() { nodeType = AST_DEFINITION; }
+	ASTDefinition() { nodeType = AST_DEFINITION; }
+    ASTDefinition(FileSite sourceLocation) 
+		:sourceLocation(sourceLocation)
+	{ nodeType = AST_DEFINITION; }
 };
 
 struct ASTExpression : public ASTNode {
@@ -101,10 +126,12 @@ struct ASTVariable : public ASTExpression {
 	FileSite site;	// This is where this variable was declared.
 	ASTExpression* initalExpression;
     void* allocaInst = nullptr;
-    bool isPointer = false;
+	S8 indirectionLevel;
 
-	ASTVariable (ASTExpression* initialExpr)
-		: initalExpression(initialExpr) {
+	ASTVariable (ASTExpression* initialExpr, S8 indirectionLevel)
+		: initalExpression(initialExpr),
+		indirectionLevel(indirectionLevel)
+	{
 		nodeType = AST_VARIABLE;
 		this->type = nullptr;
 	}
@@ -156,8 +183,9 @@ struct ASTStructMember {
 struct ASTStruct : public ASTDefinition {
     ASTStructMember* members;
     U32 memberCount;
-
-	ASTStruct() { nodeType = AST_STRUCT; }
+	ASTStruct(const FileSite& site)
+		: ASTDefinition(site)
+	{ nodeType = AST_STRUCT; }
 };
 
 enum Operation {
@@ -175,10 +203,16 @@ enum Operation {
 };
 
 enum UnaryOperator {
-	UNARY_LOAD,
-	UNARY_VALUE,
-	UNARY_ADDRESS,
+	UNARY_INDIRECTION,
 	UNARY_NOT
+};
+
+struct ASTUnaryOp : ASTExpression {
+	UnaryOperator op;
+	ASTExpression* expr;
+	S8 indirectionLevel;
+	ASTUnaryOp(UnaryOperator op, ASTExpression* expr)
+		: op(op), expr(expr) { }
 };
 
 struct ASTMemberAccess {
@@ -189,17 +223,19 @@ struct ASTMemberAccess {
 
 struct ASTMemberExpr : public ASTExpression {
 	ASTVariable* structVar;
-	UnaryOperator unaryOp;
 	ASTMemberAccess access;
 
-	ASTMemberExpr (ASTVariable* structVar, UnaryOperator unary) :
-			structVar(structVar), unaryOp(unary) { nodeType = AST_MEMBER_EXPR; }
+	ASTMemberExpr (ASTVariable* structVar) :
+			structVar(structVar) { nodeType = AST_MEMBER_EXPR; }
 };
 
 struct ASTVarExpr : public ASTExpression {
 	ASTVariable* var;
-	UnaryOperator accessMod;
-	ASTVarExpr() { nodeType = AST_VAR_EXPR; }
+	ASTVarExpr(ASTVariable* variable)
+		: var(variable)
+	{ 
+		nodeType = AST_VAR_EXPR; 
+	}
 };
 
 struct ASTMemberOperation : public ASTNode {
@@ -252,9 +288,9 @@ struct ASTCast : public ASTExpression {
 
 struct ASTLiteral : public ASTExpression {
     union { S64 intVal; F64 fltVal; U8* strVal; };
-	ASTLiteral(S32 intVal) : intVal(intVal) { nodeType = AST_INTEGER_LITERAL; }
-	ASTLiteral(F64 fltVal) : fltVal(fltVal) { nodeType = AST_FLOAT_LITERAL; }
-	ASTLiteral(U8* strVal) : strVal(strVal) { nodeType = AST_STRING_LITERAL; }
+	explicit ASTLiteral(S32 intVal) : intVal(intVal) { nodeType = AST_INTEGER_LITERAL; }
+	explicit ASTLiteral(F64 fltVal) : fltVal(fltVal) { nodeType = AST_FLOAT_LITERAL; }
+	explicit ASTLiteral(U8* strVal) : strVal(strVal) { nodeType = AST_STRING_LITERAL; }
 };
 
 struct ASTIntegerLiteral : public ASTExpression {
@@ -284,7 +320,9 @@ extern ASTDefinition* global_F16Type;
 extern ASTDefinition* global_F32Type;
 extern ASTDefinition* global_F64Type;
 extern ASTDefinition* global_F128Type;
-// TODO true / false literals
+extern ASTIntegerLiteral* global_trueLiteral;
+extern ASTIntegerLiteral* global_falseLiteral;
+
 
 // Identifiers
 void AssignIdent (ASTBlock* block, ASTNode* node, const std::string& name);
@@ -296,10 +334,10 @@ ASTFunction* CreateFunction(MemoryArena* arena, ASTBlock* block, const std::stri
 
 ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* block);
 
-ASTStruct* CreateStruct (MemoryArena* arena, const std::string& name, ASTStructMember* members, U32 memberCount);
+ASTStruct* CreateStruct (MemoryArena* arena, const FileSite& site, const std::string& name, ASTStructMember* members, U32 memberCount);
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 
-ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, const std::string& name, ASTExpression* initalExpr = nullptr);
+ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, const std::string& name, ASTExpression* initalExpr = nullptr, S8 indirectionLevel = 0);
 
 ASTCast* CreateCast(MemoryArena* arena, ASTDefinition* typeDefn, ASTExpression* expr);
 
@@ -321,7 +359,7 @@ ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
 //===============
 
 ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var, UnaryOperator accessMod);
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator unaryOp);
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar);
 
 
 // ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator unary, const std::vector<std::string>& memberNames);
@@ -336,6 +374,7 @@ std::string ToString(ASTNodeType nodeType);
 std::string ToString(Operation operation);
 
 bool isFloatingPoint(ASTDefinition* type);
+bool isInteger(ASTDefinition* type);
 bool isSignedInteger(ASTDefinition* type);
 bool isUnsignedInteger (ASTDefinition* type);
 bool isType(ASTNode* node);
@@ -374,4 +413,6 @@ inline Operation TokenToOperation (const Token& token) {
 		case TOKEN_LOGIC_OR: return OPERATION_LOR;
 		case TOKEN_LOGIC_AND: return OPERATION_LAND;
 	}
+
+	assert(false);
 }

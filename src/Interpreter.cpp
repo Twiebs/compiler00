@@ -31,12 +31,12 @@ extern "C" void InterpTest() {
 void Print (ASTFunction* function) {
     printf("%s :: (", function->name);
     for (U32 i = 0; i < function->args.size(); i++) {
-        ASTVariable* arg = function->args[i];
-        if (arg->isPointer) {
-            printf("%s : @%s", arg->name, arg->type->name);
-        } else {
-            printf("%s : %s", arg->name, arg->type->name);
-        }
+		ASTVariable* arg = function->args[i];
+		printf("%s : ", arg->name);
+		for (auto i = 0; i < arg->indirectionLevel; i++) {
+			printf("@");
+		}
+		printf("%s", arg->type->name);
     }
     printf(") ");
     if (function->returnType != nullptr) {
@@ -100,14 +100,18 @@ internal void PrintExpr (ASTExpression* expr) {
 
 
 global_variable Package* global_package;
-// HACK this is a quick hack for fun
-extern "C" void ListAll() {
-	Package* package = global_package;
+
+static void ListAllDefnitions(Package* package) {
 	for (U32 i = 0; i < package->rootBlock.members.size(); i++) {
 		auto node = package->rootBlock.members[i];
 		PrintDefn(node);
 	}
 }
+
+extern "C" void ls() {
+	ListAllDefnitions(global_package);
+}
+
 
 static llvm::Function* GenerateTestFunction (llvm::Module* module) {
     llvm::IRBuilder<> builder(llvm::getGlobalContext());
@@ -144,14 +148,13 @@ void RunInterpTest() {
 }
 
 
-
 void RunInterp (Package* package) {
 	global_package = package;
 	llvm::InitializeAllTargets();
 	llvm::InitializeAllTargetMCs();
 
 	auto memoryManager = std::make_unique<llvm::SectionMemoryManager>();
-	auto unique_module = std::make_unique<llvm::Module>("Bang Interpreter", llvm::getGlobalContext());
+	auto unique_module = std::make_unique<llvm::Module>("Bang REPL", llvm::getGlobalContext());
 	auto module = unique_module.get();
    // auto testFunction = GenerateTestFunction(module);
 
@@ -183,20 +186,10 @@ void RunInterp (Package* package) {
 	arena.memory = malloc(ARENA_BLOCK_SIZE);
 
     while (isRunning) {
-        // lex.end(); // clears the buffer from the command line
         printf("> ");
         std::cin >> inputBuffer;
         lex.SetBuffer(inputBuffer.c_str());
         lex.nextToken();
-
-//        char lastChar = getchar();
-//        while (lastChar != '\n') {
-//            lex.buffer += lastChar;
-//            lastChar = getchar();
-//        }
-
-//        lex.begin();
-//        lex.nextToken();
 
 		static auto REPLEvaluate = [&engine, &module](ASTExpression* expr) {
 			if (!engine->removeModule(module)) assert(false);
@@ -228,7 +221,8 @@ void RunInterp (Package* package) {
 
 		static auto REPLProc = [](MemoryArena* arena, Lexer* lex) -> bool {
 			auto expr = ParseExpr(arena, lex);
-			if (expr == nullptr) return false;
+			if (expr == nullptr) 
+				return false;
 			AnalyzeExpr(expr, nullptr);
 			REPLEvaluate(expr);
 			PrintExpr(expr);
@@ -269,7 +263,7 @@ void RunInterp (Package* package) {
                 }
 
                 switch (node->nodeType) {
-                    case AST_FUNCTION: {
+                    case AST_FUNCTION_SET: {
                         auto funcSet = (ASTFunctionSet *) node;
                         printf("Found %d functions named %s\n", funcSet->functions.size(), identToken.string.c_str());
                         if (listIR) {

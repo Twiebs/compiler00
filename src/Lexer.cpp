@@ -12,9 +12,13 @@ void Lexer::SetBuffer(const char* buffer) {
     lineNumber = 0;
 }
 
-void Lexer::AppendNext() {
+void Lexer::AppendToken(char character) {
+	token.string += character;
+}
+
+void Lexer::AppendCurrentChar() {
     token.string += *currentChar;
-    EatNext();
+    EatCurrentChar();
 }
 
 //    worker->lastChar = worker->nextChar;
@@ -25,7 +29,7 @@ void Lexer::AppendNext() {
 //        worker->colNumber = 1;
 //    }
 
-void Lexer::EatNext() {
+void Lexer::EatCurrentChar() {
     if (*currentChar == '\n') {
         lineNumber++;
         columnNumber = 1;
@@ -47,15 +51,27 @@ void Lexer::eatLine() {
     columnNumber = 1;
 }
 
+void Lexer::EatNewlineChars() {
+	assert(*currentChar == '\n' || *currentChar == '\r');
+	if (*currentChar == '\r') currentChar += 2;
+	else currentChar++;
+}
+
 static inline bool IsNewline (const char* current) {
-    auto result = *current == '\n';
-    return result;
+	if (*current == '\r') {
+		auto next = current + 1;
+		auto result = *next == '\n';
+		return result;
+	}
+
+	auto result = *current == '\n';
+	return result;
 }
 
 void Lexer::nextToken() {
 #ifdef USE_INDENT_BLOCK
     if (IsNewline(currentChar)) {
-        EatNext();
+		EatNewlineChars();
         if (IsNewline(currentChar)) {
             nextToken();
             return;
@@ -66,13 +82,13 @@ void Lexer::nextToken() {
             int spaceCount = 0;
             if (*currentChar == ' ') {
                 spaceCount++;
-                EatNext();
+                EatCurrentChar();
                 if (spaceCount > INDENT_SPACE_COUNT) {
                     indentLevel++;
                     spaceCount = 0;
                 }
             } else {
-                EatNext();
+                EatCurrentChar();
                 indentLevel++;
             }
         }
@@ -97,9 +113,9 @@ void Lexer::nextToken() {
 
     token.string = "";
     token.type = TOKEN_UNKOWN;
-    while (isspace(*currentChar)) EatNext();
+    while (isspace(*currentChar)) EatCurrentChar();
     if (isalpha(*currentChar) || *currentChar== '_') {
-        while ((isalnum(*currentChar) || *currentChar == '_') && *currentChar!= '.') AppendNext();
+        while ((isalnum(*currentChar) || *currentChar == '_') && *currentChar!= '.') AppendCurrentChar();
         if (token.string == "IMPORT") 			    token.type = TOKEN_IMPORT;
         else if (token.string == "FOREIGN")	 		token.type = TOKEN_FOREIGN;
         else if (token.string == "STRUCT")			token.type = TOKEN_STRUCT;
@@ -123,26 +139,35 @@ void Lexer::nextToken() {
                 else
                     LOG_ERROR(token.site << "Two decimals found in numeric constant!");
             }
-            AppendNext();
+            AppendCurrentChar();
         }
         token.type = TOKEN_NUMBER;
     }
 
-        // The Current token is a String Literal
-    else if (*currentChar== '"') {
-        EatNext();
-        while (*currentChar != '"') {
-            AppendNext();
-        }
-        EatNext();	// Eat the "
-        token.type = TOKEN_STRING;
-    }
+
+	else if (*currentChar == '"') {
+		EatCurrentChar();
+		while (*currentChar != '"') {
+	        if (*currentChar == 92) {
+	            EatCurrentChar();
+	            if (*currentChar == 'n') { 
+					EatCurrentChar();
+					AppendToken('\n');
+					continue;
+				}
+	        }
+			AppendCurrentChar();
+		}
+		EatCurrentChar();	// Eat the "
+		token.type = TOKEN_STRING;
+	}
+
 
         // COMMENTS
     else if (*currentChar == '#') {
-        EatNext();	//Eat the '# 'char
+        EatCurrentChar();	//Eat the '# 'char
         while (*currentChar != EOF && *currentChar != '\n' && *currentChar != '\r')
-            EatNext();	//Now we eat the comment body itself
+            EatCurrentChar();	//Now we eat the comment body itself
         //We have reached the end of the comment.	If is not the end of the file get the next token
         if (*currentChar != EOF) {
             nextToken();
@@ -152,12 +177,12 @@ void Lexer::nextToken() {
 
         // COLON TOKENS
     else if (*currentChar== ':') {
-        AppendNext();
+        AppendCurrentChar();
         if (*currentChar== ':') {
-            AppendNext();
+            AppendCurrentChar();
             token.type = TOKEN_TYPE_DEFINE;
         } else if (*currentChar == '=') {
-            AppendNext();
+            AppendCurrentChar();
             token.type = TOKEN_TYPE_INFER;
         } else {
             token.type = TOKEN_TYPE_DECLARE;
@@ -165,19 +190,19 @@ void Lexer::nextToken() {
     }
 
     else if (*currentChar == '@') {
-        AppendNext();
+        AppendCurrentChar();
         token.type = TOKEN_ADDRESS;
     }
 
     else if (*currentChar == '$') {
-        AppendNext();
+        AppendCurrentChar();
         token.type = TOKEN_VALUE;
     }
 
     else if (*currentChar == '=') {
-        AppendNext();
+        AppendCurrentChar();
         if (*currentChar == '=') {
-            AppendNext();
+            AppendCurrentChar();
             token.type == TOKEN_LOGIC_EQUAL;
         } else {
             token.type = TOKEN_EQUALS;
@@ -185,9 +210,9 @@ void Lexer::nextToken() {
     }
 
     else if (*currentChar == '+') {
-        AppendNext();
+        AppendCurrentChar();
         if (*currentChar == '=') {
-            AppendNext();
+            AppendCurrentChar();
             token.type = TOKEN_ADD_EQUALS;
         } else {
             token.type = TOKEN_ADD;
@@ -195,9 +220,9 @@ void Lexer::nextToken() {
     }
 
     else if (*currentChar == '-') {
-        AppendNext();
+        AppendCurrentChar();
         if (*currentChar == '=') {
-            AppendNext();
+            AppendCurrentChar();
             token.type = TOKEN_SUB_EQUALS;
         } else {
             token.type = TOKEN_SUB;
@@ -205,9 +230,9 @@ void Lexer::nextToken() {
     }
 
     else if (*currentChar == '*') {
-        AppendNext();
+        AppendCurrentChar();
         if (*currentChar == '=') {
-            AppendNext();
+            AppendCurrentChar();
             token.type = TOKEN_MUL_EQUALS;
         } else {
             token.type = TOKEN_MUL;
@@ -216,9 +241,9 @@ void Lexer::nextToken() {
 
 
     else if (*currentChar == '/') {
-        AppendNext();
+        AppendCurrentChar();
         if (*currentChar == '=') {
-            AppendNext();
+            AppendCurrentChar();
             token.type = TOKEN_DIV_EQUALS;
         } else {
             token.type = TOKEN_DIV;
@@ -227,17 +252,17 @@ void Lexer::nextToken() {
 
         // LOGICAL
     else if (*currentChar == '~') {
-        AppendNext();
+        AppendCurrentChar();
         token.type = TOKEN_LOGIC_NOT;
     }
 
     else if (*currentChar == '>') {
-        AppendNext();
+        AppendCurrentChar();
         if (*currentChar == '>') {
-            AppendNext();
+            AppendCurrentChar();
             token.type = TOKEN_TYPE_RETURN;
         } else if (*currentChar == '=') {
-            AppendNext();
+            AppendCurrentChar();
             token.type = TOKEN_LOGIC_GREATER_EQAUL;
         } else {
             token.type = TOKEN_LOGIC_GREATER;
@@ -245,12 +270,12 @@ void Lexer::nextToken() {
     }
 
     else if (*currentChar == '<') {
-        AppendNext();
+        AppendCurrentChar();
         if (*currentChar == '<') {
-            AppendNext();
+            AppendCurrentChar();
             token.type = TOKEN_CONSTRUCT;
         } else if (*currentChar == '=') {
-            AppendNext();
+            AppendCurrentChar();
             token.type = TOKEN_LOGIC_LESS_EQUAL;
         } else {
             token.type = TOKEN_LOGIC_LESS;
@@ -258,11 +283,11 @@ void Lexer::nextToken() {
     }
 
     else if (*currentChar == '.') {
-        AppendNext();
+        AppendCurrentChar();
         if (*currentChar == '.') {
-            AppendNext();
+            AppendCurrentChar();
             if (*currentChar == '.') {
-                AppendNext();
+                AppendCurrentChar();
                 token.type = TOKEN_DOTDOT;
             }
         } else {
@@ -272,30 +297,30 @@ void Lexer::nextToken() {
 
         //BRACES, BRACKETS, SUBSCRIPTS
     else if (*currentChar == '(') {
-        AppendNext();
+        AppendCurrentChar();
         token.type = TOKEN_PAREN_OPEN;
     } else if (*currentChar == ')') {
-        AppendNext();
+        AppendCurrentChar();
         token.type = TOKEN_PAREN_CLOSE;
     }	else if (*currentChar == '[') {
-        AppendNext();
+        AppendCurrentChar();
         token.type = TOKEN_ARRAY_OPEN;
     } else if (*currentChar == ']') {
-        AppendNext();
+        AppendCurrentChar();
         token.type = TOKEN_ARRAY_CLOSE;
     } else if (*currentChar == '{') {
-        AppendNext();
+        AppendCurrentChar();
         token.type = TOKEN_BLOCK_OPEN;
         // currentIndentLevel++;
     } else if (*currentChar == '}') {
-        AppendNext();
+        AppendCurrentChar();
         token.type = TOKEN_BLOCK_CLOSE;
         // currentIndentLevel++;
     } else if (*currentChar == EOF || *currentChar == 0) {
         //Dont append or ead the EOF or buffer
         token.type = TOKEN_END_OF_BUFFER;
     } else {
-        AppendNext();
+        AppendCurrentChar();
         token.type = TOKEN_UNKOWN;
     }
 }

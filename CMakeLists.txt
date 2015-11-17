@@ -2,14 +2,22 @@ cmake_minimum_required(VERSION 2.8.8)
 set(CMAKE_CXX_COMPILER clang++)
 
 project(LLVMLang)
+if(WIN32)
+    set(CMAKE_PREFIX_PATH C:/LLVM/share/llvm/cmake)
+    list(APPEND CMAKE_MODULE_PATH C:/LLVM/share/llvm/cmake)
+    message(STATUS ${CMAKE_MODULE_PATH})
+endif(WIN32)
 
 if(NOT CMAKE_ECLIPSE_VERSION)
     add_definitions(-DENABLE_COLOR_OUTPUT)
 endif()
 
+
+
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Uisng LLVMConfig.cmake in: ${LLVM_DIR}")
+
 
 add_definitions(-std=c++14)
 add_definitions(${LLVM_DEFINITIONS})
@@ -175,9 +183,9 @@ message(STATUS "Found Libararies: " ${LLVM_LIBS})
 
 
 if(MSVC)
-  include_directories("../include")
-  link_directories("../lib")
+  include_directories(C:/LLVM/include)
+  link_directories(C:/LLVM/lib)
 endif()
 
 add_subdirectory(src)
-add_subdirectory(libcpp)
+#add_subdirectory(libcpp)

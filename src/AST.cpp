@@ -31,6 +31,8 @@ ASTDefinition* global_F16Type;
 ASTDefinition* global_F32Type;
 ASTDefinition* global_F64Type;
 ASTDefinition* global_F128Type;
+ASTIntegerLiteral* global_trueLiteral;
+ASTIntegerLiteral* global_falseLiteral;
 
 // HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
 // HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
@@ -47,7 +49,7 @@ ASTDefinition* global_F128Type;
 internal inline ASTDefinition* CreatePrimitiveType(MemoryArena* arena, ASTBlock* block, const std::string& name) {
 	auto typeDefn = new (Allocate(arena, sizeof(ASTDefinition))) ASTDefinition;
     typeDefn->name = (char*)Allocate(arena, name.size() + 1);
-    memcpy(typeDefn->name, name.c_str(), name.size() + 1);
+    memcpy((void*)typeDefn->name, name.c_str(), name.size() + 1);
     AssignIdent(block, typeDefn, name);
 	return typeDefn;
 }
@@ -69,6 +71,9 @@ void InitalizeLanguagePrimitives(MemoryArena* arena, ASTBlock* block) {
 	global_F32Type   = CreatePrimitiveType(arena, block, "F32");
 	global_F64Type   = CreatePrimitiveType(arena, block, "F64");
 	global_F128Type  = CreatePrimitiveType(arena, block, "F128");
+
+	global_trueLiteral = CreateIntegerLiteral(arena, 1);
+	global_falseLiteral = CreateIntegerLiteral(arena, 0);
 }
 
 void AssignIdent (ASTBlock* block, ASTNode* node, const std::string& name) {
@@ -132,20 +137,20 @@ ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, Operation operatio
     return result;
 }
 
-ASTStruct* CreateStruct(MemoryArena* arena, const std::string& name,  ASTStructMember* members, U32 memberCount) {
-	auto structDefn = new (Allocate(arena, sizeof(ASTStruct))) ASTStruct;
+ASTStruct* CreateStruct(MemoryArena* arena, const FileSite& site, const std::string& name,  ASTStructMember* members, U32 memberCount) {
+	auto structDefn = new (Allocate(arena, sizeof(ASTStruct))) ASTStruct(site);
     structDefn->name = (char*)Allocate(arena, name.size() + 1);
     structDefn->members= (ASTStructMember*)Allocate(arena, sizeof(ASTStructMember) * memberCount);
     structDefn->nodeType = AST_STRUCT;
     structDefn ->memberCount = memberCount;
-    memcpy(structDefn ->members, members, memberCount * sizeof(ASTStructMember));
-    memcpy(structDefn->name, name.c_str(), name.size() + 1);
+    memcpy(structDefn->members, members, memberCount * sizeof(ASTStructMember));
+    memcpy((void*)structDefn->name, name.c_str(), name.size() + 1);
 	return structDefn;
 }
 
 
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator unaryOp) {
-	auto result = new (Allocate(arena, (sizeof(ASTMemberExpr)))) ASTMemberExpr(structVar, unaryOp);
+ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar) {
+	auto result = new (Allocate(arena, (sizeof(ASTMemberExpr)))) ASTMemberExpr(structVar);
 	return result;
 }
 
@@ -160,14 +165,13 @@ ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, Unar
 //	}
 //	return result;
 //}
-
-ASTVarExpr* CreateVarExpr (MemoryArena* arena, ASTVariable* var, UnaryOperator accessMod) {
-	auto result = new (Allocate(arena, sizeof(ASTVarExpr))) ASTVarExpr;
-	result->var = var;
-	result->type = var->type;
-    result->accessMod = accessMod;
-	return result;
-}
+//
+//ASTVarExpr* CreateVarExpr (MemoryArena* arena, ASTVariable* var) {
+//	auto result = new (Allocate(arena, sizeof(ASTVarExpr))) ASTVarExpr;
+//	result->var = var;
+//	result->type = var->type;
+//	return result;
+//}
 
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
 	for (auto i = 0; i < structDefn->memberCount; i++) {
@@ -217,6 +221,7 @@ ASTCall* CreateCall (MemoryArena* arena, ASTExpression** argList, U32 argCount, 
 
 ASTCast* CreateCast(MemoryArena* arena, ASTDefinition* typeDefn, ASTExpression* expr) {
     auto cast = new (Allocate(arena, sizeof(ASTCast))) ASTCast(typeDefn, expr);
+	return cast;
 }
 
 ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* parent) {
@@ -259,8 +264,9 @@ ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& st
 	return result;
 }
 
-ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, const std::string& name, ASTExpression* initalExpr) {
-	auto result = new (Allocate(arena, sizeof(ASTVariable))) ASTVariable(initalExpr);
+
+ASTVariable* CreateVariable (MemoryArena* arena, const FileSite& site, const std::string& name, ASTExpression* initalExpr, S8 indirectionLevel) {
+	auto result = new (Allocate(arena, sizeof(ASTVariable))) ASTVariable(initalExpr, indirectionLevel);
     result->name = (char*)Allocate(arena, name.size() + 1);
     memcpy(result->name, name.c_str(), name.size() + 1);
     return result;
@@ -305,6 +311,15 @@ bool isFloatingPoint(ASTDefinition* type) {
     if (type == global_F32Type) return true;
     if (type == global_F64Type) return true;
     return false;
+}
+
+
+
+// TODO store some flags about the type inside the struct directly so 
+// these absurd functions are not required
+bool isInteger(ASTDefinition* type) {
+	auto result = isSignedInteger(type) || isUnsignedInteger(type);
+	return result;
 }
 
 bool isSignedInteger(ASTDefinition* type) {

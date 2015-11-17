@@ -106,10 +106,15 @@ void AnalyzeExpr (ASTExpression* expr, ASTBlock* currentBlock) {
 	}
 
 	switch (expr->nodeType) {
+
+
 	case AST_VAR_EXPR: {
 		auto varexpr = (ASTVarExpr*)expr;
 		varexpr->type = varexpr->var->type;
 	} break;
+
+	// Consider making the assignment operator
+	// a binary operator
 	case AST_BINARY_OPERATION: {
 		auto binop = (ASTBinaryOperation*)expr;
 		AnalyzeExpr(binop->lhs, currentBlock);
@@ -127,11 +132,6 @@ void AnalyzeExpr (ASTExpression* expr, ASTBlock* currentBlock) {
 		if (memberExpr->access.memberNames != nullptr)
 			memberExpr->type = ResolveMemberAccess(&memberExpr->access, (ASTStruct*)memberExpr->structVar->type);
 
-
-
-
-
-
 	} break;
 
 
@@ -144,26 +144,26 @@ void AnalyzeExpr (ASTExpression* expr, ASTBlock* currentBlock) {
 	}
 }
 
-internal inline bool TypeCompareExplicit (ASTExpression* exprA, ASTExpression* exprB) {
+static inline bool TypeCompareExplicit (ASTExpression* exprA, ASTExpression* exprB) {
 	if (exprA->type != exprB->type)
 		return false;
 	return true;
 }
 
 // TODO implement implicit casting only for temporary constants in expressions
-internal inline bool TypeCompareImplicit (ASTExpression* exprA, ASTExpression* exprB) {
+static inline bool TypeCompareImplicit (ASTExpression* exprA, ASTExpression* exprB) {
     if (exprA->type != exprB->type)
         return false;
     return true;
 }
 
-internal inline bool TypeCompareExplicit(ASTDefinition* typeDefn, ASTExpression* expr) {
+static inline bool TypeCompareExplicit(ASTDefinition* typeDefn, ASTExpression* expr) {
     if (typeDefn != expr->type)
         return false;
     return true;
 }
 
-internal inline bool TypeCheck (ASTExpression* expr, ASTDefinition* typedefn) {
+static inline bool TypeCheck (ASTExpression* expr, ASTDefinition* typedefn) {
 	if (expr->type != typedefn)
 		return false;
 	return true;
@@ -176,11 +176,88 @@ internal inline bool TypeCheck (ASTExpression* expr, ASTDefinition* typedefn) {
 // its pointer stored in the block.  In theory the blocks should only really mater for codegeneration and
 // parsing.  Otherwise we can hit the nodes in any order whatsoever during the anayalsis because it doesnt
 // mater and will be faster to traverse them linearly rather then this tree structure
-internal inline void AnalyzeBlock (ASTBlock* block) {
-	for(auto i = 0; i < block->members.size(); i++) {
+static inline void AnalyzeBlock (ASTBlock* block) {
+	for (auto i = 0; i < block->members.size(); i++) {
 		auto node = block->members[i];
 		AnalyzeStatement(node, block);
 	}
+}
+
+S8 GetAbsoluteIndirectionLevelForExpression(ASTExpression* expr) {
+	S8 result;
+	if (expr->nodeType == AST_VAR_EXPR) {
+		auto variableExpr = static_cast<ASTVarExpr*>(expr);
+		result += variableExpr->var->indirectionLevel;
+	} else if (expr->nodeType == AST_MEMBER_EXPR) {
+		auto memberExpr = static_cast<ASTMemberExpr*>(expr);
+		result += memberExpr->structVar->indirectionLevel;
+	} else if (expr->nodeType == AST_UNARY_OPERATION) {
+		auto unaryOperation = static_cast<ASTUnaryOp*>(expr);
+		result += GetAbsoluteIndirectionLevelForExpression(unaryOperation->expr);
+		result += unaryOperation->indirectionLevel;
+	}
+
+	return result;
+}
+
+
+static inline void InferVariableTypeFromExpression(ASTVariable* variable) {
+	assert(variable->initalExpression != nullptr);
+	variable->indirectionLevel = GetAbsoluteIndirectionLevelForExpression(variable->initalExpression);
+	assert(variable->indirectionLevel >= 0 && "Infered variable types must have an indirection greater than 0");
+	variable->type = variable->initalExpression->type;
+}
+
+static inline ASTNode* FindNodeWithIndentAndExpectType(ASTBlock* block, char* name, ASTNodeType expectedNodeType) { 
+	auto node = FindNodeWithIdent(block, name);
+	if (node->nodeType != expectedNodeType) {
+		assert(false);
+		// Report an error here
+	}
+
+	return node;
+}
+
+static inline void AnalyzeVariableDecleration (ASTVariable* variable, ASTBlock* currentBlock) {
+	if (variable->type == nullptr && variable->typeName != nullptr) {
+		variable->type = static_cast<ASTDefinition*>(FindNodeWithIndentAndExpectType(currentBlock, variable->typeName, AST_DEFINITION));
+		if (variable->type == nullptr) {
+			// ReportError(worker, "Variable(%s) could not be declared with type(%s): Type does not exist!", var->name, var->typeName);
+			return;
+		}
+	}
+	
+	if (variable->initalExpression != nullptr) {
+		AnalyzeExpr(variable->initalExpression, currentBlock);
+		if (variable->type == nullptr) {
+			InferVariableTypeFromExpression(variable);
+		}
+	}
+
+
+
+	if (variable->initalExpression != nullptr) {
+		if (!TypeCheck(variable->initalExpression, variable->type)) {
+			if (variable->initalExpression->type == global_F32Type && variable->type == global_F64Type) {
+				variable->initalExpression->type = global_F64Type;
+			} else {
+				// ReportError(worker, "Type mismatch!  Variable (%s : %s) does not match inital expression (%s)", var->name, var->type->name, var->initalExpression->type->name);
+			}
+		}
+	}
+}
+
+
+static inline ASTStructMember* GetStructMember(ASTStruct* structDefn, ASTMemberAccess* access) {
+	ASTStruct* currentStructDefn = structDefn;
+	for (auto i = 0; i < access->memberCount - 1; i++) {
+		currentStructDefn = static_cast<ASTStruct*>(structDefn->members[access->indices[i]].type);
+		assert(currentStructDefn->nodeType == AST_STRUCT);
+	}
+
+	U32 memberIndex = access->indices[access->memberCount - 1];
+	auto result = &currentStructDefn->members[memberIndex];
+	return result;
 }
 
 
@@ -221,42 +298,7 @@ void AnalyzeStatement (ASTNode* node, ASTBlock* currentBlock) {
 
 	case AST_VARIABLE: {
 		auto var = (ASTVariable*)node;
-		if (var->initalExpression != nullptr) {
-			AnalyzeExpr(var->initalExpression, currentBlock);
-		}
 
-		if (var->type == nullptr) {
-			if (var->typeName != nullptr) {
-				var->type = (ASTDefinition*)FindNodeWithIdent(currentBlock, var->typeName);
-				if (var->type == nullptr) {
-					// ReportError(worker, "Variable(%s) could not be declared with type(%s): Type does not exist!", var->name, var->typeName);
-					return;
-				}
-				assert(var->type->nodeType != AST_DEFINITION && "Primitive types should always be resolved already");
-				if (var->type->nodeType != AST_STRUCT) {
-					// ReportError(worker, "Variable '%s' could not be declared with type '%s': '%s' does not represent a struct" , var->name, var->typeName, var->typeName);
-				}
-			} else if (var->initalExpression != nullptr) {
-				var->type = var->initalExpression->type;
-				if (var->initalExpression->nodeType == AST_VAR_EXPR) {
-					auto varExpr = (ASTVarExpr*)var->initalExpression;
-					var->isPointer = varExpr->accessMod == UNARY_ADDRESS;
-				} else if (var->initalExpression->nodeType == AST_MEMBER_EXPR) {
-					auto memberExpr = (ASTMemberExpr*)var->initalExpression;
-					var->isPointer = memberExpr->unaryOp == UNARY_ADDRESS;
-				}
-			}
-		}
-
-		if (var->initalExpression != nullptr){
-			if (!TypeCheck(var->initalExpression, var->type)) {
-				if (var->initalExpression->type == global_F32Type && var->type == global_F64Type) {
-					var->initalExpression->type = global_F64Type;
-				} else {
-					// ReportError(worker, "Type mismatch!  Variable (%s : %s) does not match inital expression (%s)", var->name, var->type->name, var->initalExpression->type->name);
-				}
-			}
-		}
 
 	} break;
 	case AST_VARIABLE_OPERATION: {
@@ -278,10 +320,15 @@ void AnalyzeStatement (ASTNode* node, ASTBlock* currentBlock) {
 
 		if (memberOp->access.memberNames != nullptr) {
 			auto memberType = ResolveMemberAccess(&memberOp->access, (ASTStruct*)memberOp->structVar->type);
-			if (!TypeCompareExplicit(memberType, memberOp->expr)) {
-				ReportError() << "Type mistmatch!  Struct member ... does not match ...";
-			}
 		}
+
+		ASTStruct* structDefn = static_cast<ASTStruct*>(memberOp->structVar->type);
+		auto structMember = GetStructMember(structDefn, &memberOp->access);
+		if (!TypeCompareExplicit(structMember->type, memberOp->expr)) {
+			ReportError() << "Type mismatch! Struct member(" << structMember->name << " : " << structMember->type->name << ") does not match expression("
+				<< memberOp->expr->type->name << ")\n";
+		}
+
 
     } break;
 

@@ -38,6 +38,7 @@
 #include "llvm/IR/PassManager.h"
 
 #include "AST.hpp"
+#include "Analysis.hpp"
 #include "Build.hpp"
 
 // HACK The current codegeneration structure is compleatly unsustainable
@@ -157,20 +158,26 @@ void Codegen (ASTStruct* structDefn) {
 	structDefn->llvmType = llvm::StructType::create(memberTypes, structName);
 }
 
+static inline llvm::Type* GetIndirectionType(ASTVariable* variable) {
+	auto llvmType = (llvm::Type*)variable->type->llvmType;
+	for (auto i = 0; i < variable->indirectionLevel; i++)
+		llvmType = llvm::PointerType::get(llvmType, 0);
+	return llvmType;
+}
+
 void Codegen (ASTFunction* function, llvm::Module* module) {
 	// HACK to skip function codegen if the function has allready been resolved
 	if (function->llvmFunction != nullptr) return;
 
-	std::vector<llvm::Type*> args(function->args.size());
-	for (auto i = 0; i < args.size(); i++) {
+	std::vector<llvm::Type*> argllvmTypes(function->args.size());
+	for (auto i = 0; i < argllvmTypes.size(); i++) {
 		auto& arg = function->args[i];
-		auto type = (llvm::Type*)arg->type->llvmType;
-		if (arg->isPointer) type = llvm::PointerType::get(type, 0);
-		args[i] = type;
+		auto llvmType = GetIndirectionType(arg);
+		argllvmTypes[i] = llvmType;
 	}
 
     // TODO HACK Better handling of uppercase main function! We should be able to call it whatever
-    llvm::FunctionType* funcType = llvm::FunctionType::get((llvm::Type*)function->returnType->llvmType, args, function->isVarArgs);
+    llvm::FunctionType* funcType = llvm::FunctionType::get((llvm::Type*)function->returnType->llvmType, argllvmTypes, function->isVarArgs);
 	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
     llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, strcmp(function->name, "Main") ? function->name : std::string("main"), global_module);
 
@@ -183,7 +190,7 @@ void Codegen (ASTFunction* function, llvm::Module* module) {
 	}
 
 	U32 i = 0;
-	for (auto iter = llvmFunc->arg_begin(); i != args.size(); iter++, i++) {
+	for (auto iter = llvmFunc->arg_begin(); i != argllvmTypes.size(); iter++, i++) {
 		auto name = (const char*)(function->args[i] + 1);
 		iter->setName(name);
 		if(function->members.size() > 0) {
@@ -248,11 +255,10 @@ void CodegenStatement (ASTNode* node) {
 internal void Codegen (ASTVariable* var) {
 	assert(var->allocaInst == nullptr);	// Variable codegens are variable decl statements
 	assert(var->type != nullptr && "Variable must have type resolved during anaysis");
-	auto llvmType = (llvm::Type*)var->type->llvmType;
-	if (var->isPointer) llvmType = llvm::PointerType::get(llvmType, 0);
+	
+	auto llvmType = GetIndirectionType(var);
 	var->allocaInst = builder->CreateAlloca(llvmType, 0, var->name);
 
-	// TODO This is silly and should not be determined at this phase of the compiler state... maybe???
 	llvm::Value* expr = nullptr;
 	if (var->initalExpression != nullptr) {
 		expr = CodegenExpr(var->initalExpression);
@@ -521,38 +527,45 @@ internal inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* mer
 	builder->SetInsertPoint(exitBlock);
 }
 
+
+// TODO make sure that a memberOperation or a variable operation only has a single level of indirection
+// or no indirection at all when doing an operation
 internal void Codegen (ASTMemberOperation* memberOp) {
+	auto structVar = memberOp->structVar;
 	auto structAlloca = (llvm::AllocaInst*)memberOp->structVar->allocaInst;
 
 	std::vector<llvm::Value*> indices;
+	indices.reserve(memberOp->access.memberCount + 1);
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
-	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
+	indices.emplace_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
 
 	for (auto i = 0; i < memberOp->access.memberCount; i++) {
 		auto& memberIndex = memberOp->access.indices[i];
 		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
-		indices.push_back(indexValue);
+		indices.emplace_back(indexValue);
 	}
 
-	llvm::Value* value_ptr = structAlloca;
-	if (memberOp->structVar->isPointer)
-		value_ptr = builder->CreateLoad(structAlloca);
-	auto gep = builder->CreateGEP(value_ptr, indices, "access");
+
+	llvm::Value* variableValue = structAlloca;
+	auto elementPtr = builder->CreateGEP(variableValue, indices, "access");
+	auto exprValue = CodegenExpr(memberOp->expr);
+	assert(exprValue != nullptr);
+
 	switch (memberOp->operation) {
 	case OPERATION_ASSIGN:
-		auto expr = CodegenExpr(memberOp->expr);
-		builder->CreateStore(expr, gep);
+		builder->CreateStore(exprValue, elementPtr);
 		return;
 	}
+
 }
 
 
 internal llvm::Value* Codegen(ASTCast* cast) {
-    auto exprValue = CodegenExpr(cast->expr);
-    assert(exprValue);
+	auto exprValue = CodegenExpr(cast->expr);
+	assert(exprValue);
 
-    // TODO much much muach more roboust casting
-    // Does not handle signed / unsigned mistmatch
+	// TODO much much muach more roboust casting
+	// Does not handle signed / unsigned mistmatch
 
 	auto floatingPointCastDirection = [](ASTDefinition* castFrom, ASTDefinition* castTo) {
 		if (castFrom == global_F32Type && castTo == global_F64Type) return  1;
@@ -561,7 +574,10 @@ internal llvm::Value* Codegen(ASTCast* cast) {
 	};
 
 	llvm::Instruction::CastOps castOp;
-    if (isFloatingPoint(cast->expr->type)) {
+
+
+
+	if (isFloatingPoint(cast->expr->type)) {
 		if (isFloatingPoint(cast->type)) {
 			if (floatingPointCastDirection(cast->expr->type, cast->type) == 1) castOp = llvm::Instruction::CastOps::FPExt;
 			else if (floatingPointCastDirection(cast->expr->type, cast->type) == -1) castOp = llvm::Instruction::CastOps::FPTrunc;
@@ -569,66 +585,98 @@ internal llvm::Value* Codegen(ASTCast* cast) {
 			if (isSignedInteger(cast->type)) castOp = llvm::Instruction::CastOps::FPToSI;
 			else if (isUnsignedInteger(cast->type)) castOp = llvm::Instruction::CastOps::FPToUI;
 		}
-    } else if (isSignedInteger(cast->expr->type)) {
-        if (isFloatingPoint(cast->type)) castOp = llvm::Instruction::CastOps::SIToFP;
-    } else if (isUnsignedInteger(cast->expr->type)) {
-        if (isFloatingPoint(cast->type)) castOp = llvm::Instruction::CastOps::UIToFP;
-    }
+	} 
+	
+	else if (isInteger(cast->expr->type)) {
+		if (isFloatingPoint(cast->type)) {
+			castOp = llvm::Instruction::CastOps::SIToFP;
+		} else {
+			return builder->CreateIntCast(exprValue, (llvm::Type*)cast->type->llvmType, isSignedInteger(cast->expr->type));
+		}
+	}
 
-    auto castValue = builder->CreateCast(castOp, exprValue, (llvm::Type*)cast->type->llvmType);
-    return castValue;
+	auto castValue = builder->CreateCast(castOp, exprValue, (llvm::Type*)cast->type->llvmType);
+	return castValue;
 }
 
-llvm::Value* Codegen(ASTMemberExpr* expr) {
+
+static inline llvm::LoadInst* GetLoadInstForIndirectionLevel(ASTVariable* variable) {
+	llvm::Value* value_ptr = (llvm::Value*)variable->allocaInst;
+	for (auto i = 0; i < variable->indirectionLevel; i++) {
+		value_ptr = builder->CreateLoad(value_ptr);
+	}
+
+	return static_cast<llvm::LoadInst*>(value_ptr);
+}
+
+
+llvm::Value* Codegen (ASTMemberExpr* expr) {
 	assert(expr->structVar->allocaInst);
-	auto structAlloca = (llvm::AllocaInst*)expr->structVar->allocaInst;
 
 	std::vector<llvm::Value*> indices;
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
-	indices.push_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
-
+	indices.emplace_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
 	for (auto i = 0; i < expr->access.memberCount; i++) {
 		auto& memberIndex = expr->access.indices[i];
 		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
-		indices.push_back(indexValue);
+		indices.emplace_back(indexValue);
 	}
 
-
-	llvm::Value* value_ptr = structAlloca;
+	llvm::Value* value_ptr = GetLoadInstForIndirectionLevel(expr->structVar);
 	auto pointer_type = (llvm::Type*)expr->structVar->type->llvmType;
-	if(expr->structVar->isPointer) value_ptr = builder->CreateLoad(structAlloca);
+
+
 	auto gep = llvm::GetElementPtrInst::Create(pointer_type, value_ptr, indices, "access", builder->GetInsertBlock());
-	if (expr->unaryOp == UNARY_ADDRESS) {
-		return gep;
+	return gep;
+}
+
+static inline ASTExpression* GetVariableExpressionFromUnaryOperation(ASTUnaryOp* unary) {
+	auto result = unary->expr;
+	while (result->nodeType == AST_UNARY_OPERATION) {
+		result = GetVariableExpressionFromUnaryOperation(static_cast<ASTUnaryOp*>(result));
+	}
+	return result;
+}
+
+static inline llvm::Value* CodegenIndirectionUnaryOperation(ASTUnaryOp* unaryOperation, llvm::Value* exprValue) {
+	auto indirectionLevel = unaryOperation->indirectionLevel;
+	if (indirectionLevel == 0) {
+		return builder->CreateLoad(exprValue);
+	} else if (indirectionLevel == 1) {
+		return exprValue;
 	} else {
-		auto load = builder->CreateLoad(gep);
-		return load;
+		auto result = exprValue;
+		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 0);
+		for (auto i = 2; i < indirectionLevel; i++) {
+			result = builder->CreateGEP(result, zeroValue);
+		}
+		return result;
+	}
+
+	assert(false);
+	return nullptr;
+}
+
+llvm::Value* Codegen(ASTUnaryOp* unaryOperation) {
+	assert(unaryOperation->expr != nullptr);
+	auto exprValue = CodegenExpr(unaryOperation->expr);
+
+	switch (unaryOperation->expr->nodeType) {
+	case UNARY_INDIRECTION:
+		return CodegenIndirectionUnaryOperation(unaryOperation, exprValue);
+	case UNARY_NOT:
+		auto load = builder->CreateLoad(exprValue);
+		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 0);
+		auto cmp = builder->CreateICmpEQ(load, zeroValue);
+		exprValue = builder->CreateZExt(cmp, llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()));
+		return exprValue;
 	}
 }
 
 llvm::Value* Codegen (ASTVarExpr* expr) {
 	assert(expr->var->allocaInst);
 	auto varAlloca = (llvm::AllocaInst*)expr->var->allocaInst;
-
-	llvm::Value* value = nullptr;
-	switch(expr->accessMod) {
-	case UNARY_LOAD:
-		value = builder->CreateLoad(varAlloca);
-		break;
-	case UNARY_ADDRESS:
-		value = varAlloca;
-		break;
-	case UNARY_VALUE:
-		value = builder->CreateLoad(varAlloca);
-		break;
-	case UNARY_NOT:
-		auto load = builder->CreateLoad(varAlloca);
-		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 0);
-		auto cmp = value = builder->CreateICmpEQ(load, zeroValue);
-		value = builder->CreateZExt(cmp, llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()));
-		break;
-	}
-	return value;
+	return varAlloca;
 }
 
 llvm::Value* Codegen (ASTIntegerLiteral* intNode) {
@@ -643,6 +691,7 @@ llvm::Value* Codegen (ASTStringLiteral* str) {
 	auto str_value = builder->CreateGlobalStringPtr((char*)str->value, "str");
 	return str_value;
 }
+
 
 int WriteNativeObject(llvm::Module* module, BuildSettings* settings) {
 	llvm::InitializeAllTargets();
@@ -661,9 +710,11 @@ int WriteNativeObject(llvm::Module* module, BuildSettings* settings) {
 
 	// Load the module to be compiled...
 	llvm::SMDiagnostic err;
-	llvm::Triple triple;
 	if (MCPU == "native") MCPU = sys::getHostCPUName();
+	llvm::Triple triple;
 	triple.setTriple(sys::getDefaultTargetTriple());
+	triple.setArch(llvm::Triple::x86_64);
+	
 
 	// Get the target specific parser.
 	std::string errorString;
@@ -781,16 +832,22 @@ int WriteIR(llvm::Module* module, BuildSettings* settings) {
 	}
 	llvm::raw_os_ostream ostream(filestream);
 	module->print(ostream, nullptr);
+	return 0;
 }
 
 int WriteExecutable(BuildSettings* settings) {
 	std::string allLibs;
-	for(auto& dir : settings->libDirs)
-		allLibs.append("-L" + settings->rootDir + dir + " ");
-	for(auto& lib : settings->libNames)
-		allLibs.append("-l" + lib + " ");
+	
+	//for (auto& dir : settings->libDirs)
+	//	allLibs.append("-L" + settings->rootDir + dir + " ");
+	//for (auto& lib : settings->libNames)
+	//	allLibs.append("-l" + lib + " ");
 
+#ifndef _WIN32
 	std::string cmd = "clang++ " + settings->outputFile + " " + allLibs + " -o " + settings->rootDir + "app";
+#else
+	std::string cmd = "clang++ " + settings->outputFile + " " + allLibs + " -o " + settings->rootDir + "app.exe";
+#endif
 	LOG_INFO("Writing Executable: " << cmd);
 	system(cmd.c_str());
 	return 0;
