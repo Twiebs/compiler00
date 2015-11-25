@@ -18,12 +18,15 @@ struct WorkQueue {
 
 struct Workspace {
     U32 workerCount;
+	U32 errorCount;
+
     Worker* workers;
     WorkQueue workQueue;
     void* memory;
 
     std::vector<Package*> packages;
 	std::vector<std::thread> threads;
+	std::mutex errorMutex;
 };
 
 void RunInterp (Package* package);
@@ -36,33 +39,22 @@ std::ostream& operator<<(std::ostream& stream, const SourceLocation& sourceLocat
 	return stream;
 }
 
-struct BuildContext {
-	std::atomic<int> errorCount = 0;
-};
+global_variable Workspace global_workspace;
 
-global_variable BuildContext global_buildContext;
 std::ostream& ReportError() {
-	global_buildContext.errorCount++;
+	global_workspace.errorCount++;
 	return std::cerr;
 }
 
 std::ostream& ReportError(const SourceLocation& sourceLocation) {
-	global_buildContext.errorCount++;
+	global_workspace.errorCount++;
 	std::cerr << sourceLocation;
 	return std::cerr;
 }
 
-//void ReportError(const SourceLocation& sourceLocation) {
-//	global_buildContext.errorCount++;
-//	std::cerr << sourceLocation << stream << "\n";
-//
-//}
-//
-
 
 
 // HACKS
-global_variable Workspace global_workspace;
 global_variable BuildSettings global_settings;
 
 void PushWork (const std::string& filename) {
@@ -143,6 +135,7 @@ static void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, Buil
 // calling the compiler to run on a file / package
 // XXX Threading appears to be broken when analasis happens
 // They are all acting upon the same memory
+ 
 #define FORCE_SINGLE_THREADED 1
 #define ARENA_BLOCK_SIZE 4096
 #define TEMP_BLOCK_SIZE 1 << 8
@@ -153,6 +146,7 @@ static void InitWorkspace (Workspace* workspace) {
     size_t memorySize = (sizeof(Worker) * workspace->workerCount ) + arenaMemorySize + tempMemorySize;
     workspace->memory = malloc(memorySize);
     workspace->workers = (Worker*)workspace->memory;
+	global_workspace.errorCount = 0;
 
     Worker* workers = (Worker*)workspace->memory;
     U8* arenaMemory = (U8*)(workers + workspace->workerCount );
@@ -253,14 +247,11 @@ void Build () {
 	// The main thread has finished parsing all work
 	JoinAllWorkersInOtherThreads(workspace);
 	auto errorCount = GetCurrentErrorCountFromAllWorkers(workspace);
-	errorCount += global_buildContext.errorCount;
+	errorCount += global_workspace.errorCount;
 	if (errorCount > 0) {
 		printf("There were %d errors parsing the project... exiting", errorCount);
 		return;
 	}
-
-
-
 
 
 	LOG_INFO("Analyzing Project");
@@ -272,14 +263,12 @@ void Build () {
 		AnalyzeAST(&workspace->workers[0]);
 		JoinAllWorkersInOtherThreads(workspace);
 		auto errorCount = GetCurrentErrorCountFromAllWorkers(workspace);
-		errorCount += global_buildContext.errorCount;
+		errorCount += global_workspace.errorCount;
 		if (errorCount > 0) {
 			printf("There were %d errors analyzing the project... exiting", errorCount);
 			return;
 		}
 	}
-
-
 
 	LOG_INFO("Generating Native Code");
 	CodegenPackage(package, &global_settings);
