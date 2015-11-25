@@ -56,6 +56,8 @@ T* MemoryArena::alloc(Args... args) {
     return new (Allocate(this, sizeof(T))) T(args...);
 };
 
+
+
 enum ASTNodeType {
 	AST_INVALID,
 	AST_BLOCK,
@@ -88,6 +90,7 @@ enum ASTNodeType {
 
 struct ASTNode {
 	ASTNodeType nodeType;
+	SourceLocation sourceLocation;
 };
 
 struct ASTDefinition : public ASTNode {
@@ -244,8 +247,12 @@ struct ASTMemberOperation : public ASTNode {
 	Operation operation;
 	ASTMemberAccess access;
 
-    ASTMemberOperation(ASTVariable* structVar, ASTExpression* expr, Operation operation) :
-			structVar(structVar), expr(expr), operation(operation) { nodeType = AST_MEMBER_OPERATION; }
+    ASTMemberOperation(const SourceLocation& location, ASTVariable* structVar, ASTExpression* expr, Operation operation) :
+			structVar(structVar), expr(expr), operation(operation) 
+	{ 
+		nodeType = AST_MEMBER_OPERATION; 
+		sourceLocation = location;
+	}
 };
 
 struct ASTVariableOperation : public ASTNode {
@@ -379,7 +386,7 @@ bool isSignedInteger(ASTDefinition* type);
 bool isUnsignedInteger (ASTDefinition* type);
 bool isType(ASTNode* node);
 
-
+// TODO make this a lookuptable rather than branching
 inline int GetTokenPrecedence (const Token& token) {
 	if (token.type == TOKEN_LOGIC_OR) 				return 5;
 	if (token.type == TOKEN_LOGIC_AND) 				return 5;
@@ -400,10 +407,15 @@ inline int GetTokenPrecedence (const Token& token) {
 // and intrinsic operations should be seperated from their tokens.
 inline Operation TokenToOperation (const Token& token) {
 	switch (token.type) {
+		case TOKEN_EQUALS: return OPERATION_ASSIGN;
 		case TOKEN_ADD: return OPERATION_ADD;
 		case TOKEN_SUB: return OPERATION_SUB;
 		case TOKEN_MUL: return OPERATION_MUL;
 		case TOKEN_DIV: return OPERATION_DIV;
+		case TOKEN_ADD_EQUALS: return OPERATION_ADD;
+		case TOKEN_SUB_EQUALS: return OPERATION_SUB;
+		case TOKEN_MUL_EQUALS: return OPERATION_MUL;
+		case TOKEN_DIV_EQUALS: return OPERATION_DIV;
 
 		case TOKEN_LOGIC_GREATER: return OPERATION_GT;
 		case TOKEN_LOGIC_LESS: return OPERATION_LT;
@@ -415,4 +427,5 @@ inline Operation TokenToOperation (const Token& token) {
 	}
 
 	assert(false);
+	return static_cast<Operation>(0);
 }

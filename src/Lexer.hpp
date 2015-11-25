@@ -72,6 +72,8 @@ enum TokenType {
     TOKEN_END_OF_BUFFER,
 };
 
+const char* ToString(TokenType tokenType);
+
 struct FileSite {
     std::string filename;
     U32 lineNumber;
@@ -82,7 +84,13 @@ struct FileSite {
     }
 };
 
+struct SourceLocation {
+	U32 lineNumber = 0, columnNumber = 0;
+	const char* filename = "INVALID SOURCE LOCATION";
+};
+
 struct Token {
+	SourceLocation location;
     FileSite site;
     TokenType type;
     std::string string;

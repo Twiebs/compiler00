@@ -46,7 +46,7 @@ ASTIntegerLiteral* global_falseLiteral;
 
 // TODO put nodeType initalization in the constructor of the ASTNodes
 
-internal inline ASTDefinition* CreatePrimitiveType(MemoryArena* arena, ASTBlock* block, const std::string& name) {
+static inline ASTDefinition* CreatePrimitiveType(MemoryArena* arena, ASTBlock* block, const std::string& name) {
 	auto typeDefn = new (Allocate(arena, sizeof(ASTDefinition))) ASTDefinition;
     typeDefn->name = (char*)Allocate(arena, name.size() + 1);
     memcpy((void*)typeDefn->name, name.c_str(), name.size() + 1);
@@ -113,10 +113,10 @@ ASTVariableOperation* CreateVariableOperation (MemoryArena* arena, ASTVariable* 
 //    return result;
 //}
 
-ASTMemberOperation* CreateMemberOperation (MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr) {
-	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
-	return result;
-}
+//ASTMemberOperation* CreateMemberOperation (MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr) {
+//	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
+//	return result;
+//}
 
 //ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, const std::vector<std::string>& memberNames) {
 //	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
@@ -174,7 +174,7 @@ ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar) {
 //}
 
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
-	for (auto i = 0; i < structDefn->memberCount; i++) {
+	for (U32 i = 0; i < structDefn->memberCount; i++) {
         auto structMember = structDefn->members[i];
 		if (!memberName.compare(structMember.name)) {
 			return i;

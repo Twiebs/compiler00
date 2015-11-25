@@ -6,10 +6,16 @@
 
 #include "Lexer.hpp"
 
+const char* ToString(TokenType tokenType) {
+	switch (tokenType) {
+	default: return "UNIMPLEMENTED ToString(TokenType)";
+	};
+}
+
 void Lexer::SetBuffer(const char* buffer) {
     this->currentChar = buffer;
-    columnNumber = 0;
-    lineNumber = 0;
+    columnNumber = 1;
+    lineNumber = 1;
 }
 
 void Lexer::AppendToken(char character) {
@@ -21,16 +27,19 @@ void Lexer::AppendCurrentChar() {
     EatCurrentChar();
 }
 
-//    worker->lastChar = worker->nextChar;
-//    worker->nextChar = getc(worker->file);
-//    worker->colNumber++;
-//    if (worker->lastChar == '\n') {
-//        worker->lineNumber++;
-//        worker->colNumber = 1;
-//    }
+static inline bool IsNewline (const char* current) {
+	if (*current == '\r') {
+		auto next = current + 1;
+		auto result = *next == '\n';
+		return result;
+	}
+
+	auto result = *current == '\n';
+	return result;
+}
 
 void Lexer::EatCurrentChar() {
-    if (*currentChar == '\n') {
+    if (IsNewline(currentChar)) {
         lineNumber++;
         columnNumber = 1;
         currentChar++;
@@ -57,23 +66,15 @@ void Lexer::EatNewlineChars() {
 	else currentChar++;
 }
 
-static inline bool IsNewline (const char* current) {
-	if (*current == '\r') {
-		auto next = current + 1;
-		auto result = *next == '\n';
-		return result;
-	}
-
-	auto result = *current == '\n';
-	return result;
-}
 
 void Lexer::nextToken() {
 #ifdef USE_INDENT_BLOCK
     if (IsNewline(currentChar)) {
+		lineNumber++;
+		columnNumber = 1;
 		EatNewlineChars();
         if (IsNewline(currentChar)) {
-            nextToken();
+            nextToken(); // Recurse through the indentBlock again
             return;
         }
 
@@ -93,27 +94,34 @@ void Lexer::nextToken() {
             }
         }
 
-        if (indentLevel > currentIndentLevel) {
-            token.string = "";
+
+		token.string = "";
+		token.site.lineNumber = lineNumber;
+		token.site.columNumber = columnNumber;
+		token.location.lineNumber = lineNumber;
+		token.location.columnNumber = lineNumber;
+
+        if (indentLevel > (int)currentIndentLevel) {
             token.type = TOKEN_BLOCK_OPEN;;
-            token.site.lineNumber = lineNumber;
-            token.site.columNumber = columnNumber;
-            currentIndentLevel = indentLevel;
+			currentIndentLevel = indentLevel;
             return;
-        } else if (indentLevel < currentIndentLevel) {
+        } else if (indentLevel < (int)currentIndentLevel) {
             token.string = "";
             token.type = TOKEN_BLOCK_CLOSE;
-            token.site.lineNumber = lineNumber;
-            token.site.columNumber = columnNumber;
             currentIndentLevel = indentLevel;
             return;
         }
+
     }
 #endif
 
+	while (isspace(*currentChar)) EatCurrentChar();
+
     token.string = "";
     token.type = TOKEN_UNKOWN;
-    while (isspace(*currentChar)) EatCurrentChar();
+	token.location.lineNumber = lineNumber;
+	token.location.columnNumber = columnNumber;
+
     if (isalpha(*currentChar) || *currentChar== '_') {
         while ((isalnum(*currentChar) || *currentChar == '_') && *currentChar!= '.') AppendCurrentChar();
         if (token.string == "IMPORT") 			    token.type = TOKEN_IMPORT;
@@ -203,7 +211,7 @@ void Lexer::nextToken() {
         AppendCurrentChar();
         if (*currentChar == '=') {
             AppendCurrentChar();
-            token.type == TOKEN_LOGIC_EQUAL;
+            token.type = TOKEN_LOGIC_EQUAL;
         } else {
             token.type = TOKEN_EQUALS;
         }

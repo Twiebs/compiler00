@@ -22,7 +22,13 @@
 #include "Lexer.hpp"
 
 std::ostream& ReportError (const FileSite& site);
-std::ostream& ReportError ();
+std::ostream& ReportError();
+std::ostream& ReportError(const SourceLocation& sourceLocation);
+#define ReportSourceError(sourceLocation, msg) ReportError(sourceLocation) << msg << "\n"
+
+
+// void ReportError(const SourceLocation& sourceLocation, std::ostream& stream);
+
 
 struct Package {
     std::string name;
@@ -33,6 +39,8 @@ struct Package {
 };
 
 struct Worker {
+	U32 workerID = 0;
+
     U32 errorCount = 0;
     MemoryArena arena;
     U8* tempMemory;

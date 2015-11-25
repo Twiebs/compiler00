@@ -7,8 +7,8 @@ FooData :: STRUCT
 	size : U64
 
 MemoryBlock :: STRUCT
-	size : S32
-	used : S32
+	size : U64
+	used : U64
 	memory : @U8
 
 Main :: () >> S32
@@ -18,7 +18,5 @@ Main :: () >> S32
 
 	printf("Hello World!\n")
 	printf("Memblock size: %d\n" memblock.size)
-	printf("Memblock used: %d\n" memblock.Liused)
-
-
+	printf("Memblock used: %d\n" memblock.used)
 	RETURN 0

@@ -23,26 +23,46 @@ struct Workspace {
     void* memory;
 
     std::vector<Package*> packages;
+	std::vector<std::thread> threads;
 };
 
 void RunInterp (Package* package);
-void ParseFile (Worker* worker, const std::string& rootDir, const std::string& filename);
+int ParseFile(Worker* worker, const std::string& rootDir, const std::string& filename);
 void CodegenPackage(Package* package, BuildSettings* settings);
 void AnalyzeAST (Worker* worker);
 
-std::ostream& ReportError (const FileSite& site) {
-	return std::cout;
+std::ostream& operator<<(std::ostream& stream, const SourceLocation& sourceLocation) {
+	stream << "[" << sourceLocation.filename << " " << sourceLocation.lineNumber << ":" << sourceLocation.columnNumber << "]";
+	return stream;
 }
 
+struct BuildContext {
+	std::atomic<int> errorCount = 0;
+};
+
+global_variable BuildContext global_buildContext;
 std::ostream& ReportError() {
-	return std::cout;
+	global_buildContext.errorCount++;
+	return std::cerr;
 }
 
+std::ostream& ReportError(const SourceLocation& sourceLocation) {
+	global_buildContext.errorCount++;
+	std::cerr << sourceLocation;
+	return std::cerr;
+}
 
+//void ReportError(const SourceLocation& sourceLocation) {
+//	global_buildContext.errorCount++;
+//	std::cerr << sourceLocation << stream << "\n";
+//
+//}
+//
+
+
+
+// HACKS
 global_variable Workspace global_workspace;
-
-
-// HACK
 global_variable BuildSettings global_settings;
 
 void PushWork (const std::string& filename) {
@@ -65,7 +85,7 @@ void PushWork (const std::string& filename) {
     queue->mutex.unlock();
 }
 
-internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, BuildSettings* settings) {
+static void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, BuildSettings* settings) {
 	bool working = true;
 
 	auto getWork = [&]() -> const std::string {
@@ -126,7 +146,7 @@ internal void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, Bu
 #define FORCE_SINGLE_THREADED 1
 #define ARENA_BLOCK_SIZE 4096
 #define TEMP_BLOCK_SIZE 1 << 8
-internal void InitWorkspace (Workspace* workspace) {
+static void InitWorkspace (Workspace* workspace) {
     workspace->workerCount = FORCE_SINGLE_THREADED ?  1 : std::thread::hardware_concurrency();
     U32 arenaMemorySize = ARENA_BLOCK_SIZE * workspace->workerCount ;
     U32 tempMemorySize = workspace->workerCount * TEMP_BLOCK_SIZE;
@@ -140,20 +160,21 @@ internal void InitWorkspace (Workspace* workspace) {
     for (U32 i = 0; i < workspace->workerCount ; i++) {
         Worker* worker = &workers[i];
         worker = new (worker) Worker;
+		worker->workerID = i;
         worker->tempMemory = tempMemory + (i * TEMP_BLOCK_SIZE);
         worker->arena.memory = arenaMemory + (i * ARENA_BLOCK_SIZE);
         worker->arena.capacity = ARENA_BLOCK_SIZE;
     }
 }
 
-internal void FreeSubArenas (MemoryArena* arena) {
+static void FreeSubArenas(MemoryArena* arena) {
     if (arena->next != nullptr) {
         FreeSubArenas(arena->next);
         free(arena->next);
     }
 }
 
-internal void ExitWorkspace (Workspace* workspace) {
+static void ExitWorkspace(Workspace* workspace) {
     for (U32 i = 0; i < workspace->workerCount; i++)
         FreeSubArenas(&workspace->workers[i].arena);
     free(workspace->memory);
@@ -182,12 +203,12 @@ void Build () {
         worker->currentPackage = package;
     }
 
-	std::vector<std::thread> threads(workspace->workerCount - 1);
-	if (workspace->workerCount > 1) {
-		for (int i = workspace->workerCount - 2; i >= 0; i--) { // if 4 workers then start at index 2 end at 0
-				Worker* worker = &workspace->workers[i + 1]; // add a 1 because there are workerCount workers
-				threads[i] = std::thread(ThreadProc, worker, &workspace->workQueue, i + 1, &settings); // add one again because 0 is the main thread
-		}
+
+	// Create the threads for our workspace and begin the thread procedure with each worker
+	workspace->threads.resize(workspace->workerCount - 1);
+	for (auto i = 1; i < static_cast<int>(workspace->workerCount); i++) {
+		auto worker = &workspace->workers[i];
+		workspace->threads[i - 1] = std::thread(ThreadProc, worker, &workspace->workQueue, i, &settings);
 	}
 
 	// This is a quick hack to insure that there are workers in the global work queue before
@@ -195,53 +216,72 @@ void Build () {
 	using namespace std::literals;
 	std::this_thread::sleep_for(1ms);
 	PushWork(settings.inputFile);
-	ThreadProc(&workspace->workers[0], &workspace->workQueue, 0, &settings);	// Kick of the main thread
+	// Kick of the main thread
+	ThreadProc(&workspace->workers[0], &workspace->workQueue, 0, &settings);	
 
-	// The main thread has fallen out of its work loop, insure all other threads have also finished
-	// execution and block untill they do so.
-	if (workspace->workerCount > 1) {
-		for (int i = workspace->workerCount - 2; i >= 0; i--) {
-			auto& thread = threads[i];
+
+	// TODO if the main thread falls out since there is no work avaible and another worker adds a file to import
+	// that imported file could import an enormous amount of files and the main thread would sit around doing nothing
+
+	// This procedure will be called when the main thread has finished its current task
+	// and there is no other work avaible for it to compleate.  The main thread waits for
+	// the other workers in seprate threads to compleate the work they are executing.
+	static auto JoinAllWorkersInOtherThreads = [](Workspace* workspace) {
+		for (auto i = 1; i < static_cast<int>(workspace->workerCount); i++) {
+			auto& thread = workspace->threads[i - 1];
 			thread.join();
 		}
-	}
+	};
 
-	LOG_INFO("Parsing complete");
-
-
-	// Now we resolve the dependices of our workers
-	if (workspace->workerCount > 1) {
-		for(S32 i = workspace->workerCount - 2; i >= 0; i--) {
-			threads[i] = std::thread(AnalyzeAST, &workspace->workers[i + 1]);
+	static auto GetCurrentErrorCountFromAllWorkers = [](Workspace* workspace) {
+		U32 errorCount = 0;
+		for (auto i = 0; i < static_cast<int>(workspace->workerCount); i++) {
+			errorCount += workspace->workers[i].errorCount;
 		}
-	}
+		return errorCount;
+	};
+
+	//template<typename TProcedure, typename... TProcedureArgs>
+	//static auto ExecuteProcedureWithAllWorkers = [](Workspace* workspace, TProcedure procedure, TProcedureArgs... args) {
+	//	for (auto i = 1; i < workspace->workerCount; i++) {
+	//		workspace->threads[i] = std::thread(procedure, &workspace->workers[i + 1], args...);
+	//	}
+	//	procedure(&workspace->workers[0], args...);
+	//}
 
 
-	LOG_INFO("Analyzing Package");
-	AnalyzeAST(&workspace->workers[0]);	// The main thread resolves its tree
-
-	// The main thread has finsihed execution of AST resolution
-	// we have no idea how much work is left for the other threads so
-	// we block until they are all finished
-	if (workspace->workerCount > 1) {
-		for (S32 i = workspace->workerCount - 2; i >= 0; i--) {
-			auto& thread = threads[i];
-			thread.join();
-		}
-	}
-	LOG_INFO("Analysis Complete");
-
-	U32 errorCount = 0;
-	for (S32 i = 0; i < workspace->workerCount; i++) {
-		errorCount += workspace->workers[i].errorCount;
-	}
-
-	if (errorCount != 0) {
-		LOG_ERROR("There were " << errorCount << " errors building the package");
+	// The main thread has finished parsing all work
+	JoinAllWorkersInOtherThreads(workspace);
+	auto errorCount = GetCurrentErrorCountFromAllWorkers(workspace);
+	errorCount += global_buildContext.errorCount;
+	if (errorCount > 0) {
+		printf("There were %d errors parsing the project... exiting", errorCount);
 		return;
 	}
 
-	LOG_INFO("Generating Package");
+
+
+
+
+	LOG_INFO("Analyzing Project");
+	//AnalyzeAST(&workspace->workers[0]);	// The main thread resolves its tree
+
+	{
+		for (auto i = 1; i < static_cast<int>(workspace->workerCount); i++)
+			workspace->threads[i] = std::thread(AnalyzeAST, &workspace->workers[i + 1]);
+		AnalyzeAST(&workspace->workers[0]);
+		JoinAllWorkersInOtherThreads(workspace);
+		auto errorCount = GetCurrentErrorCountFromAllWorkers(workspace);
+		errorCount += global_buildContext.errorCount;
+		if (errorCount > 0) {
+			printf("There were %d errors analyzing the project... exiting", errorCount);
+			return;
+		}
+	}
+
+
+
+	LOG_INFO("Generating Native Code");
 	CodegenPackage(package, &global_settings);
 
     // Test code to see how the interp works

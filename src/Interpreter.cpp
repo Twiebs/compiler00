@@ -79,15 +79,16 @@ internal void PrintDefn (ASTNode* node) {
 }
 
 
-internal void Print (ASTIntegerLiteral* literal) {
-	printf("%d : %s\n", literal->value, literal->type->name);
+static void Print(ASTIntegerLiteral* literal) {
+	std::cout << literal->value << " : " << literal->type->name;
+	// printf("%d : %s\n", literal->value, literal->type->name);
 }
 
-internal void Print (ASTStringLiteral* literal) {
-	printf("'%s' : @%s\n", literal->value, literal->type->name);
+static void Print(ASTStringLiteral* literal) {
+	std::cout << literal->value << " : " << literal->type->name;
 }
 
-internal void PrintExpr (ASTExpression* expr) {
+static void PrintExpr (ASTExpression* expr) {
 	switch (expr->nodeType) {
 		case AST_INTEGER_LITERAL:
 			Print((ASTIntegerLiteral*)expr);
@@ -210,10 +211,12 @@ void RunInterp (Package* package) {
 
 			if (isSignedInteger(expr->type)) {
 				auto intValue = result.IntVal.getSExtValue();
-				printf("The result is %d ", intValue);
+				std::cout << "The result is " << intValue;
+				// printf("The result is %d ", intValue);
 			} else if (isFloatingPoint(expr->type)) {
 				auto floatValue = result.FloatVal;
-				printf("The result is %f", floatValue);
+				// printf("The result is %f", floatValue);
+				std::cout << "The result is " << floatValue;
 			} else {
 			}
 

@@ -144,7 +144,7 @@ void CodegenPackage (Package* package, BuildSettings* settings) {
 
 void Codegen (ASTStruct* structDefn) {
 	std::vector<llvm::Type*> memberTypes;
-	for (auto i = 0; i < structDefn->memberCount; i++) {
+	for (U32 i = 0; i < structDefn->memberCount; i++) {
 		auto& type = structDefn->members[i].type;
 		if (type->llvmType == nullptr) {
 			assert(type->nodeType = AST_STRUCT);
@@ -170,7 +170,7 @@ void Codegen (ASTFunction* function, llvm::Module* module) {
 	if (function->llvmFunction != nullptr) return;
 
 	std::vector<llvm::Type*> argllvmTypes(function->args.size());
-	for (auto i = 0; i < argllvmTypes.size(); i++) {
+	for (U32 i = 0; i < argllvmTypes.size(); i++) {
 		auto& arg = function->args[i];
 		auto llvmType = GetIndirectionType(arg);
 		argllvmTypes[i] = llvmType;
@@ -363,7 +363,10 @@ internal llvm::Value* Codegen (ASTBinaryOperation* binop)	{
             return builder->CreateICmp((llvm::CmpInst::Predicate)(predicateBits + 32), lhs, rhs);
         } else if (isSignedInteger(binop->lhs->type)) {
             return builder->CreateICmp((llvm::CmpInst::Predicate)(predicateBits + 36), lhs, rhs);
-        }
+		} else {
+			assert(false);
+			return nullptr;
+		}
     };
 
 	auto createMul = [binop, lhs, rhs]() -> llvm::Value* {
@@ -405,7 +408,7 @@ internal llvm::Value* Codegen (ASTCall* call) {
 
 	std::vector<llvm::Value*> argsV;
 	auto argList = call->args;
-	for (auto i = 0; i < call->argCount; i++) {
+	for (U32 i = 0; i < call->argCount; i++) {
 		auto arg = argList[i];
 		auto arg_value = CodegenExpr(arg);
 		assert(arg_value != nullptr);
@@ -530,16 +533,16 @@ internal inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* mer
 
 // TODO make sure that a memberOperation or a variable operation only has a single level of indirection
 // or no indirection at all when doing an operation
-internal void Codegen (ASTMemberOperation* memberOp) {
+static void Codegen(ASTMemberOperation* memberOp) {
+	auto structAlloca = static_cast<llvm::AllocaInst*>(memberOp->structVar->allocaInst);
 	auto structVar = memberOp->structVar;
-	auto structAlloca = (llvm::AllocaInst*)memberOp->structVar->allocaInst;
 
 	std::vector<llvm::Value*> indices;
 	indices.reserve(memberOp->access.memberCount + 1);
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
 	indices.emplace_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
 
-	for (auto i = 0; i < memberOp->access.memberCount; i++) {
+	for (U32 i = 0; i < memberOp->access.memberCount; i++) {
 		auto& memberIndex = memberOp->access.indices[i];
 		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
 		indices.emplace_back(indexValue);
@@ -616,7 +619,7 @@ llvm::Value* Codegen (ASTMemberExpr* expr) {
 	std::vector<llvm::Value*> indices;
 	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
 	indices.emplace_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
-	for (auto i = 0; i < expr->access.memberCount; i++) {
+	for (U32 i = 0; i < expr->access.memberCount; i++) {
 		auto& memberIndex = expr->access.indices[i];
 		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
 		indices.emplace_back(indexValue);
@@ -671,6 +674,9 @@ llvm::Value* Codegen(ASTUnaryOp* unaryOperation) {
 		exprValue = builder->CreateZExt(cmp, llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()));
 		return exprValue;
 	}
+
+	assert(false);
+	return nullptr;
 }
 
 llvm::Value* Codegen (ASTVarExpr* expr) {

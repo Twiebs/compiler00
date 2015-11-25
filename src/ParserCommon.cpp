@@ -5,8 +5,10 @@
 static UnaryOperator TokenToUnaryOp(const Token& token) {
 	switch (token.type) {
 	case TOKEN_LOGIC_NOT: return UNARY_NOT;
-	default: assert(false);
 	}
+	
+	assert(false);
+	return static_cast<UnaryOperator>(0);
 }
 
 
