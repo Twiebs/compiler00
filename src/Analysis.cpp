@@ -10,18 +10,13 @@
 #include "Build.hpp"
 #include "Analysis.hpp"
 
-void ReportError (Worker* worker, FileSite& site, const std::string& msg);
-void ReportError (Worker* worker, FileSite* site, const char* msg, ...);
-void ReportError(Worker* worker, const char* msg, ...);
-void ReportError (Worker* worker, const std::string& msg);
+static inline void AnalyzeBlock(ASTBlock* block);
+static void AnalyzeIfStatement (ASTIfStatement* ifStatement, ASTBlock* currentBlock);
+static void AnalyzeCall(ASTCall* call, ASTBlock* currentBlock);
 
-internal inline void AnalyzeBlock(ASTBlock* block);
-internal void AnalyzeIfStatement (ASTIfStatement* ifStatement, ASTBlock* currentBlock);
-internal void AnalyzeCall(ASTCall* call, ASTBlock* currentBlock);
-
-internal inline bool TypeCheck (ASTExpression* expr, ASTDefinition* typedefn);
-internal inline bool TypeCompareExplicit (ASTExpression* exprA, ASTExpression* exprB);
-internal inline bool TypeCompareImplicit (ASTExpression* exprA, ASTExpression* exprB);
+static inline bool TypeCheck (ASTExpression* expr, ASTDefinition* typedefn);
+static inline bool TypeCompareExplicit (ASTExpression* exprA, ASTExpression* exprB);
+static inline bool TypeCompareImplicit (ASTExpression* exprA, ASTExpression* exprB);
 
 ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 argc) {
     for (U32 i = 0; i < funcSet->functions.size(); i++) {
@@ -58,7 +53,7 @@ ASTFunction* FindFunction (ASTFunctionSet* funcSet, ASTExpression** args, U32 ar
     return nullptr;
 }
 
-internal void AnalyzeCall (ASTCall* call, ASTBlock* currentBlock) {
+static void AnalyzeCall (ASTCall* call, ASTBlock* currentBlock) {
 	assert(call->nodeType == AST_CALL);
     auto funcSet = (ASTFunctionSet*)FindNodeWithIdent(currentBlock, call->name);
 	if (funcSet == nullptr) {
@@ -177,22 +172,20 @@ static inline void AnalyzeBlock (ASTBlock* block) {
 	}
 }
 
-S8 GetAbsoluteIndirectionLevelForExpression(ASTExpression* expr) {
-	S8 result = 0;
+static S8 GetAbsoluteIndirectionLevelForExpression(ASTExpression* expr) {
 	if (expr->nodeType == AST_VAR_EXPR) {
 		auto variableExpr = static_cast<ASTVarExpr*>(expr);
-		result += variableExpr->var->indirectionLevel;
+		return variableExpr->var->indirectionLevel;
 	} else if (expr->nodeType == AST_MEMBER_EXPR) {
 		auto memberExpr = static_cast<ASTMemberExpr*>(expr);
-		result += memberExpr->structVar->indirectionLevel;
+		return memberExpr->structVar->indirectionLevel;
 	} else if (expr->nodeType == AST_UNARY_OPERATION) {
 		auto unaryOperation = static_cast<ASTUnaryOp*>(expr);
-		result += GetAbsoluteIndirectionLevelForExpression(unaryOperation->expr);
+		auto result = GetAbsoluteIndirectionLevelForExpression(unaryOperation->expr);
 		result += unaryOperation->indirectionLevel;
+		return result;
 	}
-	return result;
 }
-
 
 static inline void InferVariableTypeFromExpression(ASTVariable* variable) {
 	assert(variable->initalExpression != nullptr);
@@ -211,7 +204,7 @@ static inline ASTNode* FindNodeWithIndentAndExpectType(ASTBlock* block, char* na
 	return node;
 }
 
-static inline void AnalyzeVariableDecleration (ASTVariable* variable, ASTBlock* currentBlock) {
+static inline void AnalyzeVariableDecleration(ASTVariable* variable, ASTBlock* currentBlock) {
 	if (variable->type == nullptr && variable->typeName != nullptr) {
 		variable->type = static_cast<ASTDefinition*>(FindNodeWithIndentAndExpectType(currentBlock, variable->typeName, AST_DEFINITION));
 		if (variable->type == nullptr) {
@@ -321,14 +314,14 @@ void AnalyzeStatement (ASTNode* node, ASTBlock* currentBlock) {
 		AnalyzeBlock(iter->body);
 	} break;
 
-	case AST_CALL:
-		AnalyzeCall((ASTCall*)node, currentBlock);
-		break;
+	case AST_CALL: {
+		auto call = static_cast<ASTCall*>(node);
+		AnalyzeCall(call, currentBlock);
+	} break;
 
 	case AST_VARIABLE: {
-		auto var = (ASTVariable*)node;
-
-
+		auto variable = static_cast<ASTVariable*>(node);
+		AnalyzeVariableDecleration(variable, currentBlock);
 	} break;
 
 	case AST_VARIABLE_OPERATION: {

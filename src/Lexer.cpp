@@ -189,10 +189,10 @@ void Lexer::nextToken() {
         if (*currentChar== ':') {
             AppendCurrentChar();
             token.type = TOKEN_TYPE_DEFINE;
-        } else if (*currentChar == '=') {
+        } /*else if (*currentChar == '=') {
             AppendCurrentChar();
             token.type = TOKEN_TYPE_INFER;
-        } else {
+        } */ else {
             token.type = TOKEN_TYPE_DECLARE;
         }
     }

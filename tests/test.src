@@ -16,6 +16,8 @@ Main :: () >> S32
 	memblock.size = U64(4096)
 	memblock.used = U64(0)
 
+	memptr := @memblock
+
 	printf("Hello World!\n")
 	printf("Memblock size: %d\n" memblock.size)
 	printf("Memblock used: %d\n" memblock.used)

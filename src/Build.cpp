@@ -131,11 +131,14 @@ static void ThreadProc (Worker* worker, WorkQueue* workQueue, U32 threadID, Buil
 	}
 }
 
-// TODO InitWorkspace should be able to be done lazily if the interp is run instead of directly
-// calling the compiler to run on a file / package
-// XXX Threading appears to be broken when analasis happens
-// They are all acting upon the same memory
- 
+static void FreeSubArenas(MemoryArena* arena) {
+	if (arena->next != nullptr) {
+		FreeSubArenas(arena->next);
+		free(arena->next);
+	}
+}
+
+
 #define FORCE_SINGLE_THREADED 1
 #define ARENA_BLOCK_SIZE 4096
 #define TEMP_BLOCK_SIZE 1 << 8
@@ -143,7 +146,7 @@ static void InitWorkspace (Workspace* workspace) {
     workspace->workerCount = FORCE_SINGLE_THREADED ?  1 : std::thread::hardware_concurrency();
     U32 arenaMemorySize = ARENA_BLOCK_SIZE * workspace->workerCount ;
     U32 tempMemorySize = workspace->workerCount * TEMP_BLOCK_SIZE;
-    size_t memorySize = (sizeof(Worker) * workspace->workerCount ) + arenaMemorySize + tempMemorySize;
+    size_t memorySize = (sizeof(Worker) * workspace->workerCount) + arenaMemorySize + tempMemorySize;
     workspace->memory = malloc(memorySize);
     workspace->workers = (Worker*)workspace->memory;
 	global_workspace.errorCount = 0;
@@ -161,18 +164,15 @@ static void InitWorkspace (Workspace* workspace) {
     }
 }
 
-static void FreeSubArenas(MemoryArena* arena) {
-    if (arena->next != nullptr) {
-        FreeSubArenas(arena->next);
-        free(arena->next);
-    }
+static void ExitWorkspace(Workspace* workspace) {
+	for (U32 i = 0; i < workspace->workerCount; i++)
+		FreeSubArenas(&workspace->workers[i].arena);
+	free(workspace->memory);
 }
 
-static void ExitWorkspace(Workspace* workspace) {
-    for (U32 i = 0; i < workspace->workerCount; i++)
-        FreeSubArenas(&workspace->workers[i].arena);
-    free(workspace->memory);
-}
+
+
+
 
 void Build () {
     // HACK to keep working with current build system
