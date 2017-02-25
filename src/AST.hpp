@@ -6,38 +6,6 @@
 #include "Common.hpp"
 #include "Lexer.hpp"
 
-
-
-// TODO add dynamic array
-template<typename T>
-class Array {
-    size_t capacity;
-    U32 count;
-    T* data;
-};
-
-template<size_t MEMORY_SIZE>
-struct MemoryBlock {
-	size_t used = 0;
-	U8 memory[MEMORY_SIZE];
-};
-
-
-//class ASTNodeAllocator {
-//	typedef MemoryBlock<4096> ASTMemblock;
-//	std::vector<ASTMemblock*> blocks;
-//	void* Allocate(size_t size);
-//
-//public:
-//	template<typename TNode, typename... TArgs>
-//	T* CreateNode(TArgs... args);
-//};
-//
-//template<typename TNode, typename... TArgs>
-//T* ASTNodeAllocator::CreateNode(TArgs..args) {
-//	
-//}
-
 #define ARENA_BLOCK_SIZE 4096
 struct MemoryArena {
     size_t used = 0;
@@ -56,28 +24,26 @@ T* MemoryArena::alloc(Args... args) {
     return new (Allocate(this, sizeof(T))) T(args...);
 };
 
-
-
 enum ASTNodeType {
 	AST_INVALID,
 	AST_BLOCK,
 	AST_DEFINITION,
 
 	AST_FUNCTION,
-    AST_FUNCTION_SET, // TODO set function sets to this seperate nodeType
+  AST_FUNCTION_SET, // TODO set function sets to this seperate nodeType
 	AST_STRUCT,
 
-    AST_VARIABLE,
+  AST_VARIABLE,
 
 	AST_MEMBER_OPERATION,
 	AST_VARIABLE_OPERATION,
-    AST_BINARY_OPERATION,
-    AST_UNARY_OPERATION, // TODO consider switching to these for consistancy!
+  AST_BINARY_OPERATION,
+  AST_UNARY_OPERATION, // TODO consider switching to these for consistancy!
 
 	AST_MEMBER_EXPR,
-    AST_VAR_EXPR,
-    AST_CAST,
-    AST_CALL,
+  AST_VAR_EXPR,
+  AST_CAST,
+  AST_CALL,
 
 	AST_IF,
 	AST_ITER,
@@ -327,9 +293,6 @@ extern ASTDefinition* global_F16Type;
 extern ASTDefinition* global_F32Type;
 extern ASTDefinition* global_F64Type;
 extern ASTDefinition* global_F128Type;
-extern ASTIntegerLiteral* global_trueLiteral;
-extern ASTIntegerLiteral* global_falseLiteral;
-
 
 // Identifiers
 void AssignIdent (ASTBlock* block, ASTNode* node, const std::string& name);
@@ -385,6 +348,19 @@ bool isInteger(ASTDefinition* type);
 bool isSignedInteger(ASTDefinition* type);
 bool isUnsignedInteger (ASTDefinition* type);
 bool isType(ASTNode* node);
+
+inline bool IsUnaryOperator(TokenType token) {
+	switch (token) {
+	case TOKEN_ADDRESS:
+	case TOKEN_VALUE:
+	case TOKEN_LOGIC_NOT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+
 
 // TODO make this a lookuptable rather than branching
 inline int GetTokenPrecedence (const Token& token) {

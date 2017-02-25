@@ -49,17 +49,14 @@ enum TokenType {
     TOKEN_TO,
     TOKEN_RETURN,
 
-    // Literals
-            TOKEN_TRUE,
-    TOKEN_FALSE,
-
     // TODO we check if the token has a dot in it during the lex phase
     // then we check if it has a dot again in the parExpr phase.
     // Just return a different token it will be cheaper
-            TOKEN_NUMBER,
+    TOKEN_NUMBER,
     TOKEN_STRING,
 
-	TOKEN_COMMA,
+
+    TOKEN_COMMA,
     TOKEN_DOTDOT,
 
     TOKEN_PAREN_OPEN,

@@ -55,25 +55,19 @@ static inline ASTDefinition* CreatePrimitiveType(MemoryArena* arena, ASTBlock* b
 }
 
 void InitalizeLanguagePrimitives(MemoryArena* arena, ASTBlock* block) {
-	global_voidType = CreatePrimitiveType(arena, block, "Void");
-
-	global_U8Type  = CreatePrimitiveType(arena, block, "U8");
-	global_U16Type = CreatePrimitiveType(arena, block, "U16");
-	global_U32Type = CreatePrimitiveType(arena, block, "U32");
-	global_U64Type = CreatePrimitiveType(arena, block, "U64");
-
-	global_S8Type  = CreatePrimitiveType(arena, block, "S8");
-	global_S16Type = CreatePrimitiveType(arena, block, "S16");
-	global_S32Type = CreatePrimitiveType(arena, block, "S32");
-	global_S64Type = CreatePrimitiveType(arena, block, "S64");
-
+	global_voidType  = CreatePrimitiveType(arena, block, "Void");
+	global_U8Type    = CreatePrimitiveType(arena, block, "U8");
+	global_U16Type   = CreatePrimitiveType(arena, block, "U16");
+	global_U32Type   = CreatePrimitiveType(arena, block, "U32");
+	global_U64Type   = CreatePrimitiveType(arena, block, "U64");
+	global_S8Type    = CreatePrimitiveType(arena, block, "S8");
+	global_S16Type   = CreatePrimitiveType(arena, block, "S16");
+	global_S32Type   = CreatePrimitiveType(arena, block, "S32");
+	global_S64Type   = CreatePrimitiveType(arena, block, "S64");
 	global_F16Type   = CreatePrimitiveType(arena, block, "F16");
 	global_F32Type   = CreatePrimitiveType(arena, block, "F32");
 	global_F64Type   = CreatePrimitiveType(arena, block, "F64");
 	global_F128Type  = CreatePrimitiveType(arena, block, "F128");
-
-	global_trueLiteral = CreateIntegerLiteral(arena, 1);
-	global_falseLiteral = CreateIntegerLiteral(arena, 0);
 }
 
 void AssignIdent (ASTBlock* block, ASTNode* node, const std::string& name) {
@@ -139,7 +133,7 @@ ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, Operation operatio
 
 ASTStruct* CreateStruct(MemoryArena* arena, const FileSite& site, const std::string& name,  ASTStructMember* members, U32 memberCount) {
 	auto structDefn = new (Allocate(arena, sizeof(ASTStruct))) ASTStruct(site);
-    structDefn->name = (char*)Allocate(arena, name.size() + 1);
+    structDefn->name = (char *)Allocate(arena, name.size() + 1);
     structDefn->members= (ASTStructMember*)Allocate(arena, sizeof(ASTStructMember) * memberCount);
     structDefn->nodeType = AST_STRUCT;
     structDefn ->memberCount = memberCount;

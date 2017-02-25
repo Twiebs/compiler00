@@ -4,10 +4,8 @@
 #include "Common.hpp"
 #include "AST.hpp"
 #include "Build.hpp"
-
 #include "Lexer.hpp"
 #include "Parser.hpp"
-#include "ParserCommon.hpp"
 
 void PushWork (const std::string& filename);
 
@@ -191,7 +189,7 @@ static inline ASTUnaryOp* ParseUnaryOperation (Worker* worker) {
 
 	if (IsUnaryOperator(lex.token.type)) {
 		ReportSourceError(lex.token.location, "Cannot parse two different types of unary opeartors in the same expression!");
-		while (IsUnaryOperator(lex.token)) {
+		while (IsUnaryOperator(lex.token.type)) {
 			lex.nextToken();
 		}
 	}
@@ -204,41 +202,28 @@ static inline ASTUnaryOp* ParseUnaryOperation (Worker* worker) {
 ASTExpression* ParsePrimaryExpr(Worker* worker) {
 	auto& lex = worker->lex;
 
-	switch (worker->lex.token.type) {
-	case TOKEN_TRUE: {
-		worker->lex.nextToken();
-		return global_trueLiteral;
-	} break;
-	case TOKEN_FALSE: {
-		worker->lex.nextToken();
-		return global_falseLiteral;
-	} break;
+	switch(worker->lex.token.type) {
 
-
-	case TOKEN_ADDRESS:
-	case TOKEN_VALUE:
-	case TOKEN_LOGIC_NOT:
-	{
-		return ParseUnaryOperation(worker);
-	}
-
+    case TOKEN_ADDRESS:
+    case TOKEN_VALUE:
+    case TOKEN_LOGIC_NOT: {
+      return ParseUnaryOperation(worker);
+    } break;
 
 	
 	case TOKEN_IDENTIFIER: {
-
 		Token identToken = worker->lex.token;
 		worker->lex.nextToken(); // Eat the identifier
-		// TODO more robust error checking when receving statement tokens in an expression
-        ASTNode* node;
+    ASTNode* node = FindNodeWithIdent(worker->currentBlock, identToken.string);
 
 		if (worker->lex.token.type == TOKEN_PAREN_OPEN) {
-            if (node->nodeType == AST_DEFINITION || node->nodeType == AST_STRUCT) {
-                auto cast = ParseCast(worker, identToken);
-                return (ASTExpression*)cast;
-            } else {
-                auto call = ParseCall(worker, identToken);
-                return (ASTExpression*)call;
-            }
+      if (node->nodeType == AST_DEFINITION || node->nodeType == AST_STRUCT) {
+        auto cast = ParseCast(worker, identToken);
+        return (ASTExpression*)cast;
+      } else {
+        auto call = ParseCall(worker, identToken);
+        return (ASTExpression*)call;
+      }
 		} else if (worker->lex.token.type == TOKEN_ACCESS) {
 			auto structVar = (ASTVariable*)node;
 			auto structDefn = (ASTStruct*)structVar->type;
@@ -433,6 +418,19 @@ static void ParseOperatorOverload(Worker* worker) {
 //    }
 //}
 
+static inline bool CheckSyntaxErrorsInTypeDecl(Lexer *lex, const Token& identToken) {
+  //If the token is an identifier this is not a syntax error and we can procede to 
+  //look up the AST node by the ident name and determine if it is a type
+  if (lex->token.type == TOKEN_IDENTIFIER) return true;
+  //If its not an identifier it must be a syntax error.  Here we check for
+  //some common mistakes a user might make and report a usefull error.
+  if (lex->token.type == TOKEN_STRUCT)
+    ReportSourceError(lex->token.location, "decleration of STRUCT " << identToken.string << " is missing one colon");
+  else if (lex->token.type == TOKEN_PAREN_OPEN)
+    ReportSourceError(lex->token.location, "procedure definition of " << identToken.string << " is missing one colon");
+  return false;
+}
+
 static inline ASTVariable* ParseVariableDecleration (Worker* worker, const Token& identToken) {
 	auto& lex = worker->lex;
 	assert(lex.token.type == TOKEN_TYPE_DECLARE);
@@ -454,20 +452,6 @@ static inline ASTVariable* ParseVariableDecleration (Worker* worker, const Token
 	};
 
 
-	static auto CheckForSyntaxErrorsInSpecificationOfType = [](Lexer* lex, const Token& identToken) -> bool {
-		if (lex->token.type != TOKEN_IDENTIFIER) {
-			if (lex->token.type == TOKEN_STRUCT) {
-				ReportSourceError(lex->token.location, "Missing ':' in struct decleration for " << identToken.string);
-				return false;
-			} else if (lex->token.type == TOKEN_PAREN_OPEN) {
-				ReportSourceError(lex->token.location, "Missing ':' when declaring function " << identToken.string);
-				return false;
-			}
-		}
-	};
-
-
-
 	// This is a type deduction
 	if (lex.token.type == TOKEN_EQUALS) {
 		lex.nextToken();
@@ -482,13 +466,13 @@ static inline ASTVariable* ParseVariableDecleration (Worker* worker, const Token
 	varDecl->sourceLocation = identToken.location;
 	AssignIdent(worker->currentBlock, varDecl, identToken.string);
 
-	if (CheckForSyntaxErrorsInSpecificationOfType(&worker->lex, identToken)) {
+	if (CheckSyntaxErrorsInTypeDecl(&worker->lex, identToken)) {
 		auto type = (ASTDefinition*)FindNodeWithIdent(worker->currentBlock, worker->lex.token.string);
 		if (type == nullptr) {
 			varDecl->typeName = (char*)Allocate(&worker->arena, worker->lex.token.string.size() + 1);
 			memcpy(varDecl->typeName, worker->lex.token.string.c_str(), worker->lex.token.string.size() + 1);
 		} else if (type->nodeType != AST_DEFINITION && type->nodeType != AST_STRUCT) {
-			ReportSourceError(worker->lex.token.location, "%s does not name a type!  It names a %s", worker->lex.token.string.c_str(), ToString(type->nodeType).c_str());
+			ReportSourceError(worker->lex.token.location, worker->lex.token.string << " does not name a type.   It names a " << ToString(type->nodeType));
 		} else {
 			varDecl->type = type;
 		}
@@ -569,6 +553,8 @@ static inline ASTNode* ParseStructDefn(Worker* worker, const Token& identToken, 
 
 	return ParseStatement(worker);
 }
+
+
 
 static inline ASTFunction* ParseFunction(Worker* worker, ASTFunctionSet* functionSet, const Token& identToken) {
 	auto& lex = worker->lex;
@@ -855,9 +841,6 @@ static inline ASTNode* ParseIdentifier (Worker* worker) {
 		} else {
 			return CreateVariableOperation(&worker->arena, var, operation, expr);
 		}
-
-
-
 	}
 
 	assert(false && "Internal Error: Reached End of ParseIdentifier without handling the token");
@@ -968,22 +951,29 @@ static char* ReadFileIntoMemory(const char* filename) {
 	return result;
 }
 
+bool ParseFile(Worker *worker, const std::string& filename) {
+  FILE *file = fopen(filename.c_str(), "rb");
+  if (file == nullptr) {
+    LOG_ERROR("Failed to open file " << filename);
+    return false;
+  }
 
-int ParseFile(Worker* worker, const std::string& rootDir, const std::string& filename) {
-    auto fileBuffer = ReadFileIntoMemory(filename.c_str());
-	if (fileBuffer == nullptr) {
-		LOG_ERROR("Could not open filename: " << filename);
-		return -1;
-	}
+  fseek(file, 0, SEEK_END);
+  size_t fileSize = ftell(file);
+  fseek(file, 0, SEEK_SET);
+  char *fileBuffer = (char *)malloc(fileSize + 1);
+  fread(fileBuffer, fileSize, 1, file);
+  fileBuffer[fileSize] = 0;
+  fclose(file);
 
-	LOG_INFO("Parsing " << filename);
-    worker->lex.SetBuffer(fileBuffer);
-    worker->lex.token.site.filename = filename;
-    worker->lex.nextToken();
+	LOG_INFO("Parsing file " << filename);
+  worker->lex.SetBuffer(fileBuffer);
+  worker->lex.token.site.filename = filename;
+  worker->lex.nextToken();
 	while (worker->lex.token.type != TOKEN_END_OF_BUFFER) {
 		ParseStatement(worker);
 	}
 
-    free(fileBuffer);
+  free(fileBuffer);
 	return 0;
 }

@@ -1,24 +1,5 @@
-printf :: (fmt : @U8 ...) FOREIGN
-
-ListAll :: () FOREIGN
-InterpTest :: () FOREIGN
-
-FooData :: STRUCT
-	size : U64
-
-MemoryBlock :: STRUCT
-	size : U64
-	used : U64
-	memory : @U8
+printf :: (fmt: @U8 ...) FOREIGN
 
 Main :: () >> S32
-	memblock : MemoryBlock
-	memblock.size = U64(4096)
-	memblock.used = U64(0)
-
-	memptr := @memblock
-
-	printf("Hello World!\n")
-	printf("Memblock size: %d\n" memblock.size)
-	printf("Memblock used: %d\n" memblock.used)
+  printf("Fuck, Shit, Balls")
 	RETURN 0

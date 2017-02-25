@@ -8,9 +8,6 @@
 
 #define ASSERT_ON_ERROR
 
-#define internal static
-#define global_variable static
-
 typedef int8_t    S8;
 typedef int16_t   S16;
 typedef int32_t   S32;
@@ -28,7 +25,7 @@ typedef double 	  F64;
 #define LOG_LEVEL_DEBUG   3
 #define LOG_LEVEL_VERBOSE 4
 
-#define LOG_LEVEL LOG_LEVEL_INFO
+#define LOG_LEVEL LOG_LEVEL_VERBOSE
 
 #define INTERNAL_ERROR(msg) std::cout << "INTERNAL_ERROR: " << msg << "\n";
 

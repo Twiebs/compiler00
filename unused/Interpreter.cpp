@@ -100,7 +100,7 @@ static void PrintExpr (ASTExpression* expr) {
 }
 
 
-global_variable Package* global_package;
+static Package* global_package;
 
 static void ListAllDefnitions(Package* package) {
 	for (U32 i = 0; i < package->rootBlock.members.size(); i++) {

@@ -361,7 +361,7 @@ void AnalyzeStatement (ASTNode* node, ASTBlock* currentBlock) {
 	}
 }
 
-internal void AnalyzeIfStatement (ASTIfStatement* ifStatement, ASTBlock* currentBlock) {
+static void AnalyzeIfStatement (ASTIfStatement* ifStatement, ASTBlock* currentBlock) {
 	assert(ifStatement->expr != nullptr);
 	AnalyzeExpr(ifStatement->expr, currentBlock);
 	AnalyzeStatement(ifStatement->ifBody, currentBlock);

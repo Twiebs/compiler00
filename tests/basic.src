@@ -1,5 +1,4 @@
-IMPORT "IO.bang"
-IMPORT "lang.src"
+IMPORT "clib.bang"
 
 Vector3 :: STRUCT
 	x : S32
@@ -117,8 +116,6 @@ LambdaInternalTypeTest :: () >> S32
 	DoInterestingThings()
 	RETURN 0
 
-
-
 Main :: () >> S32
 	CastTest()
 	BooleanTest()
@@ -134,7 +131,6 @@ Main :: () >> S32
 	RunInternalStructTests()
 	printf("Running LambdaTest...")
 	LambdaTest()
-
 
 	RETURN 0
 

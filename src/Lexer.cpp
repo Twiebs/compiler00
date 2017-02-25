@@ -124,16 +124,14 @@ void Lexer::nextToken() {
 
     if (isalpha(*currentChar) || *currentChar== '_') {
         while ((isalnum(*currentChar) || *currentChar == '_') && *currentChar!= '.') AppendCurrentChar();
-        if (token.string == "IMPORT") 			    token.type = TOKEN_IMPORT;
-        else if (token.string == "FOREIGN")	 		token.type = TOKEN_FOREIGN;
-        else if (token.string == "STRUCT")			token.type = TOKEN_STRUCT;
+        if (token.string == "IMPORT") 			  token.type = TOKEN_IMPORT;
+        else if (token.string == "FOREIGN")	 	token.type = TOKEN_FOREIGN;
+        else if (token.string == "STRUCT")		token.type = TOKEN_STRUCT;
         else if (token.string == "IF")				token.type = TOKEN_IF;
         else if (token.string == "ELSE") 			token.type = TOKEN_ELSE;
         else if (token.string == "ITER")			token.type = TOKEN_ITER;
         else if (token.string == "TO")				token.type = TOKEN_TO;
-        else if (token.string == "RETURN")			token.type = TOKEN_RETURN;
-        else if (token.string == "TRUE")			token.type = TOKEN_TRUE;
-        else if (token.string == "FALSE")			token.type = TOKEN_FALSE;
+        else if (token.string == "RETURN")		token.type = TOKEN_RETURN;
         else token.type = TOKEN_IDENTIFIER;
     }
 

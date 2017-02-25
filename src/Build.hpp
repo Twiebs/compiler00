@@ -1,68 +1,26 @@
 #pragma once
-#include <fstream>
+
 #include "AST.hpp"
-#include <mutex>
-
-// We need a ASTPrototype because if we store functions in a package
-// and then we let its consituant members fall out of scope then there is no
-// reason to have the member defintions at all...
-// The block is then completly irrelevant
-// Then function prototypes could be stored directly inside of the package
-// along with structs, global variables and whatever else is required
-// mabye macro definitions?? or somthing similar?
-// This is an interesting idea because perhaps the current way the function resolver works then
-// could be changed to directly work on prototypes rather than concrete functions
-// Yeah thats exactly what you want to happen!
-// Internal functions could be just stored within the regular AST but that might become to cumbersome?
-// No thats fine it would work well enough.
-
-#include "llvm/IR/Module.h"
-
 #include "Parser.hpp"
 #include "Lexer.hpp"
+
+#include <thread>
+#include <mutex>
+
+#define FORCE_SINGLE_THREADED 1
+#define ARENA_BLOCK_SIZE 4096
+#define TEMP_BLOCK_SIZE 1 << 8
 
 std::ostream& ReportError (const FileSite& site);
 std::ostream& ReportError();
 std::ostream& ReportError(const SourceLocation& sourceLocation);
 #define ReportSourceError(sourceLocation, msg) ReportError(sourceLocation) << msg << "\n"
 
-
-// void ReportError(const SourceLocation& sourceLocation, std::ostream& stream);
-
-
-struct Package {
-    std::string name;
-    ASTBlock rootBlock;
-    MemoryArena arena;
-    std::mutex mutex;
-    llvm::Module* llvmModule;
-};
-
-struct Worker {
-	U32 workerID = 0;
-
-    U32 errorCount = 0;
-    MemoryArena arena;
-    U8* tempMemory;
-
-    Lexer lex;
-    ASTBlock* currentBlock = nullptr;
-    Package* currentPackage = nullptr;
-};
-
-enum PackageFlags {
-	PACKAGE_INVALID = 1 << 0,
-};
-
 struct BuildSettings {
 	std::string rootDir;
-	std::string inputFile; // For now this is just a singular thing for simplicity
+	std::string inputFile;
 	std::string packageName;
 	std::string outputFile;
-
-	std::vector<std::string> libDirs;
-	std::vector<std::string> libNames;
-	std::vector<std::string> importDirs;
 
 	bool logModuleDump;
 	bool emitBitcode;
@@ -72,4 +30,29 @@ struct BuildSettings {
 	bool emitExecutable;
 };
 
-extern "C" void Build ();
+struct Worker {
+	U32 workerID;
+  U32 errorCount;
+  ASTBlock *currentBlock;
+
+  MemoryArena arena;
+  U8* tempMemory;
+  Lexer lex;
+};
+
+struct Compiler {
+  ASTBlock globalBlock;
+  U32 workerCount;
+  Worker *workers;
+  U32 errorCount;
+
+  bool isWorkQueueActive;
+  std::mutex workQueueMutex;
+  std::vector<std::string> fileList;
+  std::vector<std::string> filesToParse; 
+  std::vector<std::thread> activeThreads;
+
+  BuildSettings buildSettings;
+};
+
+void AddFileToParseQueue(Compiler *compiler, const std::string& filename);

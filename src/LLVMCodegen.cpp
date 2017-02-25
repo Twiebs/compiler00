@@ -33,7 +33,6 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Verifier.h"
 
-
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/PassManager.h"
 
@@ -41,72 +40,63 @@
 #include "Analysis.hpp"
 #include "Build.hpp"
 
-// HACK The current codegeneration structure is compleatly unsustainable
-// With new REPL implementation, Needs serious refactor
-global_variable llvm::IRBuilder<>* builder = new llvm::IRBuilder<>(llvm::getGlobalContext());
-llvm::IRBuilder<>* GetGlobalBuilderHack() { return builder; }
+static llvm::LLVMContext llvmContext;
+static llvm::IRBuilder<> *builder;
+static llvm::Module *global_module;
 
-global_variable llvm::Module* global_module;	// HACK HACK HACK HACK
-
-internal int WriteIR (llvm::Module* module, BuildSettings* settings);
-internal int WriteNativeObject (llvm::Module* module, BuildSettings* settings);
-internal int WriteExecutable (BuildSettings* settings);
-
-internal void CodegenStatement (ASTNode* node);
-internal void Codegen (ASTFunction* function, llvm::Module* module);
-internal void Codegen (ASTStruct* structDefn);
-internal void Codegen (ASTVariable* var);
-internal void Codegen (ASTVariableOperation* varOp);
-internal void Codegen (ASTMemberOperation* memberOp);
-internal void Codegen (ASTReturn* retVal);
-internal inline void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
-internal inline void Codegen(ASTIter* iter);
+static void CodegenStatement (ASTNode* node);
+static void Codegen (ASTFunction* function, llvm::Module* module);
+static void Codegen (ASTStruct* structDefn);
+static void Codegen (ASTVariable* var);
+static void Codegen (ASTVariableOperation* varOp);
+static void Codegen (ASTMemberOperation* memberOp);
+static void Codegen (ASTReturn* retVal);
+static inline void Codegen(ASTIfStatement* ifStatment, llvm::BasicBlock* mergeBlock, llvm::Function* function);
+static inline void Codegen(ASTIter* iter);
 
 llvm::Value* CodegenExpr (ASTNode* expr);
-internal llvm::Value* Codegen (ASTIntegerLiteral* intLiteral);
-internal llvm::Value* Codegen (ASTFloatLiteral* floatLiteral);
-internal llvm::Value* Codegen (ASTBinaryOperation* binop);
-internal llvm::Value* Codegen (ASTMemberExpr* expr);
-internal llvm::Value* Codegen (ASTVarExpr* expr);
-internal llvm::Value* Codegen (ASTStringLiteral* str);
-internal llvm::Value* Codegen (ASTCall* call);
-internal llvm::Value* Codegen (ASTCast* cast);
+static llvm::Value* Codegen (ASTIntegerLiteral* intLiteral);
+static llvm::Value* Codegen (ASTFloatLiteral* floatLiteral);
+static llvm::Value* Codegen (ASTBinaryOperation* binop);
+static llvm::Value* Codegen (ASTMemberExpr* expr);
+static llvm::Value* Codegen (ASTVarExpr* expr);
+static llvm::Value* Codegen (ASTStringLiteral* str);
+static llvm::Value* Codegen (ASTCall* call);
+static llvm::Value* Codegen (ASTCast* cast);
 
-internal void CodegenPrimitiveTypes ();
+static int WriteIR (llvm::Module* module, BuildSettings* settings);
+static int WriteNativeObject (llvm::Module* module, BuildSettings* settings);
+static int WriteExecutable (BuildSettings* settings);
 
+void Codegen(Compiler *compiler) {
+  global_voidType->llvmType = llvm::Type::getVoidTy(g_llvmContext);
 
-internal void CodegenPrimitiveTypes() {
-	global_voidType->llvmType = llvm::Type::getVoidTy(llvm::getGlobalContext());
+	global_U8Type->llvmType = llvm::IntegerType::get(g_llvmContext, 8);
+	global_U16Type->llvmType = llvm::IntegerType::get(g_llvmContext, 16);
+	global_U32Type->llvmType = llvm::IntegerType::get(g_llvmContext, 32);
+	global_U64Type->llvmType = llvm::IntegerType::get(g_llvmContext, 64);
 
-	global_U8Type->llvmType = llvm::IntegerType::get(llvm::getGlobalContext(), 8);
-	global_U16Type->llvmType = llvm::IntegerType::get(llvm::getGlobalContext(), 16);
-	global_U32Type->llvmType = llvm::IntegerType::get(llvm::getGlobalContext(), 32);
-	global_U64Type->llvmType = llvm::IntegerType::get(llvm::getGlobalContext(), 64);
+	global_S8Type->llvmType = llvm::Type::getInt8Ty(g_llvmContext);
+	global_S16Type->llvmType = llvm::Type::getInt16Ty(g_llvmContext);
+	global_S32Type->llvmType = llvm::Type::getInt32Ty(g_llvmContext);
+	global_S64Type->llvmType = llvm::Type::getInt64Ty(g_llvmContext);
 
-	global_S8Type->llvmType = llvm::Type::getInt8Ty(llvm::getGlobalContext());
-	global_S16Type->llvmType = llvm::Type::getInt16Ty(llvm::getGlobalContext());
-	global_S32Type->llvmType = llvm::Type::getInt32Ty(llvm::getGlobalContext());
-	global_S64Type->llvmType = llvm::Type::getInt64Ty(llvm::getGlobalContext());
+	global_F16Type->llvmType =	llvm::Type::getHalfTy(g_llvmContext);
+	global_F32Type->llvmType =	llvm::Type::getFloatTy(g_llvmContext);
+	global_F64Type->llvmType =	llvm::Type::getDoubleTy(g_llvmContext);
+	global_F128Type->llvmType = llvm::Type::getFP128Ty(g_llvmContext);
 
-	global_F16Type->llvmType =	llvm::Type::getHalfTy(llvm::getGlobalContext());
-	global_F32Type->llvmType =	llvm::Type::getFloatTy(llvm::getGlobalContext());
-	global_F64Type->llvmType =	llvm::Type::getDoubleTy(llvm::getGlobalContext());
-	global_F128Type->llvmType = llvm::Type::getFP128Ty(llvm::getGlobalContext());
-}
-
-void CodegenPackage (Package* package, BuildSettings* settings) {
-	CodegenPrimitiveTypes();
-    package->llvmModule = new llvm::Module("BangCompiler", llvm::getGlobalContext());
-	global_module = package->llvmModule;
+  global_module = new llvm::Module("Compiler00", g_llvmContext);
+  builder = new llvm::IRBuilder<>();
 
 	// HACK codegenerate the structs rootBlock
-	for (ASTNode* node : package->rootBlock.members) {
+	for (ASTNode* node : compiler->globalBlock.members) {
 		if (node->nodeType == AST_STRUCT) {
 			Codegen((ASTStruct*)node);
 		}
 	}
 
-		for (ASTNode* node : package->rootBlock.members) {
+  for (ASTNode* node : compiler->globalBlock.members) {
 		switch (node->nodeType) {
 			case AST_FUNCTION:
 				Codegen((ASTFunction*)node, global_module);
@@ -176,16 +166,16 @@ void Codegen (ASTFunction* function, llvm::Module* module) {
 		argllvmTypes[i] = llvmType;
 	}
 
-    // TODO HACK Better handling of uppercase main function! We should be able to call it whatever
-    llvm::FunctionType* funcType = llvm::FunctionType::get((llvm::Type*)function->returnType->llvmType, argllvmTypes, function->isVarArgs);
+  //TODO HACK Better handling of uppercase main function! We should be able to call it whatever
+  llvm::FunctionType* funcType = llvm::FunctionType::get((llvm::Type*)function->returnType->llvmType, argllvmTypes, function->isVarArgs);
 	llvm::Function::LinkageTypes linkage = (function->members.size() == 0) ? llvm::Function::ExternalLinkage : llvm::Function::ExternalLinkage;
-    llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, strcmp(function->name, "Main") ? function->name : std::string("main"), global_module);
-
-	// If the function has zero members thats how we determine that it was declared FORIGEN
-	// A normal function with no members will be a parsing error
+  llvm::Function* llvmFunc = llvm::Function::Create(funcType, linkage, strcmp(function->name, "Main") ? function->name : std::string("main"), global_module); 
+  
+	//If the function has zero members thats how we determine that it was declared FORIGEN
+	//A normal function with no members will be a parsing error
 	auto lastInsertBlock = builder->GetInsertBlock();
 	if (function->members.size() > 0) {
-		llvm::BasicBlock* block = llvm::BasicBlock::Create(llvm::getGlobalContext(), "entry", llvmFunc);
+		llvm::BasicBlock* block = llvm::BasicBlock::Create(g_llvmContext, "entry", llvmFunc);
 		builder->SetInsertPoint(block);
 	}
 
@@ -195,7 +185,7 @@ void Codegen (ASTFunction* function, llvm::Module* module) {
 		iter->setName(name);
 		if(function->members.size() > 0) {
 			function->args[i]->allocaInst = builder->CreateAlloca(iter->getType(), 0, name);
-			builder->CreateStore(iter, (llvm::AllocaInst*)function->args[i]->allocaInst);
+			//builder->CreateStore(, (llvm::AllocaInst*)function->args[i]->allocaInst);
 		}
 	}
 
@@ -205,7 +195,7 @@ void Codegen (ASTFunction* function, llvm::Module* module) {
 		for (U32 i = 0; i < function->members.size(); i++) {
 			auto node = function->members[i];
 			if (node->nodeType == AST_IF) {
-				auto mergeBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", llvmFunc);
+				auto mergeBlock = llvm::BasicBlock::Create(g_llvmContext, "merge", llvmFunc);
 				Codegen((ASTIfStatement*)node, mergeBlock, llvmFunc);
 				builder->SetInsertPoint(mergeBlock);
 				continue;
@@ -237,7 +227,7 @@ void Codegen (ASTFunction* function, llvm::Module* module) {
 	}
 }
 
-void CodegenStatement (ASTNode* node) {
+void CodegenStatement(ASTNode* node) {
 	switch(node->nodeType) {
 		case AST_VARIABLE: Codegen((ASTVariable*)node); break;
 		case AST_MEMBER_OPERATION: Codegen((ASTMemberOperation*)node); break;
@@ -245,14 +235,13 @@ void CodegenStatement (ASTNode* node) {
 		case AST_CALL: Codegen((ASTCall*)node); break;
 		case AST_ITER: Codegen((ASTIter*)node); break;
 		case AST_RETURN: Codegen((ASTReturn*)node); break;
-
 		case AST_STRUCT: Codegen((ASTStruct*)node); break;
 		case AST_FUNCTION: Codegen((ASTFunction*)node, global_module); break;
 		default: assert(!"A top level node was not a statement"); break;
 	}
 }
 
-internal void Codegen (ASTVariable* var) {
+static void Codegen (ASTVariable* var) {
 	assert(var->allocaInst == nullptr);	// Variable codegens are variable decl statements
 	assert(var->type != nullptr && "Variable must have type resolved during anaysis");
 	
@@ -263,9 +252,9 @@ internal void Codegen (ASTVariable* var) {
 	if (var->initalExpression != nullptr) {
 		expr = CodegenExpr(var->initalExpression);
 	} else if (((llvm::Type*)(var->type->llvmType))->isIntegerTy()) {
-		expr = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0);
+		expr = llvm::ConstantInt::get(llvm::Type::getInt32Ty(g_llvmContext), 0);
 	} else if (((llvm::Type*)(var->type->llvmType))->isFloatingPointTy()) {
-		expr = llvm::ConstantFP::get(llvm::Type::getFloatTy(llvm::getGlobalContext()), 0);
+		expr = llvm::ConstantFP::get(llvm::Type::getFloatTy(g_llvmContext), 0);
 	} else if (var->type->nodeType == AST_STRUCT) {
 		// TODO default values inside of structs
 		return;
@@ -275,7 +264,7 @@ internal void Codegen (ASTVariable* var) {
 	builder->CreateStore(expr, (llvm::AllocaInst*)var->allocaInst);
 }
 
-internal void Codegen (ASTVariableOperation* varOp) {
+static void Codegen (ASTVariableOperation* varOp) {
 	assert((llvm::AllocaInst*)varOp->variable->allocaInst != nullptr);
 	auto exprValue = CodegenExpr(varOp->expr);
 	switch (varOp->operation) {
@@ -343,7 +332,7 @@ llvm::Value* CodegenExpr (ASTNode* node) {
 	}
 }
 
-internal llvm::Value* Codegen (ASTBinaryOperation* binop)	{
+static llvm::Value* Codegen (ASTBinaryOperation* binop)	{
 	llvm::Value* lhs = CodegenExpr(binop->lhs);
 	llvm::Value* rhs = CodegenExpr(binop->rhs);
 	assert(lhs && rhs);
@@ -390,13 +379,13 @@ internal llvm::Value* Codegen (ASTBinaryOperation* binop)	{
 	}
 }
 
-internal void Codegen (ASTReturn* retVal) {
+static void Codegen (ASTReturn* retVal) {
 	auto value = CodegenExpr(retVal->value);
 	assert(value != nullptr);
 	builder->CreateRet(value);
 }
 
-internal llvm::Value* Codegen (ASTCall* call) {
+static llvm::Value* Codegen (ASTCall* call) {
 	assert(call->function);	// A call should always have a function resolved when here
 	if (!call->function->llvmFunction) {
 		auto lastInsertBlock = builder->GetInsertBlock();
@@ -422,18 +411,18 @@ internal llvm::Value* Codegen (ASTCall* call) {
 	}
 }
 
-internal inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
-	auto ifBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "if", function);
+static inline void Codegen(ASTIfStatement* ifStatement, llvm::BasicBlock* mergeBlock, llvm::Function* function) {
+	auto ifBlock = llvm::BasicBlock::Create(g_llvmContext, "if", function);
 	auto elseBlock = mergeBlock;
 	if (ifStatement->elseBody != nullptr) {
-		elseBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "else", function);
+		elseBlock = llvm::BasicBlock::Create(g_llvmContext, "else", function);
 	}
 
 	auto exprValue = CodegenExpr(ifStatement->expr);
 	assert(exprValue != nullptr);
 
 	if (ifStatement->expr->nodeType != AST_BINARY_OPERATION) {
-		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 0);
+		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(g_llvmContext), 0);
 		auto cmp = builder->CreateICmpNE(exprValue, zeroValue, "ifcmp");
 		builder->CreateCondBr(cmp, ifBlock, elseBlock);
 	} else {
@@ -447,7 +436,7 @@ internal inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* mer
 		auto block = (ASTBlock*)ifStatement->ifBody;
 		for(auto node : block->members) {
 			if (node->nodeType == AST_IF) {
-				ifBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", function);
+				ifBlock = llvm::BasicBlock::Create(g_llvmContext, "merge", function);
 				Codegen((ASTIfStatement*)node, ifBlock, function);
 				builder->SetInsertPoint(ifBlock);
 				continue;
@@ -468,15 +457,15 @@ internal inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* mer
 		if(ifStatement->elseBody->nodeType == AST_IF) {
 			auto ifElse = (ASTIfStatement*)ifStatement->elseBody;
 			auto condition = CodegenExpr(ifElse->expr);
-			auto comp = builder->CreateICmpEQ(condition, llvm::ConstantInt::getTrue(llvm::getGlobalContext()), "elseifcond");
-			auto elseIfBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "elseif", function);
+			auto comp = builder->CreateICmpEQ(condition, llvm::ConstantInt::getTrue(g_llvmContext), "elseifcond");
+			auto elseIfBlock = llvm::BasicBlock::Create(g_llvmContext, "elseif", function);
 		}
 
 		if (ifStatement->elseBody->nodeType == AST_BLOCK) {
 			auto block = (ASTBlock*)ifStatement->elseBody;
 			for(auto node : block->members) {
 				if(node->nodeType == AST_IF) {
-					elseBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "merge", function);
+					elseBlock = llvm::BasicBlock::Create(g_llvmContext, "merge", function);
 					Codegen((ASTIfStatement*)node, elseBlock, function);
 					builder->SetInsertPoint(elseBlock);
 					continue;
@@ -504,11 +493,11 @@ internal inline void Codegen (ASTIfStatement* ifStatement, llvm::BasicBlock* mer
 	// We emit some code for the value of the end expression
 	// AKA the end integer
 	auto endValue = CodegenExpr(iter->end);
-	auto stepValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 1);
+	auto stepValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(g_llvmContext), 1);
 
 	auto parentBlock = builder->GetInsertBlock()->getParent();
-	auto loopBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "loop", parentBlock);
-	auto exitBlock = llvm::BasicBlock::Create(llvm::getGlobalContext(), "loopexit", parentBlock);
+	auto loopBlock = llvm::BasicBlock::Create(g_llvmContext, "loop", parentBlock);
+	auto exitBlock = llvm::BasicBlock::Create(g_llvmContext, "loopexit", parentBlock);
 
 	builder->CreateBr(loopBlock);
 	builder->SetInsertPoint(loopBlock);
@@ -539,12 +528,12 @@ static void Codegen(ASTMemberOperation* memberOp) {
 
 	std::vector<llvm::Value*> indices;
 	indices.reserve(memberOp->access.memberCount + 1);
-	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
+	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(g_llvmContext), 0, true);
 	indices.emplace_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
 
 	for (U32 i = 0; i < memberOp->access.memberCount; i++) {
 		auto& memberIndex = memberOp->access.indices[i];
-		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
+		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(g_llvmContext), memberIndex, true);
 		indices.emplace_back(indexValue);
 	}
 
@@ -563,7 +552,7 @@ static void Codegen(ASTMemberOperation* memberOp) {
 }
 
 
-internal llvm::Value* Codegen(ASTCast* cast) {
+static llvm::Value* Codegen(ASTCast* cast) {
 	auto exprValue = CodegenExpr(cast->expr);
 	assert(exprValue);
 
@@ -617,11 +606,11 @@ llvm::Value* Codegen (ASTMemberExpr* expr) {
 	assert(expr->structVar->allocaInst);
 
 	std::vector<llvm::Value*> indices;
-	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), 0, true);
+	auto arrayIndex = llvm::ConstantInt::get(llvm::Type::getInt32Ty(g_llvmContext), 0, true);
 	indices.emplace_back(arrayIndex);	// Array indices allways are 0 for now because we dont have array support!
 	for (U32 i = 0; i < expr->access.memberCount; i++) {
 		auto& memberIndex = expr->access.indices[i];
-		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvm::getGlobalContext()), memberIndex, true);
+		auto indexValue = llvm::ConstantInt::get(llvm::Type::getInt32Ty(g_llvmContext), memberIndex, true);
 		indices.emplace_back(indexValue);
 	}
 
@@ -649,7 +638,7 @@ static inline llvm::Value* CodegenIndirectionUnaryOperation(ASTUnaryOp* unaryOpe
 		return exprValue;
 	} else {
 		auto result = exprValue;
-		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 0);
+		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(g_llvmContext), 0);
 		for (auto i = 2; i < indirectionLevel; i++) {
 			result = builder->CreateGEP(result, zeroValue);
 		}
@@ -669,9 +658,9 @@ llvm::Value* Codegen(ASTUnaryOp* unaryOperation) {
 		return CodegenIndirectionUnaryOperation(unaryOperation, exprValue);
 	case UNARY_NOT:
 		auto load = builder->CreateLoad(exprValue);
-		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()), 0);
+		auto zeroValue = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(g_llvmContext), 0);
 		auto cmp = builder->CreateICmpEQ(load, zeroValue);
-		exprValue = builder->CreateZExt(cmp, llvm::IntegerType::getInt32Ty(llvm::getGlobalContext()));
+		exprValue = builder->CreateZExt(cmp, llvm::IntegerType::getInt32Ty(g_llvmContext));
 		return exprValue;
 	}
 
@@ -710,7 +699,7 @@ int WriteNativeObject(llvm::Module* module, BuildSettings* settings) {
 	llvm::initializeCodeGen(*registry);
 	llvm::initializeLowerIntrinsicsPass(*registry);
 	llvm::initializeLoopStrengthReducePass(*registry);
-	llvm::initializeUnreachableBlockElimPass(*registry);
+	//llvm::initializeUnreachableBlockElimPass(*registry);
 
 	llvm::cl::AddExtraVersionPrinter(llvm::TargetRegistry::printRegisteredTargetsForVersion);
 
@@ -757,7 +746,7 @@ int WriteNativeObject(llvm::Module* module, BuildSettings* settings) {
 //	Options.MCOptions.MCUseDwarfDirectory = EnableDwarfDirectory;
 //	Options.MCOptions.AsmVerbose = AsmVerbose;
 
-	std::unique_ptr<TargetMachine> Target(TheTarget->createTargetMachine(triple.getTriple(), MCPU, featuresStr, Options, RelocModel, CMModel, OLvl));
+	std::unique_ptr<TargetMachine> Target(TheTarget->createTargetMachine(triple.getTriple(), MCPU, featuresStr, Options, getRelocModel(), CMModel, OLvl));
 	assert(Target && "Could not allocate target machine!");
 
 	// TODO add options for viewing asm as text!

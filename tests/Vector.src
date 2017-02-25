@@ -1,4 +1,4 @@
-IMPORT "IO.bang"
+IMPORT "clib.src"
 
 Vector3 :: STRUCT
 	x : S32

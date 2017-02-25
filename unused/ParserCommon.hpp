@@ -1,5 +1,6 @@
 #ifndef LLVMLANG_PARSERCOMMON_HPP
 #define LLVMLANG_PARSERCOMMON_HPP
+#if 0
 
 #include "Lexer.hpp"
 #include "AST.hpp"
@@ -21,22 +22,6 @@ inline bool IsUnaryOperator(TokenType token) {
 inline bool IsUnaryOperator(const Token& token) {
 	return IsUnaryOperator(token.type);
 }
-
-//
-//class Parser {
-//	MemoryArena* arena;
-//	Lexer* lex;
-//	ASTBlock* currentBlock;
-//
-//	void ReportError(const FileSite& site, const char* fmt, ...);
-//
-//	ASTCast* ParseCast(const Token& identToken);
-//	ASTCall* ParseCall(const Token& identToken);
-//
-//	void ParseMemberAccess(ASTVariable* structVar, ASTMemberAccess* memberAccess);
-//
-//public:
-//	ASTExpression* ParseExpr();
-//};
+#endif
 
 #endif //LLVMLANG_PARSERCOMMON_HPP

@@ -2,6 +2,7 @@
 
 #include <functional>
 
+#if 0
 static UnaryOperator TokenToUnaryOp(const Token& token) {
 	switch (token.type) {
 	case TOKEN_LOGIC_NOT: return UNARY_NOT;
@@ -10,7 +11,6 @@ static UnaryOperator TokenToUnaryOp(const Token& token) {
 	assert(false);
 	return static_cast<UnaryOperator>(0);
 }
-
 
 
 ASTExpression* ParseExpr(MemoryArena* arena, Lexer* lex) {
@@ -376,3 +376,4 @@ ASTUnaryOp* ParseUnaryOperation(MemoryArena* arena, Lexer* lex) {
 //    if (lhs == nullptr) return nullptr;
 //    return parseBinary(arena, lex, lhs, 0);
 //}
+#endif
