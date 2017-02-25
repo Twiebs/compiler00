@@ -1,37 +1,16 @@
 #include "Common.hpp"
 #include "Build.hpp"
 
+Compiler g_compiler;
+
 void AnalyzeAST (Worker* worker);
-
-std::ostream& operator<<(std::ostream& stream, const SourceLocation& sourceLocation) {
-	stream << "[" << sourceLocation.filename << " " << sourceLocation.lineNumber << ":" << sourceLocation.columnNumber << "]";
-	return stream;
-}
-
-std::ostream& ReportError() {
-	global_workspace.errorCount++;
-	return std::cerr;
-}
-
-std::ostream& ReportError(const SourceLocation& sourceLocation) {
-	global_workspace.errorCount++;
-	std::cerr << sourceLocation;
-	return std::cerr;
-}
-
-
-static void FreeSubArenas(MemoryArena* arena) {
-	if (arena->next != nullptr) {
-		FreeSubArenas(arena->next);
-		free(arena->next);
-	}
-}
 
 void AddFileToParseQueue(Compiler *compiler, const std::string& filename) {
   compiler->workMutex.lock();
   bool containsFilename = false;
-  for (std::string& str : queue->importedFiles) {
-    if (!str.compare(filename)) {
+  for (size_t i = 0; i < compiler->addedFiles.size(); i++) {
+    SourceFile& file = compiler->addedFiles[i];
+    if (Equals(file.name, filename)) {
       containsFilename = true;
     }
   }
@@ -44,7 +23,6 @@ void AddFileToParseQueue(Compiler *compiler, const std::string& filename) {
 
   queue->mutex.unlock();
 }
-
 
 static void ParserWorkerThreadProc(Compiler *compiler, Worker *worker) {
 	while (compiler->isWorkQueueActive) {
@@ -67,8 +45,7 @@ int main(int argc, char** argv) {
 	}
 
 
-  Compiler _compiler = {};
-  Compiler *compiler = &_compiler;
+  Compiler *compiler = &g_compiler;
 
   { //Initalize the compiler
     compiler->workerCount = FORCE_SINGLE_THREADED ?  1 : std::thread::hardware_concurrency();
@@ -104,19 +81,32 @@ int main(int argc, char** argv) {
     compiler->buildSettings.emitExecutable = true;
 
     Worker *mainWorker = &compiler->workers[0];
-    InitalizeLanguagePrimitives(&mainWorker->arena, &compiler->globalBlock);
+
+    compiler->VoidType  = CreatePrimitiveType("Void", compiler);
+    compiler->U8Type    = CreatePrimitiveType("U8", compiler);
+    compiler->U16Type   = CreatePrimitiveType("U16", compiler);
+    compiler->U32Type   = CreatePrimitiveType("U32", compiler);
+    compiler->U64Type   = CreatePrimitiveType("U64", compiler);
+    compiler->S8Type    = CreatePrimitiveType("S8", compiler);
+    compiler->S16Type   = CreatePrimitiveType("S16", compiler);
+    compiler->S32Type   = CreatePrimitiveType("S32", compiler);
+    compiler->S64Type   = CreatePrimitiveType("S64", compiler);
+    compiler->F16Type   = CreatePrimitiveType("F16", compiler);
+    compiler->F32Type   = CreatePrimitiveType("F32", compiler);
+    compiler->F64Type   = CreatePrimitiveType("F64", compiler);
+    compiler->F128Type  = CreatePrimitiveType("F128", compiler);
   }
 
 
   { //Start the parsing process on the provided input file 
     const char *inputFilename = argv[1];
     AddFileToParseQueue(settings.inputFile);
-    ThreadProc(&workspace->workers[0], &workspace->workQueue, 0, &settings);
+    ThreadProc(compiler, &compiler->workers[0]); 
 
     //At this point in the compiler all source files for the project have been parsed
     //we now force join all the remaining threads before starting the next phase
-    for (int i = 1; i < (int)workspace->workerCount; i++) {
-      std::thread& thread = workspace->threads[i - 1];
+    for (int i = 1; i < (int)compiler->workerCount; i++) {
+      std::thread& thread = compiler->threads[i - 1];
       thread.join();
     }
 
@@ -129,14 +119,14 @@ int main(int argc, char** argv) {
   
 	{ //Anaylsis compiler phase
     LOG_INFO("Analyzing Project");
-		for (int i = 1; i < (int)workspace->workerCount; i++) {
-			workspace->threads[i] = std::thread(AnalyzeAST, &workspace->workers[i + 1]);
+		for (int i = 1; i < (int)compiler->workerCount; i++) {
+			compiler->threads[i] = std::thread(AnalyzeAST, &compiler->workers[i + 1]);
     }
 
-		AnalyzeAST(&workspace->workers[0]);
+		AnalyzeAST(&compiler->workers[0]);
 
-    for (int i = 1; i < (int)workspace->workerCount; i++) {
-      std::thread& thread = workspace->threads[i - 1];
+    for (int i = 1; i < (int)compiler->workerCount; i++) {
+      std::thread& thread = compiler->threads[i - 1];
       thread.join();
     }
 
@@ -147,8 +137,6 @@ int main(int argc, char** argv) {
   }
 
 	LOG_INFO("Generating Native Code");
-	CodegenPackage(package, &global_settings);
-
-  FreeSubArenas(&package->arena);
+	CodegenPackage(compiler);
 	return 0;
 }

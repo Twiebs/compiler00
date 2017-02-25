@@ -370,54 +370,26 @@ ASTExpression* ParseExpr(Worker* worker) {
 		return ParseExprRHS (0, lhs, worker);
 }
 
-static inline bool IsBinaryOperator(TokenType type) {
-    switch (type) {
-        case TOKEN_ADD:
-        case TOKEN_SUB:
-        case TOKEN_MUL:
-        case TOKEN_DIV:
-        case TOKEN_CONSTRUCT:
-            return true;
-        default:
-            return false;
-    }
-}
-
+//TODO(Torin) What is this for?
 static void ExpectAndEatToken (Worker* worker, TokenType expectedToken) {
-    if (worker->lex.token.type != expectedToken) {
-        ReportSourceError(worker->lex.token.location, "Expected token: %s");
-        return;
-    }
+  if(worker->lex.token.type != expectedToken) {
+    ReportSourceError(worker->lex.token.location, "Expected token: %s");
+    return;
+  }
 
-    worker->lex.nextToken();
+  worker->lex.nextToken();
 }
 
+//TODO(Torin) What is this for?
 static void ExpectToken(Worker* worker, TokenType expectedToken) {
-    if (worker->lex.token.type != expectedToken) {
-        ReportSourceError(worker->lex.token.location, "Expected token: %s");
-        return;
-    }
+  if (worker->lex.token.type != expectedToken) {
+    ReportSourceError(worker->lex.token.location, "Expected token: %s");
+    return;
+  }
 }
 
-
-
-static void ParseOperatorOverload(Worker* worker) {
-    auto& lex = worker->lex;
-    assert(lex.token.type == TOKEN_CONSTRUCT && "Only construction operator supported currently");
-    ExpectAndEatToken(worker, TOKEN_TYPE_DEFINE);
-    ExpectToken(worker, TOKEN_PAREN_OPEN);
-
-}
-
-//static void ParseTopLevelStatement (Worker* worker) {
-//    auto& lex = worker->lex;
-//    if (lex.token.type == TOKEN_IDENTIFIER)
-//        ParseIdentifier(worker);
-//    else if (IsBinaryOperator(lex.token.type)) {
-//        ParseOperatorOverload(worker);
-//    }
-//}
-
+//TODO(Torin) Consider inlining this procedure.  It shoud not have to occur in more than
+//one location in the parsers code path
 static inline bool CheckSyntaxErrorsInTypeDecl(Lexer *lex, const Token& identToken) {
   //If the token is an identifier this is not a syntax error and we can procede to 
   //look up the AST node by the ident name and determine if it is a type

@@ -1,91 +1,52 @@
 #include "AST.hpp"
 #include "Build.hpp"
-#include <cstring>
 
-void* Allocate (MemoryArena* arena, size_t size) {
-  if (arena->used + size >= arena->capacity) {
-      if (arena->next == nullptr) {
-          arena->next = (MemoryArena*)(malloc(sizeof(MemoryArena) + ARENA_BLOCK_SIZE));
-          arena->next = new (arena->next) MemoryArena;
-          arena->next->capacity = ARENA_BLOCK_SIZE;
-          arena->next->memory = arena->next + 1;
-      }
-      return Allocate(arena->next, size);
-  } else {
-    auto ptr = (U8*)arena->memory + arena->used;
-    arena->used += size;
-    return (void*)ptr;
-  }
-}
-
-ASTDefinition* global_voidType;
-ASTDefinition* global_U8Type;
-ASTDefinition* global_U16Type;
-ASTDefinition* global_U32Type;
-ASTDefinition* global_U64Type;
-ASTDefinition* global_S8Type;
-ASTDefinition* global_S16Type;
-ASTDefinition* global_S32Type;
-ASTDefinition* global_S64Type;
-ASTDefinition* global_F16Type;
-ASTDefinition* global_F32Type;
-ASTDefinition* global_F64Type;
-ASTDefinition* global_F128Type;
-ASTIntegerLiteral* global_trueLiteral;
-ASTIntegerLiteral* global_falseLiteral;
-
-// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
-// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
-// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
-// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
-// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
-// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
-// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
-// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
-// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK) ^ (1 << 64)
-
-// TODO put nodeType initalization in the constructor of the ASTNodes
-
-static inline ASTDefinition* CreatePrimitiveType(MemoryArena* arena, ASTBlock* block, const std::string& name) {
-	auto typeDefn = new (Allocate(arena, sizeof(ASTDefinition))) ASTDefinition;
-    typeDefn->name = (char*)Allocate(arena, name.size() + 1);
-    memcpy((void*)typeDefn->name, name.c_str(), name.size() + 1);
-    AssignIdent(block, typeDefn, name);
-	return typeDefn;
-}
-
-void InitalizeLanguagePrimitives(MemoryArena* arena, ASTBlock* block) {
-	global_voidType  = CreatePrimitiveType(arena, block, "Void");
-	global_U8Type    = CreatePrimitiveType(arena, block, "U8");
-	global_U16Type   = CreatePrimitiveType(arena, block, "U16");
-	global_U32Type   = CreatePrimitiveType(arena, block, "U32");
-	global_U64Type   = CreatePrimitiveType(arena, block, "U64");
-	global_S8Type    = CreatePrimitiveType(arena, block, "S8");
-	global_S16Type   = CreatePrimitiveType(arena, block, "S16");
-	global_S32Type   = CreatePrimitiveType(arena, block, "S32");
-	global_S64Type   = CreatePrimitiveType(arena, block, "S64");
-	global_F16Type   = CreatePrimitiveType(arena, block, "F16");
-	global_F32Type   = CreatePrimitiveType(arena, block, "F32");
-	global_F64Type   = CreatePrimitiveType(arena, block, "F64");
-	global_F128Type  = CreatePrimitiveType(arena, block, "F128");
-}
-
-void AssignIdent (ASTBlock* block, ASTNode* node, const std::string& name) {
-    if (block->parent == nullptr) {
-#if FORCE_SINGLE_THREADED
-        assert(false && "Must implement lock on global scope with current build setup!");
-#endif
-        // if the block is null then this block belongs to the packages global scope and we need to lock it because multiple threads
-        // can try and write to it.
+//Returns the node assigned to the provided name.  If no node was associated
+//with the name that the assocaition is created.  If the node returned from this
+//procedure does not match the node provided than there is a name conflict!
+ASTNode *AssignIdent(ASTBlock* block, ASTNode* node, InternString& name) {
+  if (block->parent == nullptr) g_compiler.globalBlockMutex.lock();
+  for (size_t i = 0; i < block->identifiers.size(); i++) {
+    if (Equals(block->identifiers[i], name)) {
+      if (block->parent == nullptr) g_compiler.globalBlockMutex.unlock();
+      return block->identiferNodes[i];
     }
-    block->identmap[name] = node;
+  }
+
+  block->identifiers.push_back(name);
+  block->identifierNodes.push_back(node);
+  if (block->parent == nullptr) g_compiler.globalBlockMutex.unlock();
+  return node;
 }
 
-ASTNode* FindNodeWithIdent (ASTBlock* block, const std::string& name) {
-	auto result = block->identmap[name];
-	if (!result && block->parent != nullptr)
-		result = FindNodeWithIdent(block->parent, name);
-	return result;
+ASTNode* FindNodeWithIdent(ASTBlock* block, const char *string, size_t length) {
+  if (block->parent == nullptr) g_compiler.globalBlockMutex.lock();
+    for (size_t i = 0; i < block->identifiers.size(); i++) {
+    if (Equals(block->identifiers[i], string, length)) {
+      if (block->parent == nullptr) g_compiler.globalBlockMutex.unlock();
+      return block->identiferNodes[i];
+    }
+  }
+
+  if (block->parent == nullptr) { 
+    g_compiler.globalBlockMutex.unlock();
+    return nullptr;
+  } else {
+    ASTNode *result = FindNodeWithIdent(block->parent, string, length);
+    return result;
+  }
+
+  assert(false);
+  return nullptr;
+}
+
+
+static inline ASTDefinition* CreatePrimitiveType(const char *name, Compiler *compiler) {
+  ASTDefinition *typeDefn = compiler->blockAllocator.Allocate<ASTDefintion>(); 
+  typdDefn->name = compiler->stringAllocator.CreateString(name, strlen(name));
+  ASTNode *node = AssignIdent(block, typeDefn, name);
+  assert(node == typeDefn);
+	return typeDefn;
 }
 
 ASTCast::ASTCast(ASTDefinition* type, ASTExpression* expr) {
@@ -99,6 +60,7 @@ ASTVariableOperation* CreateVariableOperation (MemoryArena* arena, ASTVariable* 
 	return result;
 }
 
+#if 0
 //ASTMemberOperation* CreateMemberOperation(MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, U32* indices, U32 indexCount) {
 //	auto result = new (Allocate(arena, sizeof(ASTMemberOperation))) ASTMemberOperation(structVar, expr, operation);
 //	result->indices = (U32*)Allocate(arena, sizeof(U32) * indexCount);
@@ -125,6 +87,7 @@ ASTVariableOperation* CreateVariableOperation (MemoryArena* arena, ASTVariable* 
 //
 //	return result;
 //}
+#endif
 
 ASTBinaryOperation* CreateBinaryOperation(MemoryArena* arena, Operation operation, ASTExpression* lhs, ASTExpression* rhs) {
 	auto result = new (Allocate(arena, sizeof(ASTBinaryOperation))) ASTBinaryOperation(operation, lhs, rhs);
@@ -179,11 +142,6 @@ S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName) {
 
 // Perhaps a identifier can point to a FunctionResolver()
 // Which determines the correct call for the function to use
-
-ASTFunctionSet* CreateFunctionSet (MemoryArena* arena, ASTFunctionSet* parent) {
-	ASTFunctionSet* funcSet = new (Allocate(arena, sizeof(ASTFunctionSet))) ASTFunctionSet(parent);
-	return funcSet;
-}
 
 ASTFunction* CreateFunction (MemoryArena* arena, ASTBlock* block, const std::string& name, ASTFunctionSet* funcSet) {
 	ASTFunction* function = new (Allocate(arena, sizeof(ASTFunction))) ASTFunction;
@@ -300,36 +258,54 @@ std::string ToString(Operation operation) {
     }
 }
 
+//===========================================================
+//Consider storing flag information inside of type defintions
+//so that these functions are not required
 
-bool isFloatingPoint(ASTDefinition* type) {
-    if (type == global_F32Type) return true;
-    if (type == global_F64Type) return true;
-    return false;
+bool IsSignedInteger(ASTDefinition *type) {
+  if (type == g_compiler->S32Type) return true;
+  if (type == g_compiler->S64Type) return true;
+  return false;
 }
 
+bool IsUnsignedInteger(ASTDefinition *type) {
+  if (type == g_compiler->U8Type)  return true;
+  if (type == g_compiler->U16Type) return true;
+  if (type == g_compiler->U32Type) return true;
+  if (type == g_compiler->U64Type) return true;
+  return false;
+}
 
+bool IsFloatingPoint(ASTDefinition *type) {
+  if (type == g_compiler->F32Type) return true;
+  if (type == g_compiler->F64Type) return true;
+  return false;
+}
 
-// TODO store some flags about the type inside the struct directly so 
-// these absurd functions are not required
-bool isInteger(ASTDefinition* type) {
-	auto result = isSignedInteger(type) || isUnsignedInteger(type);
+bool IsInteger(ASTDefinition* type) {
+	bool result = isSignedInteger(type) || isUnsignedInteger(type);
 	return result;
 }
 
-bool isSignedInteger(ASTDefinition* type) {
-    if (type == global_S32Type) return true;
-    if (type == global_S64Type) return true;
-    return false;
+bool IsType(ASTNode *node) {
+  bool result = node->nodeType == AST_DEFINITION || node->nodeType == AST_STRUCT;
+  return result;
 }
 
-bool isUnsignedInteger (ASTDefinition* type) {
-    if (type == global_U8Type) return true;
-    if (type == global_U16Type) return true;
-    if (type == global_U32Type) return true;
-    if (type == global_U64Type) return true;
-    return false;
+
+static inline bool IsBinaryOperator(TokenType type) {
+  switch (type) {
+    case TOKEN_ADD:
+    case TOKEN_SUB:
+    case TOKEN_MUL:
+    case TOKEN_DIV:
+    case TOKEN_CONSTRUCT:
+      return true;
+  }
+  return false;
 }
 
-bool isType(ASTNode* node) {
-	return node->nodeType == AST_DEFINITION || node->nodeType == AST_STRUCT;
-}
+
+
+
+

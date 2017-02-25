@@ -5,24 +5,7 @@
 
 #include "Common.hpp"
 #include "Lexer.hpp"
-
-#define ARENA_BLOCK_SIZE 4096
-struct MemoryArena {
-    size_t used = 0;
-    size_t capacity = 0;
-    void* memory = nullptr;
-    MemoryArena* next = nullptr;
-
-    template<typename T, typename... Args>
-    T* alloc(Args... args);
-};
-
-void* Allocate (MemoryArena* arena, size_t size);
-
-template<typename T, typename... Args>
-T* MemoryArena::alloc(Args... args) {
-    return new (Allocate(this, sizeof(T))) T(args...);
-};
+#include "Utility.hpp"
 
 enum ASTNodeType {
 	AST_INVALID,
@@ -54,56 +37,85 @@ enum ASTNodeType {
 	AST_STRING_LITERAL,
 };
 
+enum Operation {
+  OPERATION_ASSIGN,
+  OPERATION_ADD,
+  OPERATION_SUB,
+  OPERATION_MUL,
+  OPERATION_DIV,
+  OPERATION_LT,
+  OPERATION_GT,
+  OPERATION_LTE,
+  OPERATION_GTE,
+  OPERATION_LOR,
+  OPERATION_LAND,
+};
+
+enum UnaryOperator {
+	UNARY_INDIRECTION,
+	UNARY_NOT
+};
+
 struct ASTNode {
 	ASTNodeType nodeType;
 	SourceLocation sourceLocation;
 };
 
-struct ASTDefinition : public ASTNode {
-    const char* name;
-	FileSite sourceLocation;
+struct ASTDefinition : ASTNode {
+  InternString name = {};
+	void *codegenPtr = nullptr;
 
-	void* llvmType = nullptr;
-	ASTDefinition() { nodeType = AST_DEFINITION; }
-    ASTDefinition(FileSite sourceLocation) 
-		:sourceLocation(sourceLocation)
-	{ nodeType = AST_DEFINITION; }
+  ASTDefinition(const SourceLocation& sourceLocation) {
+    this->sourceLocation = sourceLocation;
+    nodeType = AST_DEFINITION;
+  }
 };
 
-struct ASTExpression : public ASTNode {
-	ASTDefinition* type;
+struct ASTExpression : ASTNode {
+	ASTDefinition *type = nullptr;
 };
 
-struct ASTBlock : public ASTNode {
-	ASTBlock* parent = nullptr;
-	std::vector<ASTNode*> members;
-    std::unordered_map<std::string, ASTNode*> identmap;
-    ASTBlock() { nodeType = AST_BLOCK; }
+struct ASTBlock : ASTNode {
+	ASTBlock *parent = nullptr;
+  //This is a temporary solution to resolving identifiers
+  //will probably end up being a custom hashtable implmentation 
+  std::vector<InternString> identifiers;
+  std::vector<ASTNode *> identifierNodes;
+  //This array could simply become a linked list of nodes
+  //rather than having to allocate memory here which is a complete
+  //waste of the blockallocation strategy
+	std::vector<ASTNode *> members;
+
+  ASTBlock() { 
+    nodeType = AST_BLOCK; 
+  }
 };
 
 struct ASTIfStatement : public ASTNode {
-	ASTExpression* expr;
+	ASTExpression* expr = nullptr;
 	ASTNode* ifBody = nullptr;
 	ASTNode* elseBody = nullptr;
-    ASTIfStatement() { nodeType = AST_IF; }
+  ASTIfStatement() { 
+    nodeType = AST_IF; 
+  }
 };
 
+struct ASTVariable : ASTExpression {
+  InternString variableName;
+  InternString typeName;
 
-struct ASTVariable : public ASTExpression {
-    char* name;
-	char* typeName;
-	FileSite site;	// This is where this variable was declared.
-	ASTExpression* initalExpression;
-    void* allocaInst = nullptr;
+	ASTExpression *initalExpression;
 	S8 indirectionLevel;
 
-	ASTVariable (ASTExpression* initialExpr, S8 indirectionLevel)
-		: initalExpression(initialExpr),
-		indirectionLevel(indirectionLevel)
-	{
-		nodeType = AST_VARIABLE;
-		this->type = nullptr;
-	}
+  void *allocaInst = nullptr;
+
+	ASTVariable(SourceLocation& location, ASTExpression* initialExpr, S8 indirectionLevel) {
+    this->sourceLocation = location;
+    nodeType = AST_VARIABLE;
+    initalExpression = initialExpr;
+    this->indirectionLevel = indirectionLevel;
+    type = nullptr;
+  }
 };
 
 struct ASTIter : public ASTNode {
@@ -135,7 +147,7 @@ struct ASTFunction : public ASTBlock {
 
 struct ASTFunctionSet : public ASTNode {
 	ASTFunctionSet* parent;
-    std::vector<ASTFunction*> functions;
+  std::vector<ASTFunction*> functions;
 	ASTFunctionSet(ASTFunctionSet* parent) : parent(parent) { nodeType = AST_FUNCTION_SET; }
 };
 
@@ -143,39 +155,19 @@ struct ASTFunctionSet : public ASTNode {
 // on anything except other structs, therefore it is more efficant to codegen them
 // linearly
 struct ASTStructMember {
-    char* name;
-    bool isPointer = false;
-    ASTExpression* initalExpr;
-    ASTDefinition* type;
+  char* name;
+  bool isPointer = false; //TODO(Torin) This should be indirection level?
+  ASTExpression *initalExpr;
+  ASTDefinition *type;
 };
 
 struct ASTStruct : public ASTDefinition {
-    ASTStructMember* members;
-    U32 memberCount;
-	ASTStruct(const FileSite& site)
-		: ASTDefinition(site)
-	{ nodeType = AST_STRUCT; }
+  ASTStructMember* members;
+  U32 memberCount;
+	ASTStruct(const SourceLocation& location) : ASTDefinition(location) {
+    nodeType = AST_STRUCT; 
+  }
 };
-
-enum Operation {
-    OPERATION_ASSIGN,
-    OPERATION_ADD,
-    OPERATION_SUB,
-    OPERATION_MUL,
-    OPERATION_DIV,
-    OPERATION_LT,
-    OPERATION_GT,
-    OPERATION_LTE,
-    OPERATION_GTE,
-    OPERATION_LOR,
-    OPERATION_LAND,
-};
-
-enum UnaryOperator {
-	UNARY_INDIRECTION,
-	UNARY_NOT
-};
-
 struct ASTUnaryOp : ASTExpression {
 	UnaryOperator op;
 	ASTExpression* expr;
@@ -213,9 +205,10 @@ struct ASTMemberOperation : public ASTNode {
 	Operation operation;
 	ASTMemberAccess access;
 
-    ASTMemberOperation(const SourceLocation& location, ASTVariable* structVar, ASTExpression* expr, Operation operation) :
-			structVar(structVar), expr(expr), operation(operation) 
-	{ 
+  ASTMemberOperation(const SourceLocation& location, ASTVariable* structVar, ASTExpression* expr, Operation operation) { 
+    this->operation = operation;
+    this->expr = expr;
+    this->structVar = structVar;
 		nodeType = AST_MEMBER_OPERATION; 
 		sourceLocation = location;
 	}
@@ -239,18 +232,19 @@ struct ASTBinaryOperation : public ASTExpression {
 };
 
 struct ASTReturn : public ASTExpression {
-	FileSite site;
 	ASTExpression* value;
-	ASTReturn(ASTExpression* expr, const FileSite& site)
-			: site(site), value(expr) { nodeType = AST_RETURN; }
+	ASTReturn(ASTExpression* expr) {
+    nodeType = AST_RETURN; 
+    value = expr;
+  }
 };
 
 struct ASTCall : public ASTExpression {
-    char* name;
-    U32 argCount;
-    ASTExpression** args;
-	ASTFunction* function = nullptr;
-    ASTCall() { nodeType = AST_CALL; }
+  char* name;
+  U32 argCount;
+  ASTExpression** args;
+  ASTFunction* function = nullptr;
+  ASTCall() { nodeType = AST_CALL; }
 };
 
 struct ASTCast : public ASTExpression {
@@ -260,7 +254,7 @@ struct ASTCast : public ASTExpression {
 };
 
 struct ASTLiteral : public ASTExpression {
-    union { S64 intVal; F64 fltVal; U8* strVal; };
+  union { S64 intVal; F64 fltVal; U8* strVal; };
 	explicit ASTLiteral(S32 intVal) : intVal(intVal) { nodeType = AST_INTEGER_LITERAL; }
 	explicit ASTLiteral(F64 fltVal) : fltVal(fltVal) { nodeType = AST_FLOAT_LITERAL; }
 	explicit ASTLiteral(U8* strVal) : strVal(strVal) { nodeType = AST_STRING_LITERAL; }
@@ -278,36 +272,21 @@ struct ASTStringLiteral : public ASTExpression {
 	U8* value;
 };
 
-void InitalizeLanguagePrimitives(MemoryArena* arena, ASTBlock* scope);
+ASTNode *AssignIdent(ASTBlock* block, ASTNode* node, InternString& name);
+ASTNode *FindNodeWithIdent(ASTBlock* block, const char *string, size_t length);
 
-extern ASTDefinition* global_voidType;
-extern ASTDefinition* global_U8Type;
-extern ASTDefinition* global_U16Type;
-extern ASTDefinition* global_U32Type;
-extern ASTDefinition* global_U64Type;
-extern ASTDefinition* global_S8Type;
-extern ASTDefinition* global_S16Type;
-extern ASTDefinition* global_S32Type;
-extern ASTDefinition* global_S64Type;
-extern ASTDefinition* global_F16Type;
-extern ASTDefinition* global_F32Type;
-extern ASTDefinition* global_F64Type;
-extern ASTDefinition* global_F128Type;
 
-// Identifiers
-void AssignIdent (ASTBlock* block, ASTNode* node, const std::string& name);
-ASTNode* FindNodeWithIdent(ASTBlock* block, const std::string& name);
 
 // Statements
-ASTFunctionSet* CreateFunctionSet (MemoryArena* arena);		// This is where identifiers are resolved into
+ASTFunctionSet* CreateFunctionSet(MemoryArena* arena);		// This is where identifiers are resolved into
 ASTFunction* CreateFunction(MemoryArena* arena, ASTBlock* block, const std::string& name, ASTFunctionSet* funcSet);	// Functions now must be created within a function set
 
 ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* block);
 
-ASTStruct* CreateStruct (MemoryArena* arena, const FileSite& site, const std::string& name, ASTStructMember* members, U32 memberCount);
+ASTStruct* CreateStruct (MemoryArena* arena, const std::string& name, ASTStructMember* members, U32 memberCount);
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
 
-ASTVariable* CreateVariable(MemoryArena* arena, const FileSite& site, const std::string& name, ASTExpression* initalExpr = nullptr, S8 indirectionLevel = 0);
+ASTVariable* CreateVariable(MemoryArena* arena, const std::string& name, ASTExpression* initalExpr = nullptr, S8 indirectionLevel = 0);
 
 ASTCast* CreateCast(MemoryArena* arena, ASTDefinition* typeDefn, ASTExpression* expr);
 
@@ -343,11 +322,11 @@ ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& st
 std::string ToString(ASTNodeType nodeType);
 std::string ToString(Operation operation);
 
-bool isFloatingPoint(ASTDefinition* type);
-bool isInteger(ASTDefinition* type);
-bool isSignedInteger(ASTDefinition* type);
-bool isUnsignedInteger (ASTDefinition* type);
-bool isType(ASTNode* node);
+bool IsFloatingPoint(ASTDefinition *type);
+bool IsSignedInteger(ASTDefinition *type);
+bool IsUnsignedInteger(ASTDefinition *type);
+bool IsInteger(ASTDefinition *type);
+bool IsType(ASTNode *node);
 
 inline bool IsUnaryOperator(TokenType token) {
 	switch (token) {
@@ -362,7 +341,7 @@ inline bool IsUnaryOperator(TokenType token) {
 
 
 
-// TODO make this a lookuptable rather than branching
+//TODO make this a lookuptable rather than branching
 inline int GetTokenPrecedence (const Token& token) {
 	if (token.type == TOKEN_LOGIC_OR) 				return 5;
 	if (token.type == TOKEN_LOGIC_AND) 				return 5;

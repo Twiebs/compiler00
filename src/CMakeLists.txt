@@ -1,4 +1,4 @@
-set(SRCS Build.cpp AST.cpp AST.hpp Lexer.cpp Lexer.hpp Parser.cpp Parser.hpp Analysis.cpp Analysis.hpp LLVMCodegen.cpp)
+set(SRCS Build.cpp AST.cpp Lexer.cpp Parser.cpp Analysis.cpp LLVMCodegen.cpp Diagnostic.cpp)
 
 add_executable(bang ${SRCS})
 target_link_libraries(bang ${LLVM_LIBS})

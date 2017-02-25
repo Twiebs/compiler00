@@ -3,7 +3,6 @@
 
 #include "Common.hpp"
 #include "Build.hpp"
-
 #include "Lexer.hpp"
 
 const char* ToString(TokenType tokenType) {
