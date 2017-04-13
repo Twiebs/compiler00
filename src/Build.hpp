@@ -4,6 +4,7 @@
 #include "Parser.hpp"
 #include "Lexer.hpp"
 
+#include <string.h>
 #include <thread>
 #include <mutex>
 
@@ -27,14 +28,35 @@ struct SourceFile {
   InternString path;
 };
 
-struct Worker {
-	U32 workerID;
-  U32 errorCount;
-  ASTBlock *currentBlock;
+inline bool Equals(const InternString& a, const InternString& b) {
+  if(a.length != b.length) return false; 
+  for (size_t i = 0; i < a.length; i++) {
+    if (a.string[i] != b.string[i]) return false;
+  }
+  return true;
+}
 
-  MemoryArena arena;
-  U8* tempMemory;
+inline bool Equals(const InternString& a, const char *b, size_t length) {
+  if(a.length != length) return false;
+  for (size_t i = 0; i < length; i++) {
+    if (a.string[i] != b[i]) return false;
+  }
+  return true;
+}
+
+struct Worker {
+	U32 workerID = 0;
+  U32 errorCount = 0;
+  ASTBlock *currentBlock = nullptr;
   Lexer lex;
+
+  PersistantBlockAllocator astAllocator;
+  InternStringAllocator stringAllocator;
+
+  Worker(U32 workerID, ASTBlock *currentBlock) : astAllocator(4096), stringAllocator(4096) {
+    this->workerID = workerID;
+    this->currentBlock = currentBlock;
+  } 
 };
 
 struct Compiler {
@@ -76,6 +98,9 @@ struct Compiler {
   ASTDefinition* global_F128Type;
 
   BuildSettings buildSettings;
+
+  Compiler() : globalBlock(nullptr) {};
+  ~Compiler() {};
 };
 
 extern Compiler g_compiler;

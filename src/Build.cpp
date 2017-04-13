@@ -5,18 +5,18 @@ Compiler g_compiler;
 
 void AnalyzeAST (Worker* worker);
 
-void AddFileToParseQueue(Compiler *compiler, const std::string& filename) {
+void AddFileToParseQueue(Compiler *compiler, const char *path, size_t length) {
   compiler->workMutex.lock();
   bool containsFilename = false;
   for (size_t i = 0; i < compiler->addedFiles.size(); i++) {
     SourceFile& file = compiler->addedFiles[i];
-    if (Equals(file.name, filename)) {
+    if (Equals(file.path, path, length)) {
       containsFilename = true;
     }
   }
 
   if (!containsFilename) {
-    queue->fileList.push_back(filename);
+    queue->fileList.push_back();
     queue->filesToParse.push_back(filename);
     LOG_DEBUG("Added filename: " << filename << " to the global work queue");
   }
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     size_t arenaMemorySize = ARENA_BLOCK_SIZE * compiler->workerCount;
     size_t tempMemorySize = workspace->workerCount * TEMP_BLOCK_SIZE;
     size_t requiredMemory = (sizeof(Worker) * compiler->workerCount) + arenaMemorySize + tempMemorySize;
-    U8* memory = (U8 *)malloc(requiredMemory);
+    U8 *memory = (U8 *)malloc(requiredMemory);
     memset(memory, 0x00, requiredMemory);
     compiler->workers = (Worker *)memory;
 
@@ -61,11 +61,7 @@ int main(int argc, char** argv) {
     U8* tempMemory = arenaMemory + arenaMemorySize;
     for (size_t i = 0; i < compiler->workerCount ; i++) {
       Worker *worker = &compiler->workers[i];
-      worker->workerID = i;
-      worker->currentBlock = &compiler->globalBlock;
-      worker->tempMemory = tempMemory + (i * TEMP_BLOCK_SIZE);
-      worker->arena.memory = arenaMemory + (i * ARENA_BLOCK_SIZE);
-      worker->arena.capacity = ARENA_BLOCK_SIZE;
+      worker = new (worker) Worker(i, &compiler->globalBlock);
     }
 
     //Initalize and start the parser work queue

@@ -38,11 +38,14 @@ public:
 
   uint8_t *Allocate(size_t size, size_t alignment) {
     assert(size <= blockSize);
+    currentBlock->used = (currentBlock->used + (alignment - 1)) & ~(alignment - 1);
     if (currentBlock->used + size > blockSize) {
       currentBlock = AllocateBlock(currentBlock);
     }
 
     uint8_t *result = (uint8_t *)(((uintptr_t)(currentBlock + 1)) + currentBlock->used);
+    currentBlock->used += size;
+    return result;
   }
 
   template<typename T, typename... Args>
@@ -65,7 +68,7 @@ public:
   InternString CreateString(const char *string, size_t length) {
     uint8_t *memory = blockAllocator.Allocate(length, 1);
     memcpy(memory, string, length);
-    InternString result = { (char *)memory, length };
+    InternString result = { length, (char *)memory };
     return result;
   }
-}
+};

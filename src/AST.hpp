@@ -7,6 +7,8 @@
 #include "Lexer.hpp"
 #include "Utility.hpp"
 
+struct Worker;
+
 enum ASTNodeType {
 	AST_INVALID,
 	AST_BLOCK,
@@ -86,7 +88,7 @@ struct ASTBlock : ASTNode {
   //waste of the blockallocation strategy
 	std::vector<ASTNode *> members;
 
-  ASTBlock() { 
+  ASTBlock(ASTBlock *parent) { 
     nodeType = AST_BLOCK; 
   }
 };
@@ -109,13 +111,8 @@ struct ASTVariable : ASTExpression {
 
   void *allocaInst = nullptr;
 
-	ASTVariable(SourceLocation& location, ASTExpression* initialExpr, S8 indirectionLevel) {
-    this->sourceLocation = location;
-    nodeType = AST_VARIABLE;
-    initalExpression = initialExpr;
-    this->indirectionLevel = indirectionLevel;
-    type = nullptr;
-  }
+	ASTVariable(Worker *worker, SourceLocation& location, ASTExpression* initialExpr, 
+    S8 indirectionLevel, const char *name, size_t nameLength);
 };
 
 struct ASTIter : public ASTNode {
@@ -130,11 +127,14 @@ struct ASTIter : public ASTNode {
 
 struct ASTFunction : public ASTBlock {
 	char* name;
-    ASTDefinition* returnType = nullptr;
-    bool isVarArgs = false;
+  ASTDefinition* returnType = nullptr;
+  bool isVarArgs = false;
 	std::vector<ASTVariable*> args;
 	void* llvmFunction = nullptr;
-	ASTFunction() { nodeType = AST_FUNCTION; };
+
+	ASTFunction(ASTBlock *parent) : ASTBlock(parent) {
+    nodeType = AST_FUNCTION; 
+  };
 };
 
 // REFACTOR this could use a better name
@@ -262,71 +262,33 @@ struct ASTLiteral : public ASTExpression {
 
 struct ASTIntegerLiteral : public ASTExpression {
 	S64 value;
+  ASTIntegerLiteral(S64 value);
 };
 
 struct ASTFloatLiteral : public ASTExpression {
 	F64 value;
+  ASTFloatLiteral(F64 value);
 };
 
 struct ASTStringLiteral : public ASTExpression {
-	U8* value;
+  InternString value;
+  ASTStringLiteral(Worker *worker, const char *string, size_t length);
 };
+
+//==============================================================================
 
 ASTNode *AssignIdent(ASTBlock* block, ASTNode* node, InternString& name);
 ASTNode *FindNodeWithIdent(ASTBlock* block, const char *string, size_t length);
-
-
-
-// Statements
-ASTFunctionSet* CreateFunctionSet(MemoryArena* arena);		// This is where identifiers are resolved into
-ASTFunction* CreateFunction(MemoryArena* arena, ASTBlock* block, const std::string& name, ASTFunctionSet* funcSet);	// Functions now must be created within a function set
-
-ASTBlock* CreateBlock(MemoryArena* arena, ASTBlock* block);
-
-ASTStruct* CreateStruct (MemoryArena* arena, const std::string& name, ASTStructMember* members, U32 memberCount);
 S32 GetMemberIndex(ASTStruct* structDefn, const std::string& memberName);
-
-ASTVariable* CreateVariable(MemoryArena* arena, const std::string& name, ASTExpression* initalExpr = nullptr, S8 indirectionLevel = 0);
-
-ASTCast* CreateCast(MemoryArena* arena, ASTDefinition* typeDefn, ASTExpression* expr);
-
-// Operations
-ASTVariableOperation* CreateVariableOperation (MemoryArena* arena, ASTVariable* variable, Operation op, ASTExpression* expr);
-// ASTMemberOperation*   CreateMemberOperation (MemoryArena* arena, ASTVariable* structVar, Operation op, ASTExpression* expr, U32* indices, U32 indexCount);
-// ASTMemberOperation*   CreateMemberOperation (MemoryArena* arena, ASTVariable* structVar, Operation operation, ASTExpression* expr, const std::vector<std::string>& memberNames);
-ASTMemberOperation*   CreateMemberOperation (MemoryArena* arena, ASTVariable* structVar, Operation op, ASTExpression* expr);
-
-ASTBinaryOperation*   CreateBinaryOperation (MemoryArena* arena, Operation operation, ASTExpression* lhs, ASTExpression* rhs);
-
-// Control Flow
-ASTIfStatement* CreateIfStatement(MemoryArena* arena, ASTExpression* expr);	// TODO Why are ifstatements created without a body? also the body should probably be emitted into a stack thingyyy and then coppied into the if statement???
-ASTIter* CreateIter(MemoryArena* arena, ASTVariable* var, ASTExpression* start, ASTExpression* end, ASTExpression* step = nullptr, ASTBlock* body = nullptr);
-ASTReturn* CreateReturnValue(MemoryArena* arena, ASTExpression* value);
-
-//===============
-//  Expressions
-//===============
-
-ASTVarExpr* CreateVarExpr(MemoryArena* arena, ASTVariable* var, UnaryOperator accessMod);
-ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar);
-
-
-// ASTMemberExpr* CreateMemberExpr(MemoryArena* arena, ASTVariable* structVar, UnaryOperator unary, const std::vector<std::string>& memberNames);
-
-ASTCall* CreateCall(MemoryArena* arena, ASTExpression** argumentList, U32 argumentCount, const std::string& name);
-
-ASTIntegerLiteral* CreateIntegerLiteral(MemoryArena* arena, S64 value);
-ASTFloatLiteral* CreateFloatLiteral(MemoryArena* arena, F64 value);
-ASTStringLiteral* CreateStringLiteral (MemoryArena* arena, const std::string& string);
-
-std::string ToString(ASTNodeType nodeType);
-std::string ToString(Operation operation);
 
 bool IsFloatingPoint(ASTDefinition *type);
 bool IsSignedInteger(ASTDefinition *type);
 bool IsUnsignedInteger(ASTDefinition *type);
 bool IsInteger(ASTDefinition *type);
 bool IsType(ASTNode *node);
+
+std::string ToString(ASTNodeType nodeType);
+std::string ToString(Operation operation);
 
 inline bool IsUnaryOperator(TokenType token) {
 	switch (token) {
@@ -338,8 +300,6 @@ inline bool IsUnaryOperator(TokenType token) {
 		return false;
 	}
 }
-
-
 
 //TODO make this a lookuptable rather than branching
 inline int GetTokenPrecedence (const Token& token) {
